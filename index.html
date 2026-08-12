@@ -1,0 +1,720 @@
+<!DOCTYPE html>
+<html data-src-ver="363e0cf0" data-om-id="363e0cf0:0" style="color-scheme: light;" class=""><head data-om-id="363e0cf0:1"><style>
+    .sc-placeholder{background:color-mix(in srgb,currentColor 8%,transparent);
+      border:1px solid color-mix(in srgb,currentColor 50%,transparent);
+      border-radius:2px;box-sizing:border-box;overflow:hidden}
+    @keyframes sc-shine{0%{background-position:100% 50%}100%{background-position:0% 50%}}
+    html.sc-dc-streaming .sc-placeholder,
+    html.sc-dc-streaming .sc-interp.sc-missing{position:relative;
+      background:color-mix(in srgb,currentColor 5%,transparent);
+      border-color:transparent}
+    html.sc-dc-streaming .sc-placeholder::before,
+    html.sc-dc-streaming .sc-interp.sc-missing::before{content:'';
+      position:absolute;inset:0;pointer-events:none;
+      background:linear-gradient(90deg,rgba(217,119,87,0) 25%,rgba(247,225,211,.95) 37%,rgba(217,119,87,0) 63%);
+      background-size:400% 100%;animation:sc-shine 1.4s ease infinite}
+    html.sc-dc-streaming .sc-placeholder:nth-child(n+9 of .sc-placeholder)::before,
+    html.sc-dc-streaming .sc-interp.sc-missing:nth-child(n+9 of .sc-interp.sc-missing)::before{animation:none;
+      background:color-mix(in srgb,currentColor 8%,transparent)}
+    .sc-placeholder-error{padding:4px 8px;font:11px/1.4 ui-monospace,monospace;
+      color:color-mix(in srgb,currentColor 70%,transparent);word-break:break-word}
+    .sc-interp.sc-missing{display:inline-block;width:2em;height:1em;overflow:hidden;
+      vertical-align:text-bottom;background:rgba(255,255,255,.3);border:1px solid rgba(0,0,0,.5);
+      border-radius:2px;box-sizing:border-box;color:transparent;
+      user-select:none}
+    .sc-interp.sc-unresolved{font-family:ui-monospace,monospace;font-size:.85em;
+      color:color-mix(in srgb,currentColor 50%,transparent);
+      background:color-mix(in srgb,currentColor 10%,transparent);border-radius:3px;
+      padding:0 3px}
+    .sc-host.sc-has-error{position:relative}
+    .sc-logic-error{position:absolute;top:8px;left:8px;z-index:2147483647;max-width:60ch;
+      padding:6px 10px;background:#b00020;color:#fff;font:12px/1.4 ui-monospace,monospace;
+      border-radius:4px;white-space:pre-wrap;pointer-events:none}
+    /* Mirrors PRINT_BASELINE_CSS in apps/web deck-stage-export.ts — keep both
+       in sync until dc-runtime regains a build step. */
+    @media print {
+      @page { margin: 0.5cm; }
+      figure, table { break-inside: avoid; }
+      #dc-root, #dc-root > .sc-host { height: auto; }
+      *, *::before, *::after {
+        print-color-adjust: exact; -webkit-print-color-adjust: exact;
+        backdrop-filter: none !important; -webkit-backdrop-filter: none !important;
+        animation-delay: -99s !important; animation-duration: .001s !important;
+        animation-iteration-count: 1 !important; animation-fill-mode: both !important;
+        animation-play-state: running !important; transition-duration: 0s !important;
+      }
+    }
+  </style>
+<style data-omelette-injected="">html,body{background:transparent}</style><script data-omelette-injected="">(()=>{{const n=new URLSearchParams(location.search).get("theme");if(n==="light"||n==="dark"){document.documentElement.dataset.theme=n}}{if(new URLSearchParams(location.search).get("_omthumb")==="1"){const n=(f)=>{const g=f.focus;if(!g)return;f.focus=function(h){g.call(this,{...h,preventScroll:true})}};n(HTMLElement.prototype);n(SVGElement.prototype);if(typeof MathMLElement!=="undefined"){n(MathMLElement.prototype)}const d=(f)=>{f.removeAttribute("autofocus");f.inert=true;if(!(f instanceof HTMLElement))f.removeAttribute("tabindex")};const p=(f)=>{if(f.hasAttribute("autofocus"))d(f);for(const g of f.querySelectorAll("[autofocus]")){d(g)}};p(document.documentElement);new MutationObserver((f)=>{for(const g of f){for(const h of g.addedNodes){if(h.nodeType===1)p(h)}}}).observe(document,{childList:true,subtree:true})}}{const n=()=>{try{if(document.querySelector('meta[name="color-scheme"]'))return;const d=getComputedStyle(document.documentElement).getPropertyValue("color-scheme").trim();if(d&&d!=="normal")return;const p=(y)=>{if(!y)return null;const m=getComputedStyle(y).backgroundColor.match(/^rgba?\(\s*(\d+)[,\s]+(\d+)[,\s]+(\d+)(?:[,\s/]+([\d.]+%?))?\s*\)$/);if(!m)return null;const w=m[4]==null?1:parseFloat(m[4])/(m[4].endsWith("%")?100:1);if(w<0.99)return null;return[+m[1],+m[2],+m[3]]};const f=p(document.body)||p(document.documentElement);if(!f)return;const g=(y)=>{const m=y/255;return m<=0.04045?m/12.92:((m+0.055)/1.055)**2.4};const h=0.2126*g(f[0])+0.7152*g(f[1])+0.0722*g(f[2]);document.documentElement.style.setProperty("color-scheme",h<0.4?"dark":"light")}catch{}};if(document.readyState==="complete")n();else window.addEventListener("load",n)}var I=["https://claude.ai","https://preview.claude.ai","https://d087b662-dc96-40ad-874c-d2b7d536a033.claudeusercontent.com"];var B=true;var K=false;var C=()=>{};if(K===true){try{const n=setTimeout.bind(window);const d=1e4;const p=15;const f=1e4;const g=120000;const h=200;const y=(o)=>{try{let r;if(typeof o==="string")r=o;else if(o instanceof URL)r=o.href;else if(typeof Request!=="undefined"&&o instanceof Request)r=o.url;else return null;if(!r)return null;const l=document.baseURI;const i=new URL(r,l);if(i.protocol!=="http:"&&i.protocol!=="https:")return null;if(i.origin!==new URL(l).origin)return null;return i.origin+i.pathname}catch{return null}};const m=new Map;const w=(o)=>{let r=m.get(o);if(!r){if(m.size>=h){const l=m.keys().next().value;if(l!==undefined)m.delete(l)}r={fails:[],until:0,cooldown:f,hard:false};m.set(o,r)}return r};const R=(o)=>{const r=m.get(o);return r!==undefined&&r.until>Date.now()};const O=(o,r)=>{const l=Date.now();const i=w(o);if(r)i.hard=true;if(i.until>l)return;i.fails.push(l);while(i.fails.length>0&&i.fails[0]<=l-d)i.fails.shift();if(i.fails.length>=p){i.until=l+i.cooldown;if(i.hard)i.cooldown=Math.min(i.cooldown*2,g);i.fails.length=0;try{n(()=>{try{S(true)}catch{}},i.until-l+100)}catch{}console.warn("[omelette] asset circuit breaker: pausing requests to "+o+" for "+Math.round((i.until-l)/1000)+"s after "+p+" failures in "+d/1000+"s")}};const e=(o)=>{m.delete(o)};const t=100;const a=new WeakMap;const u=new Set;let s=null;const S=(o)=>{for(const r of Array.from(u)){try{const l=a.get(r);if(l===undefined){u.delete(r);continue}if(o){const i=y(l);if(i!==null&&R(i))continue}a.delete(r);u.delete(r);if(s!==null)s.call(r,l)}catch{}}};C=()=>{try{m.clear();S(false)}catch{}};document.addEventListener("visibilitychange",()=>{if(document.visibilityState==="visible")C()});const _=window.fetch;if(typeof _==="function"){const o=function(...r){let l=null;try{l=y(r[0])}catch{}if(l!==null&&R(l)){let c;try{if(r[1]&&r[1].signal!==undefined){c=r[1].signal||undefined}else if(typeof Request!=="undefined"&&r[0]instanceof Request){c=r[0].signal||undefined}}catch{c=undefined}return new Promise((k,b)=>{const E=()=>{try{return c.reason!==undefined?c.reason:new DOMException("The operation was aborted.","AbortError")}catch{return new DOMException("The operation was aborted.","AbortError")}};try{if(c&&c.aborted){b(E());return}}catch{}let T=false;const j=()=>{if(T)return;T=true;b(E())};try{if(c)c.addEventListener("abort",j,{once:true})}catch{}n(()=>{if(T)return;T=true;try{if(c)c.removeEventListener("abort",j)}catch{}let L;try{L=new Response(null,{status:429,statusText:"Too Many Requests",headers:{"Retry-After":"10"}})}catch{L={ok:false,status:429}}k(L)},250)})}const i=_.apply(window,r);if(l!==null){const c=l;i.then((k)=>{try{if(k.ok)e(c);else if(k.status===401||k.status===403||k.status===404||k.status===429){O(c,k.status!==404)}}catch{}},()=>{})}return i};window.fetch=o}const v=Object.getOwnPropertyDescriptor(HTMLImageElement.prototype,"src");if(v!==undefined&&v.set!==undefined&&v.get!==undefined){const o=v.set;s=o;Object.defineProperty(HTMLImageElement.prototype,"src",{configurable:true,enumerable:v.enumerable,get:v.get,set(r){const l=`${r}`;try{const i=y(l);if(i!==null&&R(i)){a.set(this,l);if(u.size<t)u.add(this);return}}catch{}try{a.delete(this);u.delete(this)}catch{}o.call(this,l)}})}try{const o=HTMLImageElement.prototype.setAttribute;HTMLImageElement.prototype.setAttribute=function(r,l){if(arguments.length<2){o.apply(this,arguments);return}if(typeof r==="string"&&r.toLowerCase()==="src"){const i=`${l}`;try{const c=y(i);if(c!==null&&R(c)){a.set(this,i);if(u.size<t)u.add(this);return}a.delete(this);u.delete(this)}catch{}o.call(this,r,i);return}o.call(this,r,l)}}catch{}window.addEventListener("error",(o)=>{try{const r=o.target;if(r instanceof HTMLImageElement){const l=y(r.currentSrc||r.src||"");if(l!==null)O(l,true)}}catch{}},true);window.addEventListener("load",(o)=>{try{const r=o.target;if(r instanceof HTMLImageElement){const l=y(r.currentSrc||r.src||"");if(l!==null)e(l);const i=a.get(r);if(i!==undefined){let c=false;try{c=new URL(i,document.baseURI).href===new URL(r.currentSrc||r.src||"",document.baseURI).href}catch{c=false}if(c){a.delete(r);u.delete(r)}}}}catch{}},true)}catch{}}var J=30000;var G=3000;document.addEventListener("DOMContentLoaded",()=>{const n=window.Babel;const d="om-src-id";if(n&&n.registerPlugin&&!(n.availablePlugins&&n.availablePlugins[d])){n.registerPlugin(d,({types:h})=>({visitor:{JSXOpeningElement(y,m){const w=y.node;if(w.name&&w.name.type==="JSXMemberExpression")return;for(let t=0;t<w.attributes.length;t++){const a=w.attributes[t];if(a.type==="JSXAttribute"&&a.name&&a.name.name==="data-om-id")return}const R=m.file&&m.file.opts&&m.file.opts.filename||"?";const O=w.loc&&w.loc.start;const e=`jsx:${R}:${w.start??0}:${O?O.line:0}:${O?O.column+1:0}`;w.attributes.push(h.jsxAttribute(h.jsxIdentifier("data-om-id"),h.stringLiteral(e)))}}}))}const p="om-text-extract";let f=false;if(B&&n&&n.registerPlugin&&!(n.availablePlugins&&n.availablePlugins[p])){const h=window.React;if(h&&h.useSyncExternalStore&&h.createElement){f=true;const y={};const m=new Set;let w=0;window.__omTextO=y;window.__omTextSet=(e)=>{for(const t in e){const a=e[t];if(a==null)delete y[t];else y[t]=a}w++;m.forEach((t)=>t())};const R=(e)=>{m.add(e);return()=>m.delete(e)};const O=()=>w;window.__OmT=function e(t){h.useSyncExternalStore(R,O,O);return h.createElement("span",{"data-om-text":t.i,className:"__om-t"},t.i in y?y[t.i]:t.children)};n.registerPlugin(p,({types:e})=>{const t={style:1,script:1,noscript:1,textarea:1,title:1,option:1,text:1,tspan:1,textPath:1};const a={placeholder:1,alt:1,title:1,label:1,"aria-label":1,"aria-description":1,"aria-placeholder":1};const u=(o,r)=>e.logicalExpression("??",e.memberExpression(e.logicalExpression("||",e.memberExpression(e.identifier("window"),e.identifier("__omTextO")),e.objectExpression([])),e.stringLiteral(o),true),r);const s=(o)=>o.file&&o.file.opts&&o.file.opts.filename||"?";const S=(o)=>o.file&&o.file.code||"";const _=(o,r)=>{const l=(c)=>c&&c.start!=null&&c.end!=null&&(c.type==="StringLiteral"||c.type==="TemplateLiteral"&&c.expressions.length===0)?[c.start,c.end]:null;const i=l(r);if(i)return i;if(r&&r.type==="Identifier"){const c=o.scope.getBinding(r.name);if(c&&c.constant&&c.path.node.type==="VariableDeclarator"){return l(c.path.node.init)}}return null};const v=(o,r,l)=>{const i=o.node;let c=false;const k=(E,T)=>{c=true;return e.jsxElement(e.jsxOpeningElement(e.jsxIdentifier("__OmT"),[e.jsxAttribute(e.jsxIdentifier("i"),e.stringLiteral(E))],false),e.jsxClosingElement(e.jsxIdentifier("__OmT")),[T],false)};const b=i.children.map((E)=>{if(E.type==="JSXText"){if(E.start==null||E.end==null)return E;const T=l.slice(E.start,E.end);const j=T.length-T.trimStart().length;const L=T.length-T.trimEnd().length;if(j+L>=T.length)return E;return k(`txt:${r}:${E.start+j}:${E.end-L}`,E)}if(E.type==="JSXExpressionContainer"){const T=_(o,E.expression);if(T)return k(`str:${r}:${T[0]}:${T[1]}`,E)}return E});if(c)i.children=b};return{visitor:{JSXOpeningElement(o,r){const l=o.node;const i=s(r);const c={};for(let k=0;k<l.attributes.length;k++){const b=l.attributes[k];if(b.type!=="JSXAttribute"||!b.name)continue;const E=b.name.name;if(!a[E])continue;if(!b.value||b.value.type!=="StringLiteral")continue;if(b.value.start==null||b.value.end==null)continue;const T=`txt:${i}:${b.value.start}:${b.value.end}`;c[E]=T;b.value=e.jsxExpressionContainer(u(T,e.stringLiteral(b.value.value)))}if(Object.keys(c).length){l.attributes.push(e.jsxAttribute(e.jsxIdentifier("data-om-text-attrs"),e.stringLiteral(JSON.stringify(c))))}},JSXElement(o,r){const l=o.node.openingElement;const i=l&&l.name&&l.name.name;if(i==="__OmT")return;if(typeof i==="string"&&t[i])return;v(o,s(r),S(r))},JSXFragment(o,r){v(o,s(r),S(r))}}}})}}const g=f?["transform-react-jsx-source",d,p]:["transform-react-jsx-source",d];document.querySelectorAll('script[type="text/babel"],script[type="text/jsx"]').forEach((h,y)=>{const m=h.getAttribute("data-plugins")||"";const w=g.filter((R)=>m.indexOf(R)<0);if(w.length){h.setAttribute("data-plugins",m?`${m},${w.join(",")}`:w.join(","))}if(!h.hasAttribute("data-filename")){h.setAttribute("data-filename",h.getAttribute("src")||`inline-${y}`)}})});var A=window.parent;var U="not editable here — open the project in the Claude Design editor to save";var W=()=>Promise.resolve({persisted:false,noHost:true,reason:U});var H=W;var M="data/storage.json";var z=()=>{try{const n=new URL(document.baseURI);const d=n.pathname.match(/\/projects\/([^/]+)\/serve\//);if(d)return d[1];return n.hostname.split(".")[0]||""}catch{return location.hostname.split(".")[0]||""}};var Z=()=>{try{const n=new URL(document.baseURI);const d=n.pathname.indexOf("/serve/");if(d>=0)return n.origin+n.pathname.slice(0,d+"/serve/".length)+M}catch{}return"./"+M};var x=null;var N=()=>{if(!x){x=fetch(Z(),{cache:"no-store"}).then((n)=>{if(n.ok)return n.text();return n.status===404?"":null}).catch(()=>null).then((n)=>{if(n===null){x=null;return null}const d=new Map;if(!n)return d;let p;try{p=JSON.parse(n)}catch{console.warn("[omelette.storage] "+M+" is not valid JSON; treating the store as unreadable so a save cannot overwrite the "+"hand-edited bytes. Fix the JSON (or delete the file) to re-enable persistence.");x=null;return null}if(p===null||typeof p!=="object"||Array.isArray(p)){console.warn("[omelette.storage] "+M+" doesn't hold a JSON object; treating the store as unreadable so a save cannot "+"overwrite the hand-edited bytes. Make the top level a JSON object to re-enable persistence.");x=null;return null}const f=p;if("data"in f){const g=f.data;if(g===null||typeof g!=="object"||Array.isArray(g)){console.warn("[omelette.storage] "+M+' has a "data" field that is not a JSON object; treating the store as unreadable so a '+'save cannot overwrite the hand-edited bytes. Make "data" a JSON object to re-enable persistence.');x=null;return null}const h=f._meta;const y=h!==null&&typeof h==="object"?h.project:undefined;if(typeof y==="string"&&y!==""&&y!==z())return d;for(const m of Object.keys(g))d.set(m,g[m]);return d}for(const g of Object.keys(f)){if(g!=="_meta")d.set(g,f[g])}return d})}return x};var F=(n)=>H(M,JSON.stringify({_meta:{project:z(),version:1},data:Object.fromEntries(n)},null,2));var D=Promise.resolve();var $=(n)=>{const d=D.then(n);D=d.then(()=>{return},()=>{return});return d};var V=/sk-(?:ant-)?[A-Za-z0-9_-]{16,}|AKIA[0-9A-Z]{16}|gh[pousr]_[A-Za-z0-9]{20,}|xox[a-z]-[A-Za-z0-9][A-Za-z0-9-]{9,}|AIza[0-9A-Za-z_-]{30,}|-----BEGIN [A-Z ]*PRIVATE KEY-----/;var Y=/password|passwd|secret|api[_-]?key|access[_-]?token|auth[_-]?token|credential/i;var Q=(n,d,p)=>{if(V.test(d)||Y.test(n)&&typeof p==="string"&&p.length>=8){console.warn('[omelette.storage] the value for "'+n+'" looks like a credential. The storage file is a plaintext project file — visible to '+"everyone with project access and copied when the project is duplicated. Do not store secrets here.")}};var q={persisted:false,reason:"could not load the existing store — not overwriting it"};var X={persisted:false,reason:"stored value changed since a failed read — re-read this key before saving"};var P=new Set;var ee={get:(n)=>{if(typeof n!=="string"){return Promise.reject(new TypeError("storage.get: key must be a string"))}return $(N).then((d)=>{if(d===null){P.add(n);return null}P.delete(n);if(!d.has(n))return null;const p=d.get(n);return p==null?null:JSON.parse(JSON.stringify(p))})},set:(n,d)=>{if(typeof n!=="string"){return Promise.reject(new TypeError("storage.set: key must be a string"))}let p;try{p=JSON.stringify(d)}catch(g){return Promise.reject(new TypeError("storage.set: value must be JSON-serializable ("+String(g)+")"))}if(p===undefined){return Promise.reject(new TypeError("storage.set: value must be JSON-serializable"))}Q(n,p,d);const f=JSON.parse(p);return $(()=>N().then((g)=>{if(g===null)return q;if(P.has(n)){if(g.has(n))return X;P.delete(n)}g.set(n,f);return F(g)}))},delete:(n)=>{if(typeof n!=="string"){return Promise.reject(new TypeError("storage.delete: key must be a string"))}return $(()=>N().then((d)=>{if(d===null)return q;if(P.has(n)){if(d.has(n))return X;P.delete(n)}d.delete(n);return F(d)}))},keys:()=>$(N).then((n)=>n===null?[]:Array.from(n.keys()))};window.omelette={writeFile:(n,d)=>H(n,d).then((p)=>{if(!p.persisted&&!p.noHost){throw new Error(p.reason||"write failed")}}),storage:ee};if(A&&A!==window){const n=(e,t)=>{try{A.postMessage({__omelette_log:true,type:e,data:t},"*")}catch{}};["log","warn","error"].forEach((e)=>{const t=console[e];console[e]=(...a)=>{const u=a.map((s)=>{try{return typeof s==="object"?JSON.stringify(s):String(s)}catch{try{return String(s)}catch{return"[unstringifiable]"}}}).join(" ");n(e,u);t.apply(console,a)}});window.addEventListener("error",(e)=>{const t=e.target;if(t&&t!==window&&t.tagName){const a=t.src||t.href||"";n("resource_error",`${t.tagName} failed to load: ${a}`)}else{n("error",`${e.message||"Unknown error"} at ${e.filename||"?"}:${e.lineno||0}:${e.colno||0}`)}},true);window.addEventListener("unhandledrejection",(e)=>{const t=e.reason;const a=t instanceof Error?`${t.message} ${t.stack}`:String(t);n("error",`Unhandled rejection: ${a}`)});window.addEventListener("click",(e)=>{if(e.defaultPrevented||e.button!==0)return;if(e.metaKey||e.ctrlKey||e.shiftKey||e.altKey)return;const t=e.composedPath?e.composedPath():[];const a=["button","input","select","textarea","summary","label"];let u=null;for(const v of t){if(!(v instanceof Element))continue;if(v.localName==="a"){if(!(v instanceof HTMLAnchorElement))return;u=v;break}if(a.indexOf(v.localName)!==-1)return}if(!u)return;if(u.isContentEditable)return;const s=u.closest("[contenteditable]");if(s&&s.getAttribute("contenteditable")!=="false")return;const S=(u.getAttribute("target")||"_self").toLowerCase();if(S!=="_self"&&S!=="_top"&&S!=="_parent")return;let _;try{_=new URL(u.href)}catch{return}if(_.protocol!=="http:"&&_.protocol!=="https:")return;if(location.origin==="null")return;if(_.origin===location.origin)return;e.preventDefault();window.open(_.href,"_blank","noopener,noreferrer")});const d=()=>{try{A.postMessage({type:"omelette:height",height:document.documentElement.scrollHeight},"*")}catch{}};if(window.ResizeObserver)new ResizeObserver(d).observe(document.documentElement);const p=()=>{d();if(!document.querySelector('script[type="text/babel"],script[type="text/jsx"]'))return;const e=()=>document.getElementById("root")||document.querySelector("body > div[id]");const t=e()?.firstElementChild??null;let a=0;const u=()=>{const s=e();if(s&&s.firstElementChild!==t||++a>30){d();return}setTimeout(u,100)};setTimeout(u,100)};if(document.readyState==="complete")p();else window.addEventListener("load",p);const f={};let g=0;const h=(e)=>new Promise((t,a)=>{if(!I.length){a(new Error("claude.complete: no parent origin"));return}const u=`c${++g}`;const s=()=>setTimeout(()=>{delete f[u];a(new Error(`claude.complete: no data for ${J/1000}s`))},J);const S=s();f[u]={resolve:t,reject:a,text:"",t:S,arm:s};try{for(const _ of I){A.postMessage({__om_api:true,id:u,body:e},_)}}catch(_){clearTimeout(S);delete f[u];a(_)}});const y=8;const m=async(e,t)=>{if(!Array.isArray(e.messages)){throw new Error("claude.complete: tools require a messages array")}const a=e.messages.slice();const u={...e,tools:e.tools.map((_)=>{if(_===null||typeof _!=="object")return _;const v={};for(const o of Object.keys(_)){if(typeof _[o]!=="function")v[o]=_[o]}return v})};const s=u.tool_choice;const S=s!=null&&(s.type==="any"||s.type==="tool")?{...u,tool_choice:s.disable_parallel_tool_use!==undefined?{type:"auto",disable_parallel_tool_use:s.disable_parallel_tool_use}:{type:"auto"}}:u;for(let _=0;_<y;_++){const v=await h({..._===0?u:S,messages:a});const o=v.message;const r=o&&Array.isArray(o.content)?o.content:null;const l=r?r.filter((c)=>c?.type==="tool_use"):[];if(o?.stop_reason!=="tool_use"||l.length===0){return v.text}const i=[];for(const c of l){const k=t.get(c.name);if(!k){i.push({type:"tool_result",tool_use_id:c.id,content:`no handler for tool "${c.name}"`,is_error:true});continue}try{const b=await k(c.input);const E=typeof b==="string"?b:O(b)??"";i.push({type:"tool_result",tool_use_id:c.id,content:E})}catch(b){i.push({type:"tool_result",tool_use_id:c.id,content:String(b?.message??b??"tool handler failed"),is_error:true})}}a.push({role:"assistant",content:r},{role:"user",content:i})}throw new Error(`claude.complete: exceeded ${y} tool turns`)};window.claude={complete(e){const t=e;if(t!==null&&typeof t==="object"&&Array.isArray(t.tools)&&t.tools.some((a)=>a!==null&&typeof a==="object"&&typeof a.run==="function")){const a=new Map;for(const u of t.tools){if(u!==null&&typeof u==="object"&&typeof u.run==="function"){a.set(String(u.name),u.run)}}return m(t,a)}return h(e).then((a)=>a.text)}};const w={};let R=0;H=(e,t)=>new Promise((a)=>{if(!I.length){a({persisted:false,noHost:true,reason:U});return}const u=`f${++R}`;const s=setTimeout(()=>{delete w[u];a({persisted:false,noHost:true,reason:U})},G);w[u]={settle:a,t:s};try{for(const S of I){A.postMessage({__om_file:true,id:u,op:"write",path:e,content:t},S)}}catch{clearTimeout(s);delete w[u];a({persisted:false,noHost:true,reason:U})}});const O=(e)=>{try{return JSON.stringify(e)}catch{return JSON.stringify(String(e))}};window.addEventListener("message",(e)=>{if(I.indexOf(e.origin)<0)return;if(e.source!==A)return;const t=e.data;if(!t)return;if(t.type==="omelette-preview-refresh"){if(typeof t.token!=="string"||!/^[0-9a-f.-]+(\.(rc|pr-[0-9]+))?(\.[0-9]+\.[0-9a-f]{16})?$/.test(t.token))return;const s=Math.max(1,Math.floor((t.expiresAt||0)-Date.now()/1000));document.cookie="__Host-omelette-preview="+t.token+"; Path=/; Secure; SameSite=None; Partitioned; Max-Age="+s;C();return}if(t.__om_file_r){const s=w[t.id];if(!s)return;clearTimeout(s.t);delete w[t.id];s.settle(t.ok?{persisted:true}:{persisted:false,reason:t.error||"write failed"});return}if(t.__om_api_r){const s=f[t.id];if(!s)return;if(t.error!=null){clearTimeout(s.t);delete f[t.id];s.reject(new Error(t.error));return}if(t.chunk!=null){clearTimeout(s.t);s.t=s.arm();s.text+=t.chunk;return}if(t.done){clearTimeout(s.t);delete f[t.id];s.resolve({text:t.text!=null?t.text:s.text,message:t.message});return}return}if(!t.__om_eval)return;const a=t;const u=(s)=>{e.source.postMessage({...s,__om_eval_r:1,id:a.id},e.origin)};try{const s=(0,eval)(a.code);if(s&&typeof s.then==="function"){s.then((S)=>u({ok:1,v:O(S)}),(S)=>u({ok:0,e:String(S)}))}else{u({ok:1,v:O(s)})}}catch(s){u({ok:0,e:String(s)})}})}})();
+</script>
+
+<meta charset="utf-8" data-om-id="363e0cf0:2">
+<meta name="viewport" content="width=device-width, initial-scale=1" data-om-id="363e0cf0:3">
+<script src="./support.js"></script><style>x-dc{display:none!important}</style><script src="https://unpkg.com/react@18.3.1/umd/react.production.min.js" integrity="sha384-DGyLxAyjq0f9SPpVevD6IgztCFlnMF6oW/XQGmfe+IsZ8TqEiDrcHkMLKI6fiB/Z" crossorigin="anonymous"></script><script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.production.min.js" integrity="sha384-gTGxhz21lVGYNMcdJOyq01Edg0jhn/c22nsx0kyqP0TxaV5WVdsSH1fSDUf5YJj1" crossorigin="anonymous"></script>
+<template id="__bundler_thumbnail" data-om-id="363e0cf0:7" data-dc-tpl="1"></template><meta name="viewport" content="width=device-width, initial-scale=1.0" data-om-id="363e0cf0:11" data-dc-tpl="2"><title data-dc-tpl="3">Ali Jawwad Khan — Novelist &amp; Poet</title><link rel="preconnect" href="https://fonts.googleapis.com" data-om-id="363e0cf0:12" data-dc-tpl="4"><link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300;0,9..144,400;0,9..144,500;0,9..144,600;1,9..144,400&amp;family=Source+Serif+4:ital,wght@0,300;0,400;0,500;1,400&amp;family=Work+Sans:wght@300;400;500&amp;display=swap" rel="stylesheet" data-om-id="363e0cf0:13" data-dc-tpl="5"><style data-dc-tpl="6">
+    :root{ --bone:#F2EEE4; --bone-deep:#E8E1D0; --ink:#16140F; --ink-2:#514A3E; --ink-3:#7A7263; --gold:#9F7A34; --gold-lit:#D9BA7C; --midnight:#131B24; --rule:#D2C7AB; }
+    *{box-sizing:border-box;}
+    body{margin:0; background:var(--bone); color:var(--ink); font-family:'Newsreader',Georgia,serif; font-weight:300; font-size:18px; line-height:1.72; -webkit-font-smoothing:antialiased;}
+    a{color:var(--gold);}
+    a:hover{color:var(--ink);}
+    input, textarea{font-family:'Newsreader',Georgia,serif;}
+    input:focus, textarea:focus{outline:none;}
+  </style><script id="author-data" type="application/json" data-dc-tpl="7">{
+  "settings": {
+    "adminPassword": "khan-admin-2026"
+  },
+  "bio": {
+    "oneLine": "Ali Jawwad Khan lives in Ober-Ramstadt, Germany; THE TESTIMONY OF SAND is his debut novel.",
+    "short": "Ali Jawwad Khan is a writer based in Ober-Ramstadt, Germany. Drawing on a long engagement with the Islamic contemplative tradition, he writes literary fiction concerned with complicity, testimony, and the moral weight of language. THE TESTIMONY OF SAND is his debut novel.",
+    "medium": "Ali Jawwad Khan is a debut novelist based in Ober-Ramstadt, Germany. His work grows out of a sustained engagement with Islamic history and the Sufi contemplative tradition, and out of a conviction that the most universal questions — about complicity, mercy, grief, and being heard — are best approached through the most specific and ordinary lives. He writes in English for a broad readership, in a register that is literary but propulsive, reaching across traditions rather than within a single one. THE TESTIMONY OF SAND, a geopolitical thriller about a massacre, the language that enabled it, and the sand that will not stay silent, is his first novel.",
+    "long": "Ali Jawwad Khan is a writer based in Ober-Ramstadt, Germany. His fiction is rooted in a long and serious engagement with Islamic history, theology, and the Sufi contemplative tradition — not as subject matter to be explained, but as a way of seeing that shapes how his stories are told. He is drawn to the questions that belong to no single faith: what a person owes the truth once they have profited from its absence; how mercy survives in people with no power to change anything except how gently they treat what remains. His approach trusts image over statement, and the ordinary over the grand, in the belief that the largest truths arrive most honestly through the smallest lives."
+  },
+  "books": [
+    {
+      "id": 1,
+      "title": "Die Ordnung",
+      "kind": "Deutsche literarische Fiktion",
+      "hook": "Rund 73.155 Wörter, 66 Kapitel. Fatma und Yusuf Aydın, Simon Petzold, Krieger.",
+      "status": "Fertig (Submission-Materialien erstellt)"
+    },
+    {
+      "id": 2,
+      "title": "What the Clockmaker Kept",
+      "kind": "Literary Fiction (English)",
+      "hook": "Rund 71.013 Wörter. Trauernder deutscher Teenager und älterer bosnischer Flüchtlings-Uhrmacher.",
+      "status": "Fast fertig — \"the way\"-Reparaturstatus muss noch bestätigt werden"
+    },
+    {
+      "id": 3,
+      "title": "The Second Ledger",
+      "kind": "Literary Fiction (English) · Arbeitstitel",
+      "hook": "Rund 75.360 Wörter, Prolog + 31 Kapitel. Imam Zayd erbt die Position seines Mentors und entdeckt ein elfjähriges Archiv unautorisierter, undokumentierter Barmherzigkeit.",
+      "status": "Fertig (Teil A/B abgeschlossen, korrigiertes Manuskript geliefert)"
+    },
+    {
+      "id": 4,
+      "title": "The Treasury of Unanswered Prayers",
+      "kind": "Literary Fiction (English)",
+      "hook": "Rund 70.400 Wörter. Alter Fischer in einem Vision-Raum; Allah spricht als bewusstes „Voice\"-Stilmittel in Ich-Form.",
+      "status": "Fertig (vier theologische Softening-Edits final)"
+    },
+    {
+      "id": 5,
+      "title": "Die letzte Grenzgängerin",
+      "kind": "Deutsche Fantasy / YA-Crossover · Arbeitstitel, vormals „Barzakh\"",
+      "hook": "Rund 74.215 Wörter, 63 Kapitel + Prolog. Islamische Kontemplationstradition, Jinn-Mensch-Grenzmythologie.",
+      "status": "Fertig (vollständiges Submission-Pack für den deutschen Markt)"
+    },
+    {
+      "id": 6,
+      "title": "Das verdunkelte Zimmer",
+      "kind": "Deutsche historische literarische Fiktion",
+      "hook": "Rund 69.000 Wörter, frühes 11. Jahrhundert, Kairo. Ibn al-Haytham (Alhazen).",
+      "status": "Fast fertig — ein offener Erzählfaden (Tür-Motiv, Kap. 56–58) unaufgelöst"
+    },
+    {
+      "id": 7,
+      "title": "The Physician of Ashes",
+      "kind": "Historical Literary Fiction (English)",
+      "hook": "Rund 94.300–95.030 Wörter, Prolog + 35 Kapitel + Epilog. Ibn Sina (Avicenna), erzählt durch seinen Schüler al-Juzjani.",
+      "status": "Fertig, aber ein theologischer Punkt (drei philosophische Anklagepunkte, Kap. 21) offen — Autorenentscheidung nötig"
+    },
+    {
+      "id": 8,
+      "title": "The Debt We Carry",
+      "kind": "Near-Future Upmarket Suspense (English)",
+      "hook": "Rund 83.600 Wörter. Ein Gedächtnis-Löschungs-Broker entdeckt die Neuraldaten seines gelähmten Bruders im eigenen Schwarzmarkt.",
+      "status": "Fertig"
+    },
+    {
+      "id": 9,
+      "title": "Whoever Saves a Life",
+      "kind": "Literary Fiction (English)",
+      "hook": "Rund 69.902 Wörter, Prolog + 30 Kapitel. Zwei unsterbliche Erzähler (Engel & Jinn) über drei Zeitlinien: Aksum 615, Córdoba im 12. Jh., Sarajevo 1992–95.",
+      "status": "Fast fertig — „the way\"-Reparatur-Abschluss muss bestätigt werden"
+    },
+    {
+      "id": 10,
+      "title": "ARCHE",
+      "kind": "Science Fiction (English)",
+      "hook": "Rund 33 Einheiten. Fremder Planet, KI-Kollektiv NEXUS, Found-Family-Überlebende; bewusst interreligiöse Rahmung, Koran und Mischna parallel gelesen.",
+      "status": "Fertig"
+    },
+    {
+      "id": 11,
+      "title": "The Niche of Light",
+      "kind": "Historical Literary Fiction (English)",
+      "hook": "Rund 100.500 Wörter, Prolog + 26 Kapitel + Epilog. Al-Ghazalis spirituelle Krise, Bagdad 1095.",
+      "status": "Fast fertig — Voice-Sheets für Kap. 8–26 veraltet, das Autoren-Pack ist die aktuelle Referenz"
+    },
+    {
+      "id": 12,
+      "title": "Die Werkstatt der verlorenen Dinge",
+      "kind": "Deutsche literarische Komödie mit Tiefgang",
+      "hook": "Rund 69.400 Wörter, 62 Kapitel.",
+      "status": "Fertig, mit zwei offenen Punkten vor Einreichung: Sensitivity-Read (Familie Cohen), Rechtsprüfung Grundbuchrecht"
+    },
+    {
+      "id": 13,
+      "title": "A House With Two Doors",
+      "kind": "Familiensaga, nicht-lineare Struktur",
+      "hook": "Drei Generationen: Teilung 1947, 1971, heutiges Deutschland. Vererbtes Schweigen um ein moralisches Versagen.",
+      "status": "In Entwicklung (Konzeptphase, Neuer-Roman-Protokoll)"
+    }
+  ],
+  "poems": [
+    {
+      "title": "The Door Held Open",
+      "part": "Part III — The World",
+      "mark": "◆",
+      "text": "The bus was pulling out—he saw the light\nblink amber, doors beginning to slide to a close.\nAn old man hurried through the thinning night,\nhis cane behind him, tripping where the pavement rose.\n\nThe driver could have gone; no one would blame\na schedule kept, a stranger left behind.\nInstead he held the door, and made no claim\nto kindness—just stood there, patient, unresigned.\n\nI think of how much mercy moves this way—\nunsigned, unthanked, too brief to call a sign—\nuntil you notice how the whole world stays\nupright on hands like this, and not on mine."
+    },
+    {
+      "title": "Paradox",
+      "part": "Part I — The Seeker",
+      "mark": "◆",
+      "text": "A whisper roars where silence reigns,\nIn empty fullness, freedom chains.\nThe seeker finds by not to seek,\nIn knowing nothing, answers peak."
+    },
+    {
+      "title": "Ascension",
+      "part": "Part I — The Seeker",
+      "mark": "◆",
+      "text": "The seed sleeps deep where darkness hides,\nunseen among the rest it lies,\na folded, quiet potential that abides\nuntil a drop of rain, a crack, complies.\n\nThen the shell breaks open, and it starts to climb,\nnot fast, not certain, only built to grow—\na journey measured by no clock but time,\ntoward a place in sky it did not know."
+    },
+    {
+      "title": "Drowned",
+      "part": "Part I — The Seeker",
+      "mark": "◆",
+      "text": "Faith's river veiled in soothing mist –\nStrange secrets in its silent twist.\nBrave souls who dive, seeking light,\nMay find the depths grip them tight.\n\nYet in the abyss, they're truly free –\nDrowning in Him, they find the key\nTo where the gate swings wide and clear,\nAnd every fear dissolves to fear\n\nNo more. They cross the dark expanse\nAnd wake – not dead, but in a trance\nOf utter trust. The river's name?\nThe One who first has lit the flame."
+    },
+    {
+      "title": "If Someone Asks Who I Am",
+      "part": "Part IV — Homecoming",
+      "mark": "◆",
+      "text": "If someone asks who I am,\nSay: A servant who tried and failed.\nA traveller whose feet often faltered,\nBut whose heart never derailed.\n\nI was not the one who reached the peak,\nI fell in valleys, weak and meek.\nYet every dawn, I rose again,\nWith nothing much—just hope and pain."
+    }
+  ]
+}</script><meta name="viewport" content="width=device-width, initial-scale=1.0" data-dc-tpl="2"><link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;1,300;1,400&amp;family=Newsreader:ital,wght@0,300;0,400;1,300&amp;family=Archivo:wght@400;500&amp;display=swap" rel="stylesheet" data-dc-tpl="5"><style data-designer-overlay="1"></style><meta name="x-build-id" content="b0ef4b1f3883ccdc06ecd8dcecbd1d9423fc96e7"><style data-dc-editor-style="">body:not([data-dc-editor-overlay-hidden]) [data-dc-editor-hover][data-dc-editor-hover-stroke]:not([data-dc-editor-selected]){filter:drop-shadow(0 0 1px rgba(59,130,246,0.9)) drop-shadow(0 0 2px rgba(59,130,246,0.55))!important;}[data-dc-editor-linked]{outline:1.5px dashed #3b82f6!important;outline-offset:1px!important;}body[data-dc-editor-on]:not([data-dc-editor-overlay-hidden]) [data-dc-editor-dragging],body[data-dc-editor-on]:not([data-dc-editor-overlay-hidden]) [data-dc-dragging],body[data-dc-floor-gestures]:not([data-dc-editor-overlay-hidden]) [data-dc-editor-dragging],body[data-dc-floor-gestures]:not([data-dc-editor-overlay-hidden]) [data-dc-dragging]{outline:1.5px solid #3b82f6!important;outline-offset:-0.75px!important;opacity:0.55!important;}body[data-dc-editor-on][data-dc-editor-drag-parked]:not([data-dc-editor-overlay-hidden]) [data-dc-editor-dragging],body[data-dc-editor-on][data-dc-editor-drag-parked]:not([data-dc-editor-overlay-hidden]) [data-dc-dragging],body[data-dc-floor-gestures][data-dc-editor-drag-parked]:not([data-dc-editor-overlay-hidden]) [data-dc-editor-dragging],body[data-dc-floor-gestures][data-dc-editor-drag-parked]:not([data-dc-editor-overlay-hidden]) [data-dc-dragging]{outline:1.5px dashed #3b82f6!important;opacity:0.3!important;}body[data-dc-editor-on] [data-dc-editor-editing]::selection,body[data-dc-editor-on] [data-dc-editor-editing] ::selection{background-color:#3b82f6!important;color:#fff!important;}body[data-dc-editor-on] [data-dc-editor-editing]{outline:none!important;}body[data-dc-editor-on]:not([data-dc-editor-tool="interact"]) *{cursor:default!important;user-select:none!important;}body[data-dc-editor-on]:not([data-dc-editor-tool="interact"]) :not([data-dc-editor-overlay-root]):not([data-dc-editor-overlay-root] *){pointer-events:auto!important;transition:none!important;animation:none!important;}body[data-dc-editor-on][data-dc-editor-tool="rect"] *,body[data-dc-editor-on][data-dc-editor-tool="frame"] *,body[data-dc-editor-on][data-dc-editor-tool="oval"] *{cursor:crosshair!important;}body[data-dc-editor-on][data-dc-editor-tool="text"] *{cursor:text!important;}body[data-dc-editor-on][data-dc-editor-tool="draw"] *{cursor:url('data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%2216%22 height=%2216%22 viewBox=%220 0 16 16%22%3E%3Cpath d=%22M2 14l1-4 8-8a2.1 2.1 0 0 1 3 3l-8 8-4 1z%22 fill=%22%23333%22 stroke=%22%23fff%22 stroke-width=%221%22/%3E%3C/svg%3E') 1 15, crosshair!important;}body[data-dc-editor-on]:not([data-dc-editor-tool]) [data-drags-parent],body[data-dc-editor-on]:not([data-dc-editor-tool]) [data-drags-parent] *{cursor:grab!important;}body[data-dc-editor-on]:not([data-dc-editor-tool]) [data-drags-parent]:active,body[data-dc-editor-on]:not([data-dc-editor-tool]) [data-drags-parent]:active *{cursor:grabbing!important;}html:not([data-dc-canvas]):has(body[data-dc-editor-on] .sc-host){background:var(--dc-editor-backdrop,#e9e7e4);}html:not([data-dc-canvas]) body[data-dc-editor-on]:has(.sc-host){background:var(--dc-editor-backdrop,#e9e7e4);}html:not([data-dc-canvas]) body[data-dc-editor-on] .sc-host:not(.sc-host .sc-host){min-height:100vh;background:var(--dc-editor-host-bg,#fff);}html[data-dc-canvas]{overflow:hidden;}html[data-dc-canvas] body[data-dc-editor-on] .sc-host:not(.sc-host .sc-host)::before{content:"";position:absolute;left:-100000px;top:-100000px;width:200000px;height:200000px;pointer-events:none;background:repeating-linear-gradient(45deg,var(--dc-editor-hatch-ink,rgba(0,0,0,.05)) 0 8px,transparent 8px 16px);clip-path:polygon(0 0,100% 0,100% 50%,50% 50%,50% 100%,0 100%);}html[data-dc-pan-cursor="grab"],html[data-dc-pan-cursor="grab"] *,html[data-dc-pan-cursor="grab"] body[data-dc-editor-on] *{cursor:grab!important;}html[data-dc-pan-cursor="grabbing"],html[data-dc-pan-cursor="grabbing"] *,html[data-dc-pan-cursor="grabbing"] body[data-dc-editor-on] *{cursor:grabbing!important;}html[data-dc-drag-cursor="grabbing"]:not(#sc-chrome-boost):not(#sc-chrome-boost),html[data-dc-drag-cursor="grabbing"] *:not(#sc-chrome-boost):not(#sc-chrome-boost){cursor:grabbing!important;}html[data-dc-drag-cursor="not-allowed"]:not(#sc-chrome-boost):not(#sc-chrome-boost),html[data-dc-drag-cursor="not-allowed"] *:not(#sc-chrome-boost):not(#sc-chrome-boost){cursor:not-allowed!important;}html:not([data-dc-pan-cursor]):not([data-dc-drag-cursor]) body[data-dc-editor-on]:not([data-dc-editor-tool]) [data-dc-editor-grab]:not(#sc-chrome-boost):not(#sc-chrome-boost),html:not([data-dc-pan-cursor]):not([data-dc-drag-cursor]) body[data-dc-editor-on]:not([data-dc-editor-tool]) [data-dc-editor-grab] *:not(#sc-chrome-boost):not(#sc-chrome-boost){cursor:grab!important;}body[data-dc-floor-gestures] [data-dc-editor-selected],body[data-dc-floor-gestures] [data-dc-editor-selected] *{cursor:grab!important;user-select:none!important;}body[data-dc-floor-gestures] [data-dc-editor-selected]:active,body[data-dc-floor-gestures] [data-dc-editor-selected]:active *{cursor:grabbing!important;}</style><script id="author-data" type="application/json" data-dc-tpl="7">
+  {
+    "settings": { "adminPassword": "khan-admin-2026" },
+    "bio": {
+      "short": "Ali Jawwad Khan is a writer based in Ober-Ramstadt, Germany. Drawing on a long engagement with the Islamic contemplative tradition, he writes literary fiction concerned with complicity, testimony, and the moral weight of language.",
+      "long": "Ali Jawwad Khan is a writer based in Ober-Ramstadt, Germany. His fiction is rooted in a long and serious engagement with Islamic history, theology, and the Sufi contemplative tradition — not as subject matter to be explained, but as a way of seeing that shapes how his stories are told. He is drawn to the questions that belong to no single faith: what a person owes the truth once they have profited from its absence; how mercy survives in people with no power to change anything except how gently they treat what remains. His approach trusts image over statement, and the ordinary over the grand, in the belief that the largest truths arrive most honestly through the smallest lives."
+    },
+    "books": [
+      {"title":"Die Ordnung","kind":"Deutsche literarische Fiktion","hook":"Rund 73.155 Wörter, 66 Kapitel. Fatma und Yusuf Aydın, Simon Petzold, Krieger.","status":"Fertig (Submission-Materialien erstellt)"},
+      {"title":"What the Clockmaker Kept","kind":"Literary Fiction (English)","hook":"Rund 71.013 Wörter. Trauernder deutscher Teenager und älterer bosnischer Flüchtlings-Uhrmacher.","status":"Fast fertig — \"the way\"-Reparaturstatus muss noch bestätigt werden"},
+      {"title":"The Second Ledger","kind":"Literary Fiction (English) · Arbeitstitel","hook":"Rund 75.360 Wörter, Prolog + 31 Kapitel. Imam Zayd erbt die Position seines Mentors und entdeckt ein elfjähriges Archiv unautorisierter, undokumentierter Barmherzigkeit.","status":"Fertig (Teil A/B abgeschlossen, korrigiertes Manuskript geliefert)"},
+      {"title":"The Treasury of Unanswered Prayers","kind":"Literary Fiction (English)","hook":"Rund 70.400 Wörter. Alter Fischer in einem Vision-Raum; Allah spricht als bewusstes „Voice\"-Stilmittel in Ich-Form.","status":"Fertig (vier theologische Softening-Edits final)"},
+      {"title":"Die letzte Grenzgängerin","kind":"Deutsche Fantasy / YA-Crossover · Arbeitstitel, vormals „Barzakh\"","hook":"Rund 74.215 Wörter, 63 Kapitel + Prolog. Islamische Kontemplationstradition, Jinn-Mensch-Grenzmythologie.","status":"Fertig (vollständiges Submission-Pack für den deutschen Markt)"},
+      {"title":"Das verdunkelte Zimmer","kind":"Deutsche historische literarische Fiktion","hook":"Rund 69.000 Wörter, frühes 11. Jahrhundert, Kairo. Ibn al-Haytham (Alhazen).","status":"Fast fertig — ein offener Erzählfaden (Tür-Motiv, Kap. 56–58) unaufgelöst"},
+      {"title":"The Physician of Ashes","kind":"Historical Literary Fiction (English)","hook":"Rund 94.300–95.030 Wörter, Prolog + 35 Kapitel + Epilog. Ibn Sina (Avicenna), erzählt durch seinen Schüler al-Juzjani.","status":"Fertig, aber ein theologischer Punkt (drei philosophische Anklagepunkte, Kap. 21) offen — Autorenentscheidung nötig"},
+      {"title":"The Debt We Carry","kind":"Near-Future Upmarket Suspense (English)","hook":"Rund 83.600 Wörter. Ein Gedächtnis-Löschungs-Broker entdeckt die Neuraldaten seines gelähmten Bruders im eigenen Schwarzmarkt.","status":"Fertig"},
+      {"title":"Whoever Saves a Life","kind":"Literary Fiction (English)","hook":"Rund 69.902 Wörter, Prolog + 30 Kapitel. Zwei unsterbliche Erzähler (Engel &amp; Jinn) über drei Zeitlinien: Aksum 615, Córdoba im 12. Jh., Sarajevo 1992–95.","status":"Fast fertig — „the way\"-Reparatur-Abschluss muss bestätigt werden"},
+      {"title":"ARCHE","kind":"Science Fiction (English)","hook":"Rund 33 Einheiten. Fremder Planet, KI-Kollektiv NEXUS, Found-Family-Überlebende; bewusst interreligiöse Rahmung, Koran und Mischna parallel gelesen.","status":"Fertig"},
+      {"title":"The Niche of Light","kind":"Historical Literary Fiction (English)","hook":"Rund 100.500 Wörter, Prolog + 26 Kapitel + Epilog. Al-Ghazalis spirituelle Krise, Bagdad 1095.","status":"Fast fertig — Voice-Sheets für Kap. 8–26 veraltet, das Autoren-Pack ist die aktuelle Referenz"},
+      {"title":"Die Werkstatt der verlorenen Dinge","kind":"Deutsche literarische Komödie mit Tiefgang","hook":"Rund 69.400 Wörter, 62 Kapitel.","status":"Fertig, mit zwei offenen Punkten vor Einreichung: Sensitivity-Read (Familie Cohen), Rechtsprüfung Grundbuchrecht"},
+      {"title":"A House With Two Doors","kind":"Familiensaga, nicht-lineare Struktur","hook":"Drei Generationen: Teilung 1947, 1971, heutiges Deutschland. Vererbtes Schweigen um ein moralisches Versagen.","status":"In Entwicklung (Konzeptphase, Neuer-Roman-Protokoll)"}
+    ],
+    "poems": [
+      { "title":"The Door Held Open", "part":"Part III — The World",
+        "text":"The bus was pulling out—he saw the light\nblink amber, doors beginning to slide to a close.\nAn old man hurried through the thinning night,\nhis cane behind him, tripping where the pavement rose.\n\nThe driver could have gone; no one would blame\na schedule kept, a stranger left behind.\nInstead he held the door, and made no claim\nto kindness—just stood there, patient, unresigned.\n\nI think of how much mercy moves this way—\nunsigned, unthanked, too brief to call a sign—\nuntil you notice how the whole world stays\nupright on hands like this, and not on mine." },
+      { "title":"Paradox", "part":"Part I — The Seeker",
+        "text":"A whisper roars where silence reigns,\nIn empty fullness, freedom chains.\nThe seeker finds by not to seek,\nIn knowing nothing, answers peak." },
+      { "title":"Ascension", "part":"Part I — The Seeker",
+        "text":"The seed sleeps deep where darkness hides,\nunseen among the rest it lies,\na folded, quiet potential that abides\nuntil a drop of rain, a crack, complies.\n\nThen the shell breaks open, and it starts to climb,\nnot fast, not certain, only built to grow—\na journey measured by no clock but time,\ntoward a place in sky it did not know." },
+      { "title":"Drowned", "part":"Part I — The Seeker",
+        "text":"Faith's river veiled in soothing mist –\nStrange secrets in its silent twist.\nBrave souls who dive, seeking light,\nMay find the depths grip them tight.\n\nYet in the abyss, they're truly free –\nDrowning in Him, they find the key\nTo where the gate swings wide and clear,\nAnd every fear dissolves to fear\n\nNo more. They cross the dark expanse\nAnd wake – not dead, but in a trance\nOf utter trust. The river's name?\nThe One who first has lit the flame." },
+      { "title":"If Someone Asks Who I Am", "part":"Part IV — Homecoming",
+        "text":"If someone asks who I am,\nSay: A servant who tried and failed.\nA traveller whose feet often faltered,\nBut whose heart never derailed.\n\nI was not the one who reached the peak,\nI fell in valleys, weak and meek.\nYet every dawn, I rose again,\nWith nothing much—just hope and pain." }
+    ]
+  }
+  </script></head>
+<body data-om-id="363e0cf0:4">
+<div id="dc-root"><div class="sc-host" data-sc-name="Autorenseite"><div data-dc-tpl="8" style="min-height: 100vh;">
+
+  <div data-dc-tpl="9" style="position: sticky; top: 0px; z-index: 20; background: var(--bone); border-bottom: 1px solid var(--rule); display: flex; align-items: center; justify-content: space-between; padding: 18px 32px;">
+    <div data-dc-tpl="10" style="font-family: &quot;Archivo&quot;, sans-serif; font-weight: 500; font-size: 14px; letter-spacing: 0.18em; text-transform: uppercase;">A. J. Khan</div>
+    <div data-dc-tpl="11" style="display: flex; align-items: center; gap: 26px; font-family: &quot;Archivo&quot;, sans-serif; font-size: 11px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--ink-2);">
+      <a data-dc-tpl="12" href="#books" style="text-decoration: none; color: var(--ink-2);">Books</a>
+      <a data-dc-tpl="13" href="#poems" style="text-decoration: none; color: var(--ink-2);">Poems</a>
+      <a data-dc-tpl="14" href="#about" style="text-decoration: none; color: var(--ink-2);">About</a>
+      <a data-dc-tpl="15" href="#contact" style="text-decoration: none; color: var(--ink-2);">Contact</a>
+    </div>
+  </div>
+
+  <section data-dc-tpl="16" style="max-width: 900px; margin: 0px auto; padding: 100px 32px 90px;">
+    <span data-dc-tpl="17" style="font-family: &quot;Archivo&quot;, sans-serif; font-weight: 500; font-size: 11px; letter-spacing: 0.22em; text-transform: uppercase; color: var(--gold); display: block; margin-bottom: 26px;">Writer</span>
+    <h1 data-dc-tpl="18" style="font-family: &quot;Cormorant Garamond&quot;, serif; font-weight: 300; font-size: clamp(42px, 7vw, 72px); line-height: 1.05; margin: 0px 0px 30px;">Thirteen books,<br data-dc-tpl="19"><span data-dc-tpl="20" style="font-style: italic; color: var(--ink-2);">one question asked</span><br data-dc-tpl="21">thirteen ways.</h1>
+    <p data-dc-tpl="22" style="font-size: 20px; max-width: 56ch; color: var(--ink-2); margin: 0px 0px 38px;"><span class="sc-interp">Ali Jawwad Khan is a writer based in Ober-Ramstadt, Germany. Drawing on a long engagement with the Islamic contemplative tradition, he writes literary fiction concerned with complicity, testimony, and the moral weight of language. THE TESTIMONY OF SAND is his debut novel.</span></p>
+    <div data-dc-tpl="23" style="display: flex; flex-wrap: wrap; gap: 14px;">
+      <a data-dc-tpl="24" href="#contact" style="display: inline-block; background: var(--ink); color: var(--bone); font-family: &quot;Archivo&quot;, sans-serif; font-size: 11.5px; letter-spacing: 0.16em; text-transform: uppercase; padding: 15px 26px; text-decoration: none;">Get in touch</a>
+      <a data-dc-tpl="25" href="#books" style="display: inline-block; background: transparent; border: 1px solid var(--ink); color: var(--ink); font-family: &quot;Archivo&quot;, sans-serif; font-size: 11.5px; letter-spacing: 0.16em; text-transform: uppercase; padding: 15px 26px; text-decoration: none;">The work</a>
+    </div>
+  </section>
+
+  <section data-dc-tpl="26" id="poems" style="background: var(--midnight); color: rgb(233, 225, 205); padding: 96px 0px 90px;">
+    <div data-dc-tpl="27" style="max-width: 1080px; margin: 0px auto; padding: 0px 32px;">
+      <span data-dc-tpl="28" style="font-family: &quot;Archivo&quot;, sans-serif; font-weight: 500; font-size: 11px; letter-spacing: 0.22em; text-transform: uppercase; color: var(--gold-lit); display: block; margin-bottom: 16px;">The poems</span>
+      <h2 data-dc-tpl="29" style="font-family: &quot;Cormorant Garamond&quot;, serif; font-weight: 300; font-size: clamp(32px, 4.6vw, 48px); color: rgb(244, 238, 221); margin: 0px 0px 16px;"><em data-dc-tpl="30" style="color: var(--gold-lit); font-style: italic;">Heartfelt</em><br data-dc-tpl="31">A Journey from the Gate to the Gate</h2>
+      <p data-dc-tpl="32" style="color: rgb(191, 182, 160); font-size: 17px; max-width: 60ch; margin: 0px 0px 50px;">Ninety-three poems in four movements — the old stations of the contemplative way: question, trial, the world, return. You don't need to be Muslim, or religious at all, to walk them.</p>
+
+      <div data-dc-tpl="33" style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 0px; margin-bottom: 60px; border-top: 1px solid rgba(217, 186, 124, 0.25);">
+        <div data-dc-tpl="34" style="padding: 24px 22px 0px; border-right: 1px solid rgba(217, 186, 124, 0.25);"><span data-dc-tpl="35" style="font-family: &quot;Archivo&quot;, sans-serif; font-size: 10px; letter-spacing: 0.22em; color: var(--gold-lit);">Part I</span><h3 data-dc-tpl="36" style="font-family: &quot;Cormorant Garamond&quot;, serif; font-weight: 400; font-size: 24px; margin: 8px 0px 10px; color: rgb(244, 238, 221);">The Seeker</h3><p data-dc-tpl="37" style="font-size: 15px; color: rgb(191, 182, 160); margin: 0px;">Before the question, the thirst.</p></div>
+        <div data-dc-tpl="38" style="padding: 24px 22px 0px; border-right: 1px solid rgba(217, 186, 124, 0.25);"><span data-dc-tpl="39" style="font-family: &quot;Archivo&quot;, sans-serif; font-size: 10px; letter-spacing: 0.22em; color: var(--gold-lit);">Part II</span><h3 data-dc-tpl="40" style="font-family: &quot;Cormorant Garamond&quot;, serif; font-weight: 400; font-size: 24px; margin: 8px 0px 10px; color: rgb(244, 238, 221);">The Struggle</h3><p data-dc-tpl="41" style="font-size: 15px; color: rgb(191, 182, 160); margin: 0px;">The battle in a silent, unseen field.</p></div>
+        <div data-dc-tpl="42" style="padding: 24px 22px 0px; border-right: 1px solid rgba(217, 186, 124, 0.25);"><span data-dc-tpl="43" style="font-family: &quot;Archivo&quot;, sans-serif; font-size: 10px; letter-spacing: 0.22em; color: var(--gold-lit);">Part III</span><h3 data-dc-tpl="44" style="font-family: &quot;Cormorant Garamond&quot;, serif; font-weight: 400; font-size: 24px; margin: 8px 0px 10px; color: rgb(244, 238, 221);">The World</h3><p data-dc-tpl="45" style="font-size: 15px; color: rgb(191, 182, 160); margin: 0px;">We miss the sun the most when it won't shine.</p></div>
+        <div data-dc-tpl="46" style="padding: 24px 22px 0px;"><span data-dc-tpl="47" style="font-family: &quot;Archivo&quot;, sans-serif; font-size: 10px; letter-spacing: 0.22em; color: var(--gold-lit);">Part IV</span><h3 data-dc-tpl="48" style="font-family: &quot;Cormorant Garamond&quot;, serif; font-weight: 400; font-size: 24px; margin: 8px 0px 10px; color: rgb(244, 238, 221);">Homecoming</h3><p data-dc-tpl="49" style="font-size: 15px; color: rgb(191, 182, 160); margin: 0px;">Travelling lately. Home, to stay.</p></div>
+      </div>
+
+      <div data-dc-tpl="50" style="display: grid; grid-template-columns: 1fr 300px; gap: 56px; align-items: start;">
+        <div data-dc-tpl="51">
+          <h3 data-dc-tpl="52" style="font-family: &quot;Cormorant Garamond&quot;, serif; font-weight: 400; font-size: 30px; margin: 0px 0px 4px; color: rgb(244, 238, 221);"><span class="sc-interp">The Door Held Open</span></h3>
+          <span data-dc-tpl="53" style="font-size: 13px; color: var(--gold-lit); letter-spacing: 0.1em;"><span class="sc-interp">Part III — The World</span></span>
+          <div data-dc-tpl="54" style="white-space: pre-line; font-family: &quot;Cormorant Garamond&quot;, serif; font-size: 21px; line-height: 1.62; color: rgb(222, 213, 190); margin-top: 18px;"><span class="sc-interp">The bus was pulling out—he saw the light
+blink amber, doors beginning to slide to a close.
+An old man hurried through the thinning night,
+his cane behind him, tripping where the pavement rose.
+
+The driver could have gone; no one would blame
+a schedule kept, a stranger left behind.
+Instead he held the door, and made no claim
+to kindness—just stood there, patient, unresigned.
+
+I think of how much mercy moves this way—
+unsigned, unthanked, too brief to call a sign—
+until you notice how the whole world stays
+upright on hands like this, and not on mine.</span></div>
+          <div data-dc-tpl="55" style="display: flex; gap: 10px; margin-top: 26px;">
+            <button data-dc-tpl="56" style="background: none; border: 1px solid rgba(217, 186, 124, 0.4); color: rgb(233, 225, 205); font-family: &quot;Archivo&quot;, sans-serif; font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; padding: 9px 16px; cursor: pointer;">← Previous</button>
+            <button data-dc-tpl="57" style="background: none; border: 1px solid rgba(217, 186, 124, 0.4); color: rgb(233, 225, 205); font-family: &quot;Archivo&quot;, sans-serif; font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; padding: 9px 16px; cursor: pointer;">Next poem →</button>
+          </div>
+        </div>
+        <aside data-dc-tpl="58" style="border-left: 1px solid rgba(217, 186, 124, 0.25); padding-left: 26px;">
+          <p data-dc-tpl="59" style="font-family: &quot;Archivo&quot;, sans-serif; font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--gold-lit); margin: 0px 0px 8px;">New each week</p>
+          <p data-dc-tpl="60" style="font-size: 16px; color: rgb(191, 182, 160); margin: 0px;">A poem changes here roughly every week, drawn from the collection as it's revised.</p>
+        </aside>
+      </div>
+    </div>
+  </section>
+
+  <section data-dc-tpl="61" id="books" style="max-width: 1080px; margin: 0px auto; padding: 100px 32px;">
+    <div data-dc-tpl="62" style="display: flex; justify-content: space-between; align-items: flex-end; gap: 24px; flex-wrap: wrap; margin-bottom: 20px;">
+      <div data-dc-tpl="63">
+        <span data-dc-tpl="64" style="font-family: &quot;Archivo&quot;, sans-serif; font-weight: 500; font-size: 11px; letter-spacing: 0.22em; text-transform: uppercase; color: var(--gold); display: block; margin-bottom: 16px;">The work</span>
+        <h2 data-dc-tpl="65" style="font-family: &quot;Cormorant Garamond&quot;, serif; font-weight: 300; font-size: clamp(32px, 4.6vw, 46px); margin: 0px;">Thirteen books, one question<br data-dc-tpl="66">asked thirteen ways.</h2>
+      </div>
+      <span data-dc-tpl="67" style="font-family: &quot;Archivo&quot;, sans-serif; font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--ink-3); white-space: nowrap;">◆ fertig &nbsp;·&nbsp; ○ in Entwicklung</span>
+    </div>
+    <hr data-dc-tpl="68" style="border-top: 1px solid var(--rule); border-right: medium; border-bottom: medium; border-left: medium; border-image: none; margin: 36px 0px 0px;">
+    
+      <div data-dc-tpl="70" style="display: grid; grid-template-columns: 1fr auto; gap: 28px; padding: 36px 0px; border-bottom: 1px solid var(--rule); align-items: start;">
+        <div data-dc-tpl="71">
+          <span data-dc-tpl="72" style="font-family: &quot;Archivo&quot;, sans-serif; font-size: 10.5px; letter-spacing: 0.2em; text-transform: uppercase; color: var(--gold); display: block; margin-bottom: 9px;"><span class="sc-interp">Deutsche literarische Fiktion</span></span>
+          <h3 data-dc-tpl="73" style="font-family: &quot;Cormorant Garamond&quot;, serif; font-weight: 400; font-size: 27px; margin: 0px 0px 6px;"><span class="sc-interp">Die Ordnung</span></h3>
+          <p data-dc-tpl="74" style="color: var(--ink-2); margin: 0px; max-width: 64ch; font-size: 17px;"><span class="sc-interp">Rund 73.155 Wörter, 66 Kapitel. Fatma und Yusuf Aydın, Simon Petzold, Krieger.</span></p>
+        </div>
+        <div data-dc-tpl="75" style="text-align: right; padding-top: 6px; line-height: 1.6; max-width: 280px;">
+          <b data-dc-tpl="76" style="color: var(--gold); font-weight: 400; font-size: 15px;"><span class="sc-interp">◆</span></b>
+          <p data-dc-tpl="77" style="font-size: 13px; color: var(--ink-3); margin: 6px 0px 0px;"><span class="sc-interp">Fertig (Submission-Materialien erstellt)</span></p>
+        </div>
+      </div>
+    
+      <div data-dc-tpl="70" style="display: grid; grid-template-columns: 1fr auto; gap: 28px; padding: 36px 0px; border-bottom: 1px solid var(--rule); align-items: start;">
+        <div data-dc-tpl="71">
+          <span data-dc-tpl="72" style="font-family: &quot;Archivo&quot;, sans-serif; font-size: 10.5px; letter-spacing: 0.2em; text-transform: uppercase; color: var(--gold); display: block; margin-bottom: 9px;"><span class="sc-interp">Literary Fiction (English)</span></span>
+          <h3 data-dc-tpl="73" style="font-family: &quot;Cormorant Garamond&quot;, serif; font-weight: 400; font-size: 27px; margin: 0px 0px 6px;"><span class="sc-interp">What the Clockmaker Kept</span></h3>
+          <p data-dc-tpl="74" style="color: var(--ink-2); margin: 0px; max-width: 64ch; font-size: 17px;"><span class="sc-interp">Rund 71.013 Wörter. Trauernder deutscher Teenager und älterer bosnischer Flüchtlings-Uhrmacher.</span></p>
+        </div>
+        <div data-dc-tpl="75" style="text-align: right; padding-top: 6px; line-height: 1.6; max-width: 280px;">
+          <b data-dc-tpl="76" style="color: var(--gold); font-weight: 400; font-size: 15px;"><span class="sc-interp">◆</span></b>
+          <p data-dc-tpl="77" style="font-size: 13px; color: var(--ink-3); margin: 6px 0px 0px;"><span class="sc-interp">Fast fertig — "the way"-Reparaturstatus muss noch bestätigt werden</span></p>
+        </div>
+      </div>
+    
+      <div data-dc-tpl="70" style="display: grid; grid-template-columns: 1fr auto; gap: 28px; padding: 36px 0px; border-bottom: 1px solid var(--rule); align-items: start;">
+        <div data-dc-tpl="71">
+          <span data-dc-tpl="72" style="font-family: &quot;Archivo&quot;, sans-serif; font-size: 10.5px; letter-spacing: 0.2em; text-transform: uppercase; color: var(--gold); display: block; margin-bottom: 9px;"><span class="sc-interp">Literary Fiction (English) · Arbeitstitel</span></span>
+          <h3 data-dc-tpl="73" style="font-family: &quot;Cormorant Garamond&quot;, serif; font-weight: 400; font-size: 27px; margin: 0px 0px 6px;"><span class="sc-interp">The Second Ledger</span></h3>
+          <p data-dc-tpl="74" style="color: var(--ink-2); margin: 0px; max-width: 64ch; font-size: 17px;"><span class="sc-interp">Rund 75.360 Wörter, Prolog + 31 Kapitel. Imam Zayd erbt die Position seines Mentors und entdeckt ein elfjähriges Archiv unautorisierter, undokumentierter Barmherzigkeit.</span></p>
+        </div>
+        <div data-dc-tpl="75" style="text-align: right; padding-top: 6px; line-height: 1.6; max-width: 280px;">
+          <b data-dc-tpl="76" style="color: var(--gold); font-weight: 400; font-size: 15px;"><span class="sc-interp">◆</span></b>
+          <p data-dc-tpl="77" style="font-size: 13px; color: var(--ink-3); margin: 6px 0px 0px;"><span class="sc-interp">Fertig (Teil A/B abgeschlossen, korrigiertes Manuskript geliefert)</span></p>
+        </div>
+      </div>
+    
+      <div data-dc-tpl="70" style="display: grid; grid-template-columns: 1fr auto; gap: 28px; padding: 36px 0px; border-bottom: 1px solid var(--rule); align-items: start;">
+        <div data-dc-tpl="71">
+          <span data-dc-tpl="72" style="font-family: &quot;Archivo&quot;, sans-serif; font-size: 10.5px; letter-spacing: 0.2em; text-transform: uppercase; color: var(--gold); display: block; margin-bottom: 9px;"><span class="sc-interp">Literary Fiction (English)</span></span>
+          <h3 data-dc-tpl="73" style="font-family: &quot;Cormorant Garamond&quot;, serif; font-weight: 400; font-size: 27px; margin: 0px 0px 6px;"><span class="sc-interp">The Treasury of Unanswered Prayers</span></h3>
+          <p data-dc-tpl="74" style="color: var(--ink-2); margin: 0px; max-width: 64ch; font-size: 17px;"><span class="sc-interp">Rund 70.400 Wörter. Alter Fischer in einem Vision-Raum; Allah spricht als bewusstes „Voice"-Stilmittel in Ich-Form.</span></p>
+        </div>
+        <div data-dc-tpl="75" style="text-align: right; padding-top: 6px; line-height: 1.6; max-width: 280px;">
+          <b data-dc-tpl="76" style="color: var(--gold); font-weight: 400; font-size: 15px;"><span class="sc-interp">◆</span></b>
+          <p data-dc-tpl="77" style="font-size: 13px; color: var(--ink-3); margin: 6px 0px 0px;"><span class="sc-interp">Fertig (vier theologische Softening-Edits final)</span></p>
+        </div>
+      </div>
+    
+      <div data-dc-tpl="70" style="display: grid; grid-template-columns: 1fr auto; gap: 28px; padding: 36px 0px; border-bottom: 1px solid var(--rule); align-items: start;">
+        <div data-dc-tpl="71">
+          <span data-dc-tpl="72" style="font-family: &quot;Archivo&quot;, sans-serif; font-size: 10.5px; letter-spacing: 0.2em; text-transform: uppercase; color: var(--gold); display: block; margin-bottom: 9px;"><span class="sc-interp">Deutsche Fantasy / YA-Crossover · Arbeitstitel, vormals „Barzakh"</span></span>
+          <h3 data-dc-tpl="73" style="font-family: &quot;Cormorant Garamond&quot;, serif; font-weight: 400; font-size: 27px; margin: 0px 0px 6px;"><span class="sc-interp">Die letzte Grenzgängerin</span></h3>
+          <p data-dc-tpl="74" style="color: var(--ink-2); margin: 0px; max-width: 64ch; font-size: 17px;"><span class="sc-interp">Rund 74.215 Wörter, 63 Kapitel + Prolog. Islamische Kontemplationstradition, Jinn-Mensch-Grenzmythologie.</span></p>
+        </div>
+        <div data-dc-tpl="75" style="text-align: right; padding-top: 6px; line-height: 1.6; max-width: 280px;">
+          <b data-dc-tpl="76" style="color: var(--gold); font-weight: 400; font-size: 15px;"><span class="sc-interp">◆</span></b>
+          <p data-dc-tpl="77" style="font-size: 13px; color: var(--ink-3); margin: 6px 0px 0px;"><span class="sc-interp">Fertig (vollständiges Submission-Pack für den deutschen Markt)</span></p>
+        </div>
+      </div>
+    
+      <div data-dc-tpl="70" style="display: grid; grid-template-columns: 1fr auto; gap: 28px; padding: 36px 0px; border-bottom: 1px solid var(--rule); align-items: start;">
+        <div data-dc-tpl="71">
+          <span data-dc-tpl="72" style="font-family: &quot;Archivo&quot;, sans-serif; font-size: 10.5px; letter-spacing: 0.2em; text-transform: uppercase; color: var(--gold); display: block; margin-bottom: 9px;"><span class="sc-interp">Deutsche historische literarische Fiktion</span></span>
+          <h3 data-dc-tpl="73" style="font-family: &quot;Cormorant Garamond&quot;, serif; font-weight: 400; font-size: 27px; margin: 0px 0px 6px;"><span class="sc-interp">Das verdunkelte Zimmer</span></h3>
+          <p data-dc-tpl="74" style="color: var(--ink-2); margin: 0px; max-width: 64ch; font-size: 17px;"><span class="sc-interp">Rund 69.000 Wörter, frühes 11. Jahrhundert, Kairo. Ibn al-Haytham (Alhazen).</span></p>
+        </div>
+        <div data-dc-tpl="75" style="text-align: right; padding-top: 6px; line-height: 1.6; max-width: 280px;">
+          <b data-dc-tpl="76" style="color: var(--gold); font-weight: 400; font-size: 15px;"><span class="sc-interp">◆</span></b>
+          <p data-dc-tpl="77" style="font-size: 13px; color: var(--ink-3); margin: 6px 0px 0px;"><span class="sc-interp">Fast fertig — ein offener Erzählfaden (Tür-Motiv, Kap. 56–58) unaufgelöst</span></p>
+        </div>
+      </div>
+    
+      <div data-dc-tpl="70" style="display: grid; grid-template-columns: 1fr auto; gap: 28px; padding: 36px 0px; border-bottom: 1px solid var(--rule); align-items: start;">
+        <div data-dc-tpl="71">
+          <span data-dc-tpl="72" style="font-family: &quot;Archivo&quot;, sans-serif; font-size: 10.5px; letter-spacing: 0.2em; text-transform: uppercase; color: var(--gold); display: block; margin-bottom: 9px;"><span class="sc-interp">Historical Literary Fiction (English)</span></span>
+          <h3 data-dc-tpl="73" style="font-family: &quot;Cormorant Garamond&quot;, serif; font-weight: 400; font-size: 27px; margin: 0px 0px 6px;"><span class="sc-interp">The Physician of Ashes</span></h3>
+          <p data-dc-tpl="74" style="color: var(--ink-2); margin: 0px; max-width: 64ch; font-size: 17px;"><span class="sc-interp">Rund 94.300–95.030 Wörter, Prolog + 35 Kapitel + Epilog. Ibn Sina (Avicenna), erzählt durch seinen Schüler al-Juzjani.</span></p>
+        </div>
+        <div data-dc-tpl="75" style="text-align: right; padding-top: 6px; line-height: 1.6; max-width: 280px;">
+          <b data-dc-tpl="76" style="color: var(--gold); font-weight: 400; font-size: 15px;"><span class="sc-interp">◆</span></b>
+          <p data-dc-tpl="77" style="font-size: 13px; color: var(--ink-3); margin: 6px 0px 0px;"><span class="sc-interp">Fertig, aber ein theologischer Punkt (drei philosophische Anklagepunkte, Kap. 21) offen — Autorenentscheidung nötig</span></p>
+        </div>
+      </div>
+    
+      <div data-dc-tpl="70" style="display: grid; grid-template-columns: 1fr auto; gap: 28px; padding: 36px 0px; border-bottom: 1px solid var(--rule); align-items: start;">
+        <div data-dc-tpl="71">
+          <span data-dc-tpl="72" style="font-family: &quot;Archivo&quot;, sans-serif; font-size: 10.5px; letter-spacing: 0.2em; text-transform: uppercase; color: var(--gold); display: block; margin-bottom: 9px;"><span class="sc-interp">Near-Future Upmarket Suspense (English)</span></span>
+          <h3 data-dc-tpl="73" style="font-family: &quot;Cormorant Garamond&quot;, serif; font-weight: 400; font-size: 27px; margin: 0px 0px 6px;"><span class="sc-interp">The Debt We Carry</span></h3>
+          <p data-dc-tpl="74" style="color: var(--ink-2); margin: 0px; max-width: 64ch; font-size: 17px;"><span class="sc-interp">Rund 83.600 Wörter. Ein Gedächtnis-Löschungs-Broker entdeckt die Neuraldaten seines gelähmten Bruders im eigenen Schwarzmarkt.</span></p>
+        </div>
+        <div data-dc-tpl="75" style="text-align: right; padding-top: 6px; line-height: 1.6; max-width: 280px;">
+          <b data-dc-tpl="76" style="color: var(--gold); font-weight: 400; font-size: 15px;"><span class="sc-interp">◆</span></b>
+          <p data-dc-tpl="77" style="font-size: 13px; color: var(--ink-3); margin: 6px 0px 0px;"><span class="sc-interp">Fertig</span></p>
+        </div>
+      </div>
+    
+      <div data-dc-tpl="70" style="display: grid; grid-template-columns: 1fr auto; gap: 28px; padding: 36px 0px; border-bottom: 1px solid var(--rule); align-items: start;">
+        <div data-dc-tpl="71">
+          <span data-dc-tpl="72" style="font-family: &quot;Archivo&quot;, sans-serif; font-size: 10.5px; letter-spacing: 0.2em; text-transform: uppercase; color: var(--gold); display: block; margin-bottom: 9px;"><span class="sc-interp">Literary Fiction (English)</span></span>
+          <h3 data-dc-tpl="73" style="font-family: &quot;Cormorant Garamond&quot;, serif; font-weight: 400; font-size: 27px; margin: 0px 0px 6px;"><span class="sc-interp">Whoever Saves a Life</span></h3>
+          <p data-dc-tpl="74" style="color: var(--ink-2); margin: 0px; max-width: 64ch; font-size: 17px;"><span class="sc-interp">Rund 69.902 Wörter, Prolog + 30 Kapitel. Zwei unsterbliche Erzähler (Engel &amp; Jinn) über drei Zeitlinien: Aksum 615, Córdoba im 12. Jh., Sarajevo 1992–95.</span></p>
+        </div>
+        <div data-dc-tpl="75" style="text-align: right; padding-top: 6px; line-height: 1.6; max-width: 280px;">
+          <b data-dc-tpl="76" style="color: var(--gold); font-weight: 400; font-size: 15px;"><span class="sc-interp">◆</span></b>
+          <p data-dc-tpl="77" style="font-size: 13px; color: var(--ink-3); margin: 6px 0px 0px;"><span class="sc-interp">Fast fertig — „the way"-Reparatur-Abschluss muss bestätigt werden</span></p>
+        </div>
+      </div>
+    
+      <div data-dc-tpl="70" style="display: grid; grid-template-columns: 1fr auto; gap: 28px; padding: 36px 0px; border-bottom: 1px solid var(--rule); align-items: start;">
+        <div data-dc-tpl="71">
+          <span data-dc-tpl="72" style="font-family: &quot;Archivo&quot;, sans-serif; font-size: 10.5px; letter-spacing: 0.2em; text-transform: uppercase; color: var(--gold); display: block; margin-bottom: 9px;"><span class="sc-interp">Science Fiction (English)</span></span>
+          <h3 data-dc-tpl="73" style="font-family: &quot;Cormorant Garamond&quot;, serif; font-weight: 400; font-size: 27px; margin: 0px 0px 6px;"><span class="sc-interp">ARCHE</span></h3>
+          <p data-dc-tpl="74" style="color: var(--ink-2); margin: 0px; max-width: 64ch; font-size: 17px;"><span class="sc-interp">Rund 33 Einheiten. Fremder Planet, KI-Kollektiv NEXUS, Found-Family-Überlebende; bewusst interreligiöse Rahmung, Koran und Mischna parallel gelesen.</span></p>
+        </div>
+        <div data-dc-tpl="75" style="text-align: right; padding-top: 6px; line-height: 1.6; max-width: 280px;">
+          <b data-dc-tpl="76" style="color: var(--gold); font-weight: 400; font-size: 15px;"><span class="sc-interp">◆</span></b>
+          <p data-dc-tpl="77" style="font-size: 13px; color: var(--ink-3); margin: 6px 0px 0px;"><span class="sc-interp">Fertig</span></p>
+        </div>
+      </div>
+    
+      <div data-dc-tpl="70" style="display: grid; grid-template-columns: 1fr auto; gap: 28px; padding: 36px 0px; border-bottom: 1px solid var(--rule); align-items: start;">
+        <div data-dc-tpl="71">
+          <span data-dc-tpl="72" style="font-family: &quot;Archivo&quot;, sans-serif; font-size: 10.5px; letter-spacing: 0.2em; text-transform: uppercase; color: var(--gold); display: block; margin-bottom: 9px;"><span class="sc-interp">Historical Literary Fiction (English)</span></span>
+          <h3 data-dc-tpl="73" style="font-family: &quot;Cormorant Garamond&quot;, serif; font-weight: 400; font-size: 27px; margin: 0px 0px 6px;"><span class="sc-interp">The Niche of Light</span></h3>
+          <p data-dc-tpl="74" style="color: var(--ink-2); margin: 0px; max-width: 64ch; font-size: 17px;"><span class="sc-interp">Rund 100.500 Wörter, Prolog + 26 Kapitel + Epilog. Al-Ghazalis spirituelle Krise, Bagdad 1095.</span></p>
+        </div>
+        <div data-dc-tpl="75" style="text-align: right; padding-top: 6px; line-height: 1.6; max-width: 280px;">
+          <b data-dc-tpl="76" style="color: var(--gold); font-weight: 400; font-size: 15px;"><span class="sc-interp">◆</span></b>
+          <p data-dc-tpl="77" style="font-size: 13px; color: var(--ink-3); margin: 6px 0px 0px;"><span class="sc-interp">Fast fertig — Voice-Sheets für Kap. 8–26 veraltet, das Autoren-Pack ist die aktuelle Referenz</span></p>
+        </div>
+      </div>
+    
+      <div data-dc-tpl="70" style="display: grid; grid-template-columns: 1fr auto; gap: 28px; padding: 36px 0px; border-bottom: 1px solid var(--rule); align-items: start;">
+        <div data-dc-tpl="71">
+          <span data-dc-tpl="72" style="font-family: &quot;Archivo&quot;, sans-serif; font-size: 10.5px; letter-spacing: 0.2em; text-transform: uppercase; color: var(--gold); display: block; margin-bottom: 9px;"><span class="sc-interp">Deutsche literarische Komödie mit Tiefgang</span></span>
+          <h3 data-dc-tpl="73" style="font-family: &quot;Cormorant Garamond&quot;, serif; font-weight: 400; font-size: 27px; margin: 0px 0px 6px;"><span class="sc-interp">Die Werkstatt der verlorenen Dinge</span></h3>
+          <p data-dc-tpl="74" style="color: var(--ink-2); margin: 0px; max-width: 64ch; font-size: 17px;"><span class="sc-interp">Rund 69.400 Wörter, 62 Kapitel.</span></p>
+        </div>
+        <div data-dc-tpl="75" style="text-align: right; padding-top: 6px; line-height: 1.6; max-width: 280px;">
+          <b data-dc-tpl="76" style="color: var(--gold); font-weight: 400; font-size: 15px;"><span class="sc-interp">◆</span></b>
+          <p data-dc-tpl="77" style="font-size: 13px; color: var(--ink-3); margin: 6px 0px 0px;"><span class="sc-interp">Fertig, mit zwei offenen Punkten vor Einreichung: Sensitivity-Read (Familie Cohen), Rechtsprüfung Grundbuchrecht</span></p>
+        </div>
+      </div>
+    
+      <div data-dc-tpl="70" style="display: grid; grid-template-columns: 1fr auto; gap: 28px; padding: 36px 0px; border-bottom: 1px solid var(--rule); align-items: start;">
+        <div data-dc-tpl="71">
+          <span data-dc-tpl="72" style="font-family: &quot;Archivo&quot;, sans-serif; font-size: 10.5px; letter-spacing: 0.2em; text-transform: uppercase; color: var(--gold); display: block; margin-bottom: 9px;"><span class="sc-interp">Familiensaga, nicht-lineare Struktur</span></span>
+          <h3 data-dc-tpl="73" style="font-family: &quot;Cormorant Garamond&quot;, serif; font-weight: 400; font-size: 27px; margin: 0px 0px 6px;"><span class="sc-interp">A House With Two Doors</span></h3>
+          <p data-dc-tpl="74" style="color: var(--ink-2); margin: 0px; max-width: 64ch; font-size: 17px;"><span class="sc-interp">Drei Generationen: Teilung 1947, 1971, heutiges Deutschland. Vererbtes Schweigen um ein moralisches Versagen.</span></p>
+        </div>
+        <div data-dc-tpl="75" style="text-align: right; padding-top: 6px; line-height: 1.6; max-width: 280px;">
+          <b data-dc-tpl="76" style="color: var(--gold); font-weight: 400; font-size: 15px;"><span class="sc-interp">○</span></b>
+          <p data-dc-tpl="77" style="font-size: 13px; color: var(--ink-3); margin: 6px 0px 0px;"><span class="sc-interp">In Entwicklung (Konzeptphase, Neuer-Roman-Protokoll)</span></p>
+        </div>
+      </div>
+    
+  </section>
+
+  <section data-dc-tpl="78" id="about" style="background: var(--bone-deep); padding: 100px 32px;">
+    <div data-dc-tpl="79" style="max-width: 1080px; margin: 0px auto; display: grid; grid-template-columns: 0.8fr 1.2fr; gap: 64px; align-items: start;">
+      <div data-dc-tpl="80" style="border: 8px solid var(--bone); outline: 1px solid var(--rule); box-sizing: border-box;">
+        <img data-dc-tpl="81" src="uploads/portrait-1786557199986-x6v4.jpg" alt="Portrait of Ali Jawwad Khan" style="display: block; width: 100%; aspect-ratio: 3 / 4; object-fit: cover; filter: sepia(0.1) saturate(0.95);">
+      </div>
+      <div data-dc-tpl="82">
+        <span data-dc-tpl="83" style="font-family: &quot;Archivo&quot;, sans-serif; font-weight: 500; font-size: 11px; letter-spacing: 0.22em; text-transform: uppercase; color: var(--gold); display: block; margin-bottom: 16px;">About</span>
+        <h2 data-dc-tpl="84" style="font-family: &quot;Cormorant Garamond&quot;, serif; font-weight: 300; font-size: 38px; margin: 0px 0px 22px;">Ali Jawwad Khan</h2>
+        <p data-dc-tpl="85" style="color: var(--ink-2); font-size: 18px; margin: 0px;"><span class="sc-interp">Ali Jawwad Khan is a writer based in Ober-Ramstadt, Germany. His fiction is rooted in a long and serious engagement with Islamic history, theology, and the Sufi contemplative tradition — not as subject matter to be explained, but as a way of seeing that shapes how his stories are told. He is drawn to the questions that belong to no single faith: what a person owes the truth once they have profited from its absence; how mercy survives in people with no power to change anything except how gently they treat what remains. His approach trusts image over statement, and the ordinary over the grand, in the belief that the largest truths arrive most honestly through the smallest lives.</span></p>
+      </div>
+    </div>
+  </section>
+
+  <section data-dc-tpl="86" id="contact" style="background: var(--midnight); text-align: center; padding: 110px 32px;">
+    <img data-dc-tpl="87" src="assets/flourish.webp" alt="" style="width: 96px; margin: 0px auto 26px; opacity: 0.95;">
+    <span data-dc-tpl="88" style="font-family: &quot;Archivo&quot;, sans-serif; font-weight: 500; font-size: 11px; letter-spacing: 0.22em; text-transform: uppercase; color: var(--gold-lit); display: block; margin-bottom: 14px;">Stay in touch</span>
+    <h2 data-dc-tpl="89" style="font-family: &quot;Cormorant Garamond&quot;, serif; font-style: italic; font-weight: 300; font-size: clamp(28px, 4vw, 42px); color: rgb(244, 238, 221); max-width: 19ch; margin: 0px auto 18px;">A note, now and then.</h2>
+    <a data-dc-tpl="90" href="mailto:hello@ajkhanbooks.com" style="display: inline-block; font-family: &quot;Archivo&quot;, sans-serif; font-size: 14px; letter-spacing: 0.05em; color: var(--gold-lit); text-decoration: none; border-bottom: 1px solid rgba(217, 186, 124, 0.4);"><span class="sc-interp">hello@ajkhanbooks.com</span></a>
+  </section>
+
+  <div data-dc-tpl="91" style="padding: 24px 32px; text-align: center; font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-3); font-family: &quot;Archivo&quot;, sans-serif; border-top: 1px solid var(--rule);">
+    © <span class="sc-interp">2026</span> Ali Jawwad Khan
+    <button data-dc-tpl="92" style="background: none; border: medium; color: var(--ink-3); font-family: &quot;Archivo&quot;, sans-serif; font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; cursor: pointer; margin-left: 16px; text-decoration: underline;">Admin</button>
+  </div>
+
+  
+
+  
+    <div data-dc-tpl="105" style="position: fixed; inset: 0px; background: rgba(22, 20, 15, 0.6); z-index: 40; display: flex; align-items: flex-start; justify-content: center; padding: 40px 20px; overflow: auto;">
+      <div data-dc-tpl="106" style="width: min(680px, 100%); background: var(--bone); border: 1px solid var(--rule); padding: 36px;">
+        <div data-dc-tpl="107" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px;">
+          <h3 data-dc-tpl="108" style="font-family: &quot;Cormorant Garamond&quot;, serif; font-weight: 400; font-size: 24px; margin: 0px;">Manage poems</h3>
+          <button data-dc-tpl="109" style="background: none; border: 1px solid var(--rule); color: var(--ink-2); font-family: &quot;Archivo&quot;, sans-serif; font-size: 12px; text-transform: uppercase; padding: 8px 14px; cursor: pointer;">Close</button>
+        </div>
+
+        
+          <div data-dc-tpl="111" style="border: 1px solid var(--rule); padding: 16px; margin-bottom: 12px;">
+            
+            
+              <div data-dc-tpl="121" style="display: flex; justify-content: space-between; gap: 16px;">
+                <div data-dc-tpl="122">
+                  <span data-dc-tpl="123" style="font-family: &quot;Archivo&quot;, sans-serif; font-size: 11px; text-transform: uppercase; color: var(--ink-3);"><span class="sc-interp">Part III — The World</span></span>
+                  <h4 data-dc-tpl="124" style="font-family: &quot;Cormorant Garamond&quot;, serif; font-size: 18px; margin: 4px 0px 0px;"><span class="sc-interp">The Door Held Open</span></h4>
+                </div>
+                <div data-dc-tpl="125" style="display: flex; gap: 8px; flex-shrink: 0;">
+                  <button data-dc-tpl="126" style="background: none; border: 1px solid var(--rule); color: var(--ink-2); font-family: &quot;Archivo&quot;, sans-serif; font-size: 11px; text-transform: uppercase; padding: 6px 12px; cursor: pointer;">Edit</button>
+                  <button data-dc-tpl="127" style="background: none; border: 1px solid var(--rule); color: rgb(161, 59, 43); font-family: &quot;Archivo&quot;, sans-serif; font-size: 11px; text-transform: uppercase; padding: 6px 12px; cursor: pointer;">Delete</button>
+                </div>
+              </div>
+            
+          </div>
+        
+          <div data-dc-tpl="111" style="border: 1px solid var(--rule); padding: 16px; margin-bottom: 12px;">
+            
+            
+              <div data-dc-tpl="121" style="display: flex; justify-content: space-between; gap: 16px;">
+                <div data-dc-tpl="122">
+                  <span data-dc-tpl="123" style="font-family: &quot;Archivo&quot;, sans-serif; font-size: 11px; text-transform: uppercase; color: var(--ink-3);"><span class="sc-interp">Part I — The Seeker</span></span>
+                  <h4 data-dc-tpl="124" style="font-family: &quot;Cormorant Garamond&quot;, serif; font-size: 18px; margin: 4px 0px 0px;"><span class="sc-interp">Paradox</span></h4>
+                </div>
+                <div data-dc-tpl="125" style="display: flex; gap: 8px; flex-shrink: 0;">
+                  <button data-dc-tpl="126" style="background: none; border: 1px solid var(--rule); color: var(--ink-2); font-family: &quot;Archivo&quot;, sans-serif; font-size: 11px; text-transform: uppercase; padding: 6px 12px; cursor: pointer;">Edit</button>
+                  <button data-dc-tpl="127" style="background: none; border: 1px solid var(--rule); color: rgb(161, 59, 43); font-family: &quot;Archivo&quot;, sans-serif; font-size: 11px; text-transform: uppercase; padding: 6px 12px; cursor: pointer;">Delete</button>
+                </div>
+              </div>
+            
+          </div>
+        
+          <div data-dc-tpl="111" style="border: 1px solid var(--rule); padding: 16px; margin-bottom: 12px;">
+            
+            
+              <div data-dc-tpl="121" style="display: flex; justify-content: space-between; gap: 16px;">
+                <div data-dc-tpl="122">
+                  <span data-dc-tpl="123" style="font-family: &quot;Archivo&quot;, sans-serif; font-size: 11px; text-transform: uppercase; color: var(--ink-3);"><span class="sc-interp">Part I — The Seeker</span></span>
+                  <h4 data-dc-tpl="124" style="font-family: &quot;Cormorant Garamond&quot;, serif; font-size: 18px; margin: 4px 0px 0px;"><span class="sc-interp">Ascension</span></h4>
+                </div>
+                <div data-dc-tpl="125" style="display: flex; gap: 8px; flex-shrink: 0;">
+                  <button data-dc-tpl="126" style="background: none; border: 1px solid var(--rule); color: var(--ink-2); font-family: &quot;Archivo&quot;, sans-serif; font-size: 11px; text-transform: uppercase; padding: 6px 12px; cursor: pointer;">Edit</button>
+                  <button data-dc-tpl="127" style="background: none; border: 1px solid var(--rule); color: rgb(161, 59, 43); font-family: &quot;Archivo&quot;, sans-serif; font-size: 11px; text-transform: uppercase; padding: 6px 12px; cursor: pointer;">Delete</button>
+                </div>
+              </div>
+            
+          </div>
+        
+          <div data-dc-tpl="111" style="border: 1px solid var(--rule); padding: 16px; margin-bottom: 12px;">
+            
+            
+              <div data-dc-tpl="121" style="display: flex; justify-content: space-between; gap: 16px;">
+                <div data-dc-tpl="122">
+                  <span data-dc-tpl="123" style="font-family: &quot;Archivo&quot;, sans-serif; font-size: 11px; text-transform: uppercase; color: var(--ink-3);"><span class="sc-interp">Part I — The Seeker</span></span>
+                  <h4 data-dc-tpl="124" style="font-family: &quot;Cormorant Garamond&quot;, serif; font-size: 18px; margin: 4px 0px 0px;"><span class="sc-interp">Drowned</span></h4>
+                </div>
+                <div data-dc-tpl="125" style="display: flex; gap: 8px; flex-shrink: 0;">
+                  <button data-dc-tpl="126" style="background: none; border: 1px solid var(--rule); color: var(--ink-2); font-family: &quot;Archivo&quot;, sans-serif; font-size: 11px; text-transform: uppercase; padding: 6px 12px; cursor: pointer;">Edit</button>
+                  <button data-dc-tpl="127" style="background: none; border: 1px solid var(--rule); color: rgb(161, 59, 43); font-family: &quot;Archivo&quot;, sans-serif; font-size: 11px; text-transform: uppercase; padding: 6px 12px; cursor: pointer;">Delete</button>
+                </div>
+              </div>
+            
+          </div>
+        
+          <div data-dc-tpl="111" style="border: 1px solid var(--rule); padding: 16px; margin-bottom: 12px;">
+            
+            
+              <div data-dc-tpl="121" style="display: flex; justify-content: space-between; gap: 16px;">
+                <div data-dc-tpl="122">
+                  <span data-dc-tpl="123" style="font-family: &quot;Archivo&quot;, sans-serif; font-size: 11px; text-transform: uppercase; color: var(--ink-3);"><span class="sc-interp">Part IV — Homecoming</span></span>
+                  <h4 data-dc-tpl="124" style="font-family: &quot;Cormorant Garamond&quot;, serif; font-size: 18px; margin: 4px 0px 0px;"><span class="sc-interp">If Someone Asks Who I Am</span></h4>
+                </div>
+                <div data-dc-tpl="125" style="display: flex; gap: 8px; flex-shrink: 0;">
+                  <button data-dc-tpl="126" style="background: none; border: 1px solid var(--rule); color: var(--ink-2); font-family: &quot;Archivo&quot;, sans-serif; font-size: 11px; text-transform: uppercase; padding: 6px 12px; cursor: pointer;">Edit</button>
+                  <button data-dc-tpl="127" style="background: none; border: 1px solid var(--rule); color: rgb(161, 59, 43); font-family: &quot;Archivo&quot;, sans-serif; font-size: 11px; text-transform: uppercase; padding: 6px 12px; cursor: pointer;">Delete</button>
+                </div>
+              </div>
+            
+          </div>
+        
+
+        <button data-dc-tpl="128" style="background: none; border: 1px dashed var(--gold); color: var(--gold); font-family: &quot;Archivo&quot;, sans-serif; font-size: 12px; text-transform: uppercase; padding: 10px 16px; cursor: pointer; width: 100%; margin-bottom: 24px;">+ Add new poem</button>
+
+        <div data-dc-tpl="129" style="display: flex; gap: 12px; flex-wrap: wrap; border-top: 1px solid var(--rule); padding-top: 20px;">
+          <button data-dc-tpl="130" style="background: var(--midnight); border: 1px solid var(--midnight); color: var(--bone); font-family: &quot;Archivo&quot;, sans-serif; font-size: 12px; text-transform: uppercase; padding: 10px 18px; cursor: pointer;">Download updated site</button>
+          <button data-dc-tpl="131" style="background: none; border: medium; color: var(--ink-2); font-family: &quot;Archivo&quot;, sans-serif; font-size: 12px; text-transform: uppercase; cursor: pointer;">Sign out</button>
+        </div>
+        
+        <p data-dc-tpl="134" style="font-size: 12px; color: var(--ink-3); margin-top: 14px;">Downloaded file replaces your published site's index.html so weekly poem changes go live.</p>
+      </div>
+    </div>
+  </div></div></div>
+<script type="text/x-dc" data-dc-script="" data-props="{&quot;$preview&quot;:{}}">
+class Component extends DCLogic {
+  state = { bio: {}, books: [], poems: [], settings: { adminPassword: 'khan-admin-2026' },
+    poemIndex: 0, showAdminLogin: false, adminPasswordInput: '', adminError: '',
+    isAdmin: false, editingIndex: null, forms: {}, downloadMsg: '' };
+
+  componentDidMount() {
+    let seed = {};
+    try { seed = JSON.parse(document.getElementById('author-data').textContent); } catch (e) {}
+    let draft = null;
+    try { draft = JSON.parse(localStorage.getItem('ajk_author_poems_draft')); } catch (e) {}
+    this.setState({
+      bio: seed.bio || {},
+      books: (seed.books || []).map((b, i) => ({ ...b, num: String(i + 1).padStart(2, '0') })),
+      poems: (draft && draft.poems) || seed.poems || [],
+      settings: seed.settings || { adminPassword: 'khan-admin-2026' },
+      isAdmin: localStorage.getItem('ajk_author_admin') === '1'
+    });
+  }
+
+  persist() { localStorage.setItem('ajk_author_poems_draft', JSON.stringify({ poems: this.state.poems })); }
+
+  nextPoem = () => this.setState(s => ({ poemIndex: (s.poemIndex + 1) % Math.max(s.poems.length, 1) }));
+  prevPoem = () => this.setState(s => ({ poemIndex: (s.poemIndex - 1 + s.poems.length) % Math.max(s.poems.length, 1) }));
+
+  openAdminLogin = () => this.setState({ showAdminLogin: true, adminPasswordInput: '', adminError: '' });
+  closeAdminLogin = () => this.setState({ showAdminLogin: false });
+  setAdminPasswordInput = (e) => this.setState({ adminPasswordInput: e.target.value, adminError: '' });
+  submitAdminLoginForm = (e) => { e.preventDefault(); this.submitAdminLogin(); };
+  submitAdminLogin() {
+    if (this.state.adminPasswordInput === this.state.settings.adminPassword) {
+      localStorage.setItem('ajk_author_admin', '1');
+      this.setState({ isAdmin: true, showAdminLogin: false, adminPasswordInput: '' });
+    } else {
+      this.setState({ adminError: 'Incorrect password.' });
+    }
+  }
+  closeAdminPanel = () => this.setState({ isAdmin: false === false ? this.state.isAdmin : false, editingIndex: null });
+  signOut = () => { localStorage.removeItem('ajk_author_admin'); this.setState({ isAdmin: false, editingIndex: null }); };
+
+  addPoem = () => {
+    const np = { title: '', part: '', mark: '◆', text: '' };
+    this.setState(s => ({ poems: [...s.poems, np], editingIndex: s.poems.length, forms: { ...s.forms, [s.poems.length]: { ...np } } }));
+  };
+  editPoem = (i) => this.setState(s => ({ editingIndex: i, forms: { ...s.forms, [i]: { ...s.poems[i] } } }));
+  cancelEdit = (i) => this.setState(s => {
+    const poems = s.poems[i] && !s.poems[i].title && s.editingIndex === i && s.forms[i] && !s.forms[i].title && s.poems.length - 1 === i && s.poems[i].text === ''
+      ? s.poems.slice(0, -1) : s.poems;
+    return { editingIndex: null };
+  });
+  setFormField = (i, field, value) => this.setState(s => ({ forms: { ...s.forms, [i]: { ...s.forms[i], [field]: value } } }));
+  savePoem = (i) => {
+    this.setState(s => {
+      const poems = s.poems.map((p, idx) => idx === i ? { ...s.forms[i] } : p);
+      return { poems, editingIndex: null };
+    }, () => this.persist());
+  };
+  removePoem = (i) => {
+    if (!window.confirm('Delete this poem?')) return;
+    this.setState(s => ({ poems: s.poems.filter((_, idx) => idx !== i), poemIndex: 0 }), () => this.persist());
+  };
+
+  downloadSite = () => {
+    const clone = document.documentElement.cloneNode(true);
+    const dataScript = clone.querySelector('#author-data');
+    if (dataScript) {
+      const payload = JSON.parse(dataScript.textContent);
+      payload.poems = this.state.poems;
+      dataScript.textContent = JSON.stringify(payload, null, 2);
+    }
+    const html = '<!DOCTYPE html>\n' + clone.outerHTML;
+    const blob = new Blob([html], { type: 'text/html' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = 'ajkhan-author-site.html';
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    this.setState({ downloadMsg: 'Downloaded — upload this file to your host to publish the changes.' });
+  };
+
+  renderVals() {
+    const s = this.state;
+    const badgeFor = (status) => {
+      if (status.startsWith('Fertig')) return { badge: 'Fertig', color: 'var(--brass)' };
+      if (status.startsWith('Fast fertig')) return { badge: 'Fast fertig', color: 'var(--indigo)' };
+      return { badge: 'In Entwicklung', color: 'var(--ink-soft)' };
+    };
+    const books = s.books.map(b => {
+      const bd = badgeFor(b.status);
+      return { ...b, badge: bd.badge, badgeColor: bd.color };
+    });
+    const poems = s.poems.map((p, i) => ({
+      title: p.title, part: p.part,
+      isEditing: s.editingIndex === i,
+      isViewing: s.editingIndex !== i,
+      form: s.forms[i] || p,
+      setTitle: (e) => this.setFormField(i, 'title', e.target.value),
+      setPart: (e) => this.setFormField(i, 'part', e.target.value),
+      setText: (e) => this.setFormField(i, 'text', e.target.value),
+      edit: () => this.editPoem(i),
+      remove: () => this.removePoem(i),
+      save: () => this.savePoem(i),
+      cancel: () => this.cancelEdit(i)
+    }));
+    const currentPoem = s.poems[s.poemIndex] || { title: '', part: '', mark: '', text: '' };
+
+    return {
+      bioText: s.bio.short || '', bioLong: s.bio.long || '',
+      books, bookCount: books.length,
+      currentPoem, nextPoem: this.nextPoem, prevPoem: this.prevPoem,
+      poems,
+      contactEmail: 'hello@ajkhanbooks.com',
+      year: new Date().getFullYear(),
+      showAdminLogin: s.showAdminLogin, openAdminLogin: this.openAdminLogin, closeAdminLogin: this.closeAdminLogin,
+      adminPasswordInput: s.adminPasswordInput, adminError: s.adminError,
+      setAdminPasswordInput: this.setAdminPasswordInput, submitAdminLoginForm: this.submitAdminLoginForm,
+      isAdmin: s.isAdmin, closeAdminPanel: this.closeAdminPanel, signOut: this.signOut,
+      addPoem: this.addPoem, downloadSite: this.downloadSite, downloadMsg: s.downloadMsg
+    };
+  }
+}
+</script>
+
+
+<script type="application/json" id="__om_srcmap">{"gen":"363e0cf0","entries":[{"id":"363e0cf0:0","tag":"html","openStart":16,"attrEnd":21,"openEnd":22,"closeStart":31367,"closeEnd":31374,"textRuns":[[22,23],[166,167],[31366,31367]],"parentId":null,"childIds":["363e0cf0:1","363e0cf0:4"]},{"id":"363e0cf0:1","tag":"head","openStart":23,"attrEnd":28,"openEnd":29,"closeStart":159,"closeEnd":166,"textRuns":[[29,30],[52,53],[121,122],[158,159]],"parentId":"363e0cf0:0","childIds":["363e0cf0:2","363e0cf0:3"]},{"id":"363e0cf0:2","tag":"meta","openStart":30,"attrEnd":51,"openEnd":52,"closeEnd":52,"textRuns":[],"parentId":"363e0cf0:1","childIds":[]},{"id":"363e0cf0:3","tag":"meta","openStart":53,"attrEnd":120,"openEnd":121,"closeEnd":121,"textRuns":[],"parentId":"363e0cf0:1","childIds":[]},{"id":"363e0cf0:4","tag":"body","openStart":167,"attrEnd":172,"openEnd":173,"closeStart":31359,"closeEnd":31366,"textRuns":[[173,174],[25261,25262],[31358,31359]],"parentId":"363e0cf0:0","childIds":["363e0cf0:5"]},{"id":"363e0cf0:5","tag":"x-dc","openStart":174,"attrEnd":179,"openEnd":180,"closeStart":25254,"closeEnd":25261,"textRuns":[[180,181],[9507,9509],[25252,25254]],"parentId":"363e0cf0:4","childIds":["363e0cf0:6","363e0cf0:14"]},{"id":"363e0cf0:6","tag":"helmet","openStart":181,"attrEnd":188,"openEnd":189,"closeStart":9498,"closeEnd":9507,"textRuns":[[189,192],[454,457],[527,530],[566,569],[628,631],[894,897],[1415,1418],[9497,9498]],"parentId":"363e0cf0:5","childIds":["363e0cf0:7","363e0cf0:11","363e0cf0:12","363e0cf0:13"]},{"id":"363e0cf0:7","tag":"template","openStart":192,"attrEnd":226,"openEnd":227,"closeStart":443,"closeEnd":454,"textRuns":[],"parentId":"363e0cf0:6","childIds":["363e0cf0:8"]},{"id":"363e0cf0:8","tag":"svg","openStart":227,"attrEnd":288,"openEnd":289,"closeStart":437,"closeEnd":443,"textRuns":[],"parentId":"363e0cf0:7","childIds":["363e0cf0:9"]},{"id":"363e0cf0:9","tag":"rect","openStart":289,"attrEnd":334,"openEnd":336,"textRuns":[],"parentId":"363e0cf0:8","childIds":["363e0cf0:10"]},{"id":"363e0cf0:10","tag":"text","openStart":336,"attrEnd":426,"openEnd":427,"closeStart":430,"closeEnd":437,"textRuns":[[427,430]],"parentId":"363e0cf0:9","childIds":[]},{"id":"363e0cf0:11","tag":"meta","openStart":457,"attrEnd":526,"openEnd":527,"closeEnd":527,"textRuns":[],"parentId":"363e0cf0:6","childIds":[]},{"id":"363e0cf0:12","tag":"link","openStart":569,"attrEnd":627,"openEnd":628,"closeEnd":628,"textRuns":[],"parentId":"363e0cf0:6","childIds":[]},{"id":"363e0cf0:13","tag":"link","openStart":631,"attrEnd":893,"openEnd":894,"closeEnd":894,"textRuns":[],"parentId":"363e0cf0:6","childIds":[]},{"id":"363e0cf0:14","tag":"div","openStart":9509,"attrEnd":9576,"openEnd":9577,"closeStart":25246,"closeEnd":25252,"styleAttr":[9521,9575],"textRuns":[[9577,9581],[10484,10488],[12038,12042],[12604,12608],[14957,14961],[16913,16917],[18246,18250],[18697,18701],[20383,20387],[25244,25246]],"parentId":"363e0cf0:5","childIds":["363e0cf0:15","363e0cf0:23","363e0cf0:33","363e0cf0:38","363e0cf0:55","363e0cf0:68","363e0cf0:81","363e0cf0:83","363e0cf0:94"]},{"id":"363e0cf0:15","tag":"div","openStart":9581,"attrEnd":9775,"openEnd":9776,"closeStart":10478,"closeEnd":10484,"styleAttr":[9593,9774],"textRuns":[[9776,9781],[9954,9959],[10475,10478]],"parentId":"363e0cf0:14","childIds":["363e0cf0:16","363e0cf0:18"]},{"id":"363e0cf0:16","tag":"div","openStart":9781,"attrEnd":9896,"openEnd":9897,"closeStart":9948,"closeEnd":9954,"styleAttr":[9793,9895],"textRuns":[[9897,9903]],"parentId":"363e0cf0:15","childIds":["363e0cf0:17"]},{"id":"363e0cf0:17","tag":"span","openStart":9903,"attrEnd":9936,"openEnd":9937,"closeStart":9941,"closeEnd":9948,"styleAttr":[9916,9935],"textRuns":[[9937,9941]],"parentId":"363e0cf0:16","childIds":[]},{"id":"363e0cf0:18","tag":"div","openStart":9959,"attrEnd":10115,"openEnd":10116,"closeStart":10469,"closeEnd":10475,"styleAttr":[9971,10114],"textRuns":[[10116,10123],[10202,10209],[10288,10295],[10374,10381],[10464,10469]],"parentId":"363e0cf0:15","childIds":["363e0cf0:19","363e0cf0:20","363e0cf0:21","363e0cf0:22"]},{"id":"363e0cf0:19","tag":"a","openStart":10123,"attrEnd":10192,"openEnd":10193,"closeStart":10198,"closeEnd":10202,"styleAttr":[10147,10191],"textRuns":[[10193,10198]],"parentId":"363e0cf0:18","childIds":[]},{"id":"363e0cf0:20","tag":"a","openStart":10209,"attrEnd":10278,"openEnd":10279,"closeStart":10284,"closeEnd":10288,"styleAttr":[10233,10277],"textRuns":[[10279,10284]],"parentId":"363e0cf0:18","childIds":[]},{"id":"363e0cf0:21","tag":"a","openStart":10295,"attrEnd":10364,"openEnd":10365,"closeStart":10370,"closeEnd":10374,"styleAttr":[10319,10363],"textRuns":[[10365,10370]],"parentId":"363e0cf0:18","childIds":[]},{"id":"363e0cf0:22","tag":"a","openStart":10381,"attrEnd":10452,"openEnd":10453,"closeStart":10460,"closeEnd":10464,"styleAttr":[10407,10451],"textRuns":[[10453,10460]],"parentId":"363e0cf0:18","childIds":[]},{"id":"363e0cf0:23","tag":"section","openStart":10488,"attrEnd":10673,"openEnd":10674,"closeStart":12028,"closeEnd":12038,"styleAttr":[10504,10672],"textRuns":[[10674,10679],[11708,11713],[12025,12028]],"parentId":"363e0cf0:14","childIds":["363e0cf0:24","363e0cf0:31"]},{"id":"363e0cf0:24","tag":"div","openStart":10679,"attrEnd":10683,"openEnd":10684,"closeStart":11702,"closeEnd":11708,"textRuns":[[10684,10691],[10890,10897],[11050,11057],[11326,11333],[11434,11441],[11697,11702]],"parentId":"363e0cf0:23","childIds":["363e0cf0:25","363e0cf0:26","363e0cf0:27","363e0cf0:29","363e0cf0:30"]},{"id":"363e0cf0:25","tag":"span","openStart":10691,"attrEnd":10876,"openEnd":10877,"closeStart":10883,"closeEnd":10890,"styleAttr":[10704,10875],"textRuns":[[10877,10883]],"parentId":"363e0cf0:24","childIds":[]},{"id":"363e0cf0:26","tag":"h1","openStart":10897,"attrEnd":11029,"openEnd":11030,"closeStart":11045,"closeEnd":11050,"styleAttr":[10908,11028],"textRuns":[[11030,11045]],"parentId":"363e0cf0:24","childIds":[]},{"id":"363e0cf0:27","tag":"svg","openStart":11057,"attrEnd":11167,"openEnd":11168,"closeStart":11320,"closeEnd":11326,"styleAttr":[11112,11166],"textRuns":[],"parentId":"363e0cf0:24","childIds":["363e0cf0:28"]},{"id":"363e0cf0:28","tag":"path","openStart":11168,"attrEnd":11312,"openEnd":11313,"closeStart":11313,"closeEnd":11320,"textRuns":[],"parentId":"363e0cf0:27","childIds":[]},{"id":"363e0cf0:29","tag":"p","openStart":11333,"attrEnd":11416,"openEnd":11417,"closeStart":11430,"closeEnd":11434,"styleAttr":[11343,11415],"textRuns":[[11417,11430]],"parentId":"363e0cf0:24","childIds":[]},{"id":"363e0cf0:30","tag":"a","openStart":11441,"attrEnd":11679,"openEnd":11680,"closeStart":11693,"closeEnd":11697,"styleAttr":[11465,11678],"textRuns":[[11680,11693]],"parentId":"363e0cf0:24","childIds":[]},{"id":"363e0cf0:31","tag":"div","openStart":11713,"attrEnd":11815,"openEnd":11816,"closeStart":12019,"closeEnd":12025,"styleAttr":[11725,11814],"textRuns":[[11816,11823],[12014,12019]],"parentId":"363e0cf0:23","childIds":["363e0cf0:32"]},{"id":"363e0cf0:32","tag":"img","openStart":11823,"attrEnd":12013,"openEnd":12014,"closeEnd":12014,"styleAttr":[11915,12012],"textRuns":[],"parentId":"363e0cf0:31","childIds":[]},{"id":"363e0cf0:33","tag":"section","openStart":12042,"attrEnd":12118,"openEnd":12119,"closeStart":12594,"closeEnd":12604,"styleAttr":[12069,12117],"textRuns":[[12119,12124],[12591,12594]],"parentId":"363e0cf0:14","childIds":["363e0cf0:34"]},{"id":"363e0cf0:34","tag":"div","openStart":12124,"attrEnd":12168,"openEnd":12169,"closeStart":12585,"closeEnd":12591,"styleAttr":[12136,12167],"textRuns":[[12169,12176],[12374,12381],[12496,12503],[12580,12585]],"parentId":"363e0cf0:33","childIds":["363e0cf0:35","363e0cf0:36","363e0cf0:37"]},{"id":"363e0cf0:35","tag":"span","openStart":12176,"attrEnd":12361,"openEnd":12362,"closeStart":12367,"closeEnd":12374,"styleAttr":[12189,12360],"textRuns":[[12362,12367]],"parentId":"363e0cf0:34","childIds":[]},{"id":"363e0cf0:36","tag":"h2","openStart":12381,"attrEnd":12472,"openEnd":12473,"closeStart":12491,"closeEnd":12496,"styleAttr":[12392,12471],"textRuns":[[12473,12491]],"parentId":"363e0cf0:34","childIds":[]},{"id":"363e0cf0:37","tag":"p","openStart":12503,"attrEnd":12562,"openEnd":12563,"closeStart":12576,"closeEnd":12580,"styleAttr":[12513,12561],"textRuns":[[12563,12576]],"parentId":"363e0cf0:34","childIds":[]},{"id":"363e0cf0:38","tag":"section","openStart":12608,"attrEnd":12721,"openEnd":12722,"closeStart":14947,"closeEnd":14957,"styleAttr":[12635,12720],"textRuns":[[12722,12727],[12934,12939],[13045,13050],[13319,13324],[13600,13605],[13674,13679],[14944,14947]],"parentId":"363e0cf0:14","childIds":["363e0cf0:39","363e0cf0:40","363e0cf0:41","363e0cf0:43","363e0cf0:44","363e0cf0:45"]},{"id":"363e0cf0:39","tag":"span","openStart":12727,"attrEnd":12912,"openEnd":12913,"closeStart":12927,"closeEnd":12934,"styleAttr":[12740,12911],"textRuns":[[12913,12927]],"parentId":"363e0cf0:38","childIds":[]},{"id":"363e0cf0:40","tag":"h2","openStart":12939,"attrEnd":13030,"openEnd":13031,"closeStart":13040,"closeEnd":13045,"styleAttr":[12950,13029],"textRuns":[[13031,13040]],"parentId":"363e0cf0:38","childIds":[]},{"id":"363e0cf0:41","tag":"svg","openStart":13050,"attrEnd":13160,"openEnd":13161,"closeStart":13313,"closeEnd":13319,"styleAttr":[13105,13159],"textRuns":[],"parentId":"363e0cf0:38","childIds":["363e0cf0:42"]},{"id":"363e0cf0:42","tag":"path","openStart":13161,"attrEnd":13305,"openEnd":13306,"closeStart":13306,"closeEnd":13313,"textRuns":[],"parentId":"363e0cf0:41","childIds":[]},{"id":"363e0cf0:43","tag":"p","openStart":13324,"attrEnd":13407,"openEnd":13408,"closeStart":13596,"closeEnd":13600,"styleAttr":[13334,13406],"textRuns":[[13408,13596]],"parentId":"363e0cf0:38","childIds":[]},{"id":"363e0cf0:44","tag":"hr","openStart":13605,"attrEnd":13673,"openEnd":13674,"closeEnd":13674,"styleAttr":[13616,13672],"textRuns":[],"parentId":"363e0cf0:38","childIds":[]},{"id":"363e0cf0:45","tag":"sc-for","openStart":13679,"attrEnd":13743,"openEnd":13744,"closeStart":14935,"closeEnd":14944,"textRuns":[[13744,13751],[14930,14935]],"parentId":"363e0cf0:38","childIds":["363e0cf0:46"]},{"id":"363e0cf0:46","tag":"div","openStart":13751,"attrEnd":13891,"openEnd":13892,"closeStart":14924,"closeEnd":14930,"styleAttr":[13763,13890],"textRuns":[[13892,13901],[14005,14014],[14917,14924]],"parentId":"363e0cf0:45","childIds":["363e0cf0:47","363e0cf0:48"]},{"id":"363e0cf0:47","tag":"div","openStart":13901,"attrEnd":13984,"openEnd":13985,"closeStart":13999,"closeEnd":14005,"styleAttr":[13913,13983],"textRuns":[[13985,13999]],"parentId":"363e0cf0:46","childIds":[]},{"id":"363e0cf0:48","tag":"div","openStart":14014,"attrEnd":14018,"openEnd":14019,"closeStart":14911,"closeEnd":14917,"textRuns":[[14019,14030],[14222,14233],[14346,14357],[14460,14471],[14902,14911]],"parentId":"363e0cf0:46","childIds":["363e0cf0:49","363e0cf0:50","363e0cf0:51","363e0cf0:52"]},{"id":"363e0cf0:49","tag":"span","openStart":14030,"attrEnd":14199,"openEnd":14200,"closeStart":14215,"closeEnd":14222,"styleAttr":[14043,14198],"textRuns":[[14200,14215]],"parentId":"363e0cf0:48","childIds":[]},{"id":"363e0cf0:50","tag":"h3","openStart":14233,"attrEnd":14324,"openEnd":14325,"closeStart":14341,"closeEnd":14346,"styleAttr":[14244,14323],"textRuns":[[14325,14341]],"parentId":"363e0cf0:48","childIds":[]},{"id":"363e0cf0:51","tag":"p","openStart":14357,"attrEnd":14440,"openEnd":14441,"closeStart":14456,"closeEnd":14460,"styleAttr":[14367,14439],"textRuns":[[14441,14456]],"parentId":"363e0cf0:48","childIds":[]},{"id":"363e0cf0:52","tag":"div","openStart":14471,"attrEnd":14475,"openEnd":14476,"closeStart":14896,"closeEnd":14902,"textRuns":[[14476,14489],[14774,14787],[14885,14896]],"parentId":"363e0cf0:48","childIds":["363e0cf0:53","363e0cf0:54"]},{"id":"363e0cf0:53","tag":"span","openStart":14489,"attrEnd":14750,"openEnd":14751,"closeStart":14767,"closeEnd":14774,"styleAttr":[14502,14749],"textRuns":[[14751,14767]],"parentId":"363e0cf0:52","childIds":[]},{"id":"363e0cf0:54","tag":"p","openStart":14787,"attrEnd":14863,"openEnd":14864,"closeStart":14881,"closeEnd":14885,"styleAttr":[14797,14862],"textRuns":[[14864,14881]],"parentId":"363e0cf0:52","childIds":[]},{"id":"363e0cf0:55","tag":"section","openStart":14961,"attrEnd":15054,"openEnd":15055,"closeStart":16903,"closeEnd":16913,"styleAttr":[14988,15053],"textRuns":[[15055,15060],[16900,16903]],"parentId":"363e0cf0:14","childIds":["363e0cf0:56"]},{"id":"363e0cf0:56","tag":"div","openStart":15060,"attrEnd":15123,"openEnd":15124,"closeStart":16894,"closeEnd":16900,"styleAttr":[15072,15122],"textRuns":[[15124,15131],[15334,15341],[15451,15458],[15732,15739],[16889,16894]],"parentId":"363e0cf0:55","childIds":["363e0cf0:57","363e0cf0:58","363e0cf0:59","363e0cf0:61"]},{"id":"363e0cf0:57","tag":"span","openStart":15131,"attrEnd":15321,"openEnd":15322,"closeStart":15327,"closeEnd":15334,"styleAttr":[15144,15320],"textRuns":[[15322,15327]],"parentId":"363e0cf0:56","childIds":[]},{"id":"363e0cf0:58","tag":"h2","openStart":15341,"attrEnd":15432,"openEnd":15433,"closeStart":15446,"closeEnd":15451,"styleAttr":[15352,15431],"textRuns":[[15433,15446]],"parentId":"363e0cf0:56","childIds":[]},{"id":"363e0cf0:59","tag":"svg","openStart":15458,"attrEnd":15573,"openEnd":15574,"closeStart":15726,"closeEnd":15732,"styleAttr":[15513,15572],"textRuns":[],"parentId":"363e0cf0:56","childIds":["363e0cf0:60"]},{"id":"363e0cf0:60","tag":"path","openStart":15574,"attrEnd":15718,"openEnd":15719,"closeStart":15719,"closeEnd":15726,"textRuns":[],"parentId":"363e0cf0:59","childIds":[]},{"id":"363e0cf0:61","tag":"div","openStart":15739,"attrEnd":15743,"openEnd":15744,"closeStart":16883,"closeEnd":16889,"textRuns":[[15744,15753],[15961,15970],[16090,16099],[16237,16246],[16876,16883]],"parentId":"363e0cf0:56","childIds":["363e0cf0:62","363e0cf0:63","363e0cf0:64","363e0cf0:65"]},{"id":"363e0cf0:62","tag":"p","openStart":15753,"attrEnd":15904,"openEnd":15905,"closeStart":15957,"closeEnd":15961,"styleAttr":[15763,15903],"textRuns":[[15905,15957]],"parentId":"363e0cf0:61","childIds":[]},{"id":"363e0cf0:63","tag":"h3","openStart":15970,"attrEnd":16061,"openEnd":16062,"closeStart":16085,"closeEnd":16090,"styleAttr":[15981,16060],"textRuns":[[16062,16085]],"parentId":"363e0cf0:61","childIds":[]},{"id":"363e0cf0:64","tag":"p","openStart":16099,"attrEnd":16210,"openEnd":16211,"closeStart":16233,"closeEnd":16237,"styleAttr":[16109,16209],"textRuns":[[16211,16233]],"parentId":"363e0cf0:61","childIds":[]},{"id":"363e0cf0:65","tag":"div","openStart":16246,"attrEnd":16306,"openEnd":16307,"closeStart":16870,"closeEnd":16876,"styleAttr":[16258,16305],"textRuns":[[16307,16318],[16584,16595],[16861,16870]],"parentId":"363e0cf0:61","childIds":["363e0cf0:66","363e0cf0:67"]},{"id":"363e0cf0:66","tag":"button","openStart":16318,"attrEnd":16566,"openEnd":16567,"closeStart":16575,"closeEnd":16584,"styleAttr":[16333,16540],"textRuns":[[16567,16575]],"parentId":"363e0cf0:65","childIds":[]},{"id":"363e0cf0:67","tag":"button","openStart":16595,"attrEnd":16843,"openEnd":16844,"closeStart":16852,"closeEnd":16861,"styleAttr":[16610,16817],"textRuns":[[16844,16852]],"parentId":"363e0cf0:65","childIds":[]},{"id":"363e0cf0:68","tag":"section","openStart":16917,"attrEnd":16985,"openEnd":16986,"closeStart":18236,"closeEnd":18246,"styleAttr":[16946,16984],"textRuns":[[16986,16991],[18233,18236]],"parentId":"363e0cf0:14","childIds":["363e0cf0:69"]},{"id":"363e0cf0:69","tag":"div","openStart":16991,"attrEnd":17119,"openEnd":17120,"closeStart":18227,"closeEnd":18233,"styleAttr":[17003,17118],"textRuns":[[17120,17127],[17502,17509],[17818,17825],[18222,18227]],"parentId":"363e0cf0:68","childIds":["363e0cf0:70","363e0cf0:74","363e0cf0:77"]},{"id":"363e0cf0:70","tag":"svg","openStart":17127,"attrEnd":17219,"openEnd":17220,"closeStart":17496,"closeEnd":17502,"styleAttr":[17184,17218],"textRuns":[],"parentId":"363e0cf0:69","childIds":["363e0cf0:71","363e0cf0:72","363e0cf0:73"]},{"id":"363e0cf0:71","tag":"path","openStart":17220,"attrEnd":17367,"openEnd":17368,"closeStart":17368,"closeEnd":17375,"textRuns":[],"parentId":"363e0cf0:70","childIds":[]},{"id":"363e0cf0:72","tag":"circle","openStart":17375,"attrEnd":17426,"openEnd":17427,"closeStart":17427,"closeEnd":17436,"textRuns":[],"parentId":"363e0cf0:70","childIds":[]},{"id":"363e0cf0:73","tag":"circle","openStart":17436,"attrEnd":17486,"openEnd":17487,"closeStart":17487,"closeEnd":17496,"textRuns":[],"parentId":"363e0cf0:70","childIds":[]},{"id":"363e0cf0:74","tag":"div","openStart":17509,"attrEnd":17513,"openEnd":17514,"closeStart":17812,"closeEnd":17818,"textRuns":[[17514,17523],[17614,17623],[17805,17812]],"parentId":"363e0cf0:69","childIds":["363e0cf0:75","363e0cf0:76"]},{"id":"363e0cf0:75","tag":"p","openStart":17523,"attrEnd":17596,"openEnd":17597,"closeStart":17610,"closeEnd":17614,"styleAttr":[17533,17595],"textRuns":[[17597,17610]],"parentId":"363e0cf0:74","childIds":[]},{"id":"363e0cf0:76","tag":"a","openStart":17623,"attrEnd":17782,"openEnd":17783,"closeStart":17801,"closeEnd":17805,"styleAttr":[17666,17781],"textRuns":[[17783,17801]],"parentId":"363e0cf0:74","childIds":[]},{"id":"363e0cf0:77","tag":"svg","openStart":17825,"attrEnd":17939,"openEnd":17940,"closeStart":18216,"closeEnd":18222,"styleAttr":[17882,17938],"textRuns":[],"parentId":"363e0cf0:69","childIds":["363e0cf0:78","363e0cf0:79","363e0cf0:80"]},{"id":"363e0cf0:78","tag":"path","openStart":17940,"attrEnd":18087,"openEnd":18088,"closeStart":18088,"closeEnd":18095,"textRuns":[],"parentId":"363e0cf0:77","childIds":[]},{"id":"363e0cf0:79","tag":"circle","openStart":18095,"attrEnd":18146,"openEnd":18147,"closeStart":18147,"closeEnd":18156,"textRuns":[],"parentId":"363e0cf0:77","childIds":[]},{"id":"363e0cf0:80","tag":"circle","openStart":18156,"attrEnd":18206,"openEnd":18207,"closeStart":18207,"closeEnd":18216,"textRuns":[],"parentId":"363e0cf0:77","childIds":[]},{"id":"363e0cf0:81","tag":"div","openStart":18250,"attrEnd":18373,"openEnd":18374,"closeStart":18691,"closeEnd":18697,"styleAttr":[18262,18372],"textRuns":[[18374,18413],[18688,18691]],"parentId":"363e0cf0:14","childIds":["363e0cf0:82"]},{"id":"363e0cf0:82","tag":"button","openStart":18413,"attrEnd":18673,"openEnd":18674,"closeStart":18679,"closeEnd":18688,"styleAttr":[18428,18641],"textRuns":[[18674,18679]],"parentId":"363e0cf0:81","childIds":[]},{"id":"363e0cf0:83","tag":"sc-if","openStart":18701,"attrEnd":18771,"openEnd":18772,"closeStart":20375,"closeEnd":20383,"textRuns":[[18772,18777],[20372,20375]],"parentId":"363e0cf0:14","childIds":["363e0cf0:84"]},{"id":"363e0cf0:84","tag":"div","openStart":18777,"attrEnd":18928,"openEnd":18929,"closeStart":20366,"closeEnd":20372,"styleAttr":[18789,18927],"textRuns":[[18929,18936],[20361,20366]],"parentId":"363e0cf0:83","childIds":["363e0cf0:85"]},{"id":"363e0cf0:85","tag":"div","openStart":18936,"attrEnd":19083,"openEnd":19084,"closeStart":20355,"closeEnd":20361,"styleAttr":[18948,19082],"textRuns":[[19084,19093],[20348,20355]],"parentId":"363e0cf0:84","childIds":["363e0cf0:86"]},{"id":"363e0cf0:86","tag":"form","openStart":19093,"attrEnd":19168,"openEnd":19169,"closeStart":20341,"closeEnd":20348,"styleAttr":[19144,19167],"textRuns":[[19169,19180],[19283,19294],[19540,19551],[19722,19733],[20332,20341]],"parentId":"363e0cf0:85","childIds":["363e0cf0:87","363e0cf0:88","363e0cf0:89","363e0cf0:91"]},{"id":"363e0cf0:87","tag":"h3","openStart":19180,"attrEnd":19264,"openEnd":19265,"closeStart":19278,"closeEnd":19283,"styleAttr":[19191,19263],"textRuns":[[19265,19278]],"parentId":"363e0cf0:86","childIds":[]},{"id":"363e0cf0:88","tag":"input","openStart":19294,"attrEnd":19539,"openEnd":19540,"closeEnd":19540,"styleAttr":[19425,19538],"textRuns":[],"parentId":"363e0cf0:86","childIds":[]},{"id":"363e0cf0:89","tag":"sc-if","openStart":19551,"attrEnd":19617,"openEnd":19618,"closeStart":19714,"closeEnd":19722,"textRuns":[[19618,19631],[19703,19714]],"parentId":"363e0cf0:86","childIds":["363e0cf0:90"]},{"id":"363e0cf0:90","tag":"p","openStart":19631,"attrEnd":19682,"openEnd":19683,"closeStart":19699,"closeEnd":19703,"styleAttr":[19641,19681],"textRuns":[[19683,19699]],"parentId":"363e0cf0:89","childIds":[]},{"id":"363e0cf0:91","tag":"div","openStart":19733,"attrEnd":19795,"openEnd":19796,"closeStart":20326,"closeEnd":20332,"styleAttr":[19745,19794],"textRuns":[[19796,19809],[20068,20081],[20315,20326]],"parentId":"363e0cf0:86","childIds":["363e0cf0:92","363e0cf0:93"]},{"id":"363e0cf0:92","tag":"button","openStart":19809,"attrEnd":20052,"openEnd":20053,"closeStart":20059,"closeEnd":20068,"styleAttr":[19838,20019],"textRuns":[[20053,20059]],"parentId":"363e0cf0:91","childIds":[]},{"id":"363e0cf0:93","tag":"button","openStart":20081,"attrEnd":20298,"openEnd":20299,"closeStart":20306,"closeEnd":20315,"styleAttr":[20110,20297],"textRuns":[[20299,20306]],"parentId":"363e0cf0:91","childIds":[]},{"id":"363e0cf0:94","tag":"sc-if","openStart":20387,"attrEnd":20450,"openEnd":20451,"closeStart":25236,"closeEnd":25244,"textRuns":[[20451,20456],[25233,25236]],"parentId":"363e0cf0:14","childIds":["363e0cf0:95"]},{"id":"363e0cf0:95","tag":"div","openStart":20456,"attrEnd":20632,"openEnd":20633,"closeStart":25227,"closeEnd":25233,"styleAttr":[20468,20631],"textRuns":[[20633,20640],[25222,25227]],"parentId":"363e0cf0:94","childIds":["363e0cf0:96"]},{"id":"363e0cf0:96","tag":"div","openStart":20640,"attrEnd":20744,"openEnd":20745,"closeStart":25216,"closeEnd":25222,"styleAttr":[20652,20743],"textRuns":[[20745,20754],[21235,21245],[23941,23951],[24228,24238],[24850,24859],[25040,25049],[25209,25216]],"parentId":"363e0cf0:95","childIds":["363e0cf0:97","363e0cf0:100","363e0cf0:117","363e0cf0:118","363e0cf0:121","363e0cf0:123"]},{"id":"363e0cf0:97","tag":"div","openStart":20754,"attrEnd":20851,"openEnd":20852,"closeStart":21229,"closeEnd":21235,"styleAttr":[20766,20850],"textRuns":[[20852,20863],[20965,20976],[21220,21229]],"parentId":"363e0cf0:96","childIds":["363e0cf0:98","363e0cf0:99"]},{"id":"363e0cf0:98","tag":"h3","openStart":20863,"attrEnd":20947,"openEnd":20948,"closeStart":20960,"closeEnd":20965,"styleAttr":[20874,20946],"textRuns":[[20948,20960]],"parentId":"363e0cf0:97","childIds":[]},{"id":"363e0cf0:99","tag":"button","openStart":20976,"attrEnd":21205,"openEnd":21206,"closeStart":21211,"closeEnd":21220,"styleAttr":[20991,21172],"textRuns":[[21206,21211]],"parentId":"363e0cf0:97","childIds":[]},{"id":"363e0cf0:100","tag":"sc-for","openStart":21245,"attrEnd":21308,"openEnd":21309,"closeStart":23932,"closeEnd":23941,"textRuns":[[21309,21320],[23923,23932]],"parentId":"363e0cf0:96","childIds":["363e0cf0:101"]},{"id":"363e0cf0:101","tag":"div","openStart":21320,"attrEnd":21396,"openEnd":21397,"closeStart":23917,"closeEnd":23923,"styleAttr":[21332,21395],"textRuns":[[21397,21410],[22784,22797],[23906,23917]],"parentId":"363e0cf0:100","childIds":["363e0cf0:102","363e0cf0:109"]},{"id":"363e0cf0:102","tag":"sc-if","openStart":21410,"attrEnd":21480,"openEnd":21481,"closeStart":22776,"closeEnd":22784,"textRuns":[[21481,21496],[22763,22776]],"parentId":"363e0cf0:101","childIds":["363e0cf0:103"]},{"id":"363e0cf0:103","tag":"div","openStart":21496,"attrEnd":21532,"openEnd":21533,"closeStart":22757,"closeEnd":22763,"styleAttr":[21508,21531],"textRuns":[[21533,21550],[21705,21722],[21903,21920],[22117,22134],[22742,22757]],"parentId":"363e0cf0:102","childIds":["363e0cf0:104","363e0cf0:105","363e0cf0:106"]},{"id":"363e0cf0:104","tag":"input","openStart":21550,"attrEnd":21704,"openEnd":21705,"closeEnd":21705,"styleAttr":[21645,21703],"textRuns":[],"parentId":"363e0cf0:103","childIds":[]},{"id":"363e0cf0:105","tag":"input","openStart":21722,"attrEnd":21902,"openEnd":21903,"closeEnd":21903,"styleAttr":[21843,21901],"textRuns":[],"parentId":"363e0cf0:103","childIds":[]},{"id":"363e0cf0:106","tag":"div","openStart":22134,"attrEnd":22196,"openEnd":22197,"closeStart":22736,"closeEnd":22742,"styleAttr":[22146,22195],"textRuns":[[22197,22216],[22457,22476],[22719,22736]],"parentId":"363e0cf0:103","childIds":["363e0cf0:107","363e0cf0:108"]},{"id":"363e0cf0:107","tag":"button","openStart":22216,"attrEnd":22441,"openEnd":22442,"closeStart":22448,"closeEnd":22457,"styleAttr":[22231,22412],"textRuns":[[22442,22448]],"parentId":"363e0cf0:106","childIds":[]},{"id":"363e0cf0:108","tag":"button","openStart":22476,"attrEnd":22705,"openEnd":22706,"closeStart":22710,"closeEnd":22719,"styleAttr":[22491,22678],"textRuns":[[22706,22710]],"parentId":"363e0cf0:106","childIds":[]},{"id":"363e0cf0:109","tag":"sc-if","openStart":22797,"attrEnd":22866,"openEnd":22867,"closeStart":23898,"closeEnd":23906,"textRuns":[[22867,22882],[23885,23898]],"parentId":"363e0cf0:101","childIds":["363e0cf0:110"]},{"id":"363e0cf0:110","tag":"div","openStart":22882,"attrEnd":22949,"openEnd":22950,"closeStart":23879,"closeEnd":23885,"styleAttr":[22894,22948],"textRuns":[[22950,22967],[23265,23282],[23864,23879]],"parentId":"363e0cf0:109","childIds":["363e0cf0:111","363e0cf0:114"]},{"id":"363e0cf0:111","tag":"div","openStart":22967,"attrEnd":22971,"openEnd":22972,"closeStart":23259,"closeEnd":23265,"textRuns":[[22972,22991],[23128,23147],[23242,23259]],"parentId":"363e0cf0:110","childIds":["363e0cf0:112","363e0cf0:113"]},{"id":"363e0cf0:112","tag":"span","openStart":22991,"attrEnd":23105,"openEnd":23106,"closeStart":23121,"closeEnd":23128,"styleAttr":[23004,23104],"textRuns":[[23106,23121]],"parentId":"363e0cf0:111","childIds":[]},{"id":"363e0cf0:113","tag":"h4","openStart":23147,"attrEnd":23220,"openEnd":23221,"closeStart":23237,"closeEnd":23242,"styleAttr":[23158,23219],"textRuns":[[23221,23237]],"parentId":"363e0cf0:111","childIds":[]},{"id":"363e0cf0:114","tag":"div","openStart":23282,"attrEnd":23332,"openEnd":23333,"closeStart":23858,"closeEnd":23864,"styleAttr":[23294,23331],"textRuns":[[23333,23352],[23589,23608],[23841,23858]],"parentId":"363e0cf0:110","childIds":["363e0cf0:115","363e0cf0:116"]},{"id":"363e0cf0:115","tag":"button","openStart":23352,"attrEnd":23575,"openEnd":23576,"closeStart":23580,"closeEnd":23589,"styleAttr":[23367,23548],"textRuns":[[23576,23580]],"parentId":"363e0cf0:114","childIds":[]},{"id":"363e0cf0:116","tag":"button","openStart":23608,"attrEnd":23825,"openEnd":23826,"closeStart":23832,"closeEnd":23841,"styleAttr":[23623,23796],"textRuns":[[23826,23832]],"parentId":"363e0cf0:114","childIds":[]},{"id":"363e0cf0:117","tag":"button","openStart":23951,"attrEnd":24204,"openEnd":24205,"closeStart":24219,"closeEnd":24228,"styleAttr":[23966,24179],"textRuns":[[24205,24219]],"parentId":"363e0cf0:96","childIds":[]},{"id":"363e0cf0:118","tag":"div","openStart":24238,"attrEnd":24342,"openEnd":24343,"closeStart":24844,"closeEnd":24850,"styleAttr":[24250,24341],"textRuns":[[24343,24354],[24620,24631],[24835,24844]],"parentId":"363e0cf0:96","childIds":["363e0cf0:119","363e0cf0:120"]},{"id":"363e0cf0:119","tag":"button","openStart":24354,"attrEnd":24589,"openEnd":24590,"closeStart":24611,"closeEnd":24620,"styleAttr":[24369,24559],"textRuns":[[24590,24611]],"parentId":"363e0cf0:118","childIds":[]},{"id":"363e0cf0:120","tag":"button","openStart":24631,"attrEnd":24817,"openEnd":24818,"closeStart":24826,"closeEnd":24835,"styleAttr":[24646,24792],"textRuns":[[24818,24826]],"parentId":"363e0cf0:118","childIds":[]},{"id":"363e0cf0:121","tag":"sc-if","openStart":24859,"attrEnd":24926,"openEnd":24927,"closeStart":25032,"closeEnd":25040,"textRuns":[[24927,24938],[25023,25032]],"parentId":"363e0cf0:96","childIds":["363e0cf0:122"]},{"id":"363e0cf0:122","tag":"p","openStart":24938,"attrEnd":25001,"openEnd":25002,"closeStart":25019,"closeEnd":25023,"styleAttr":[24948,25000],"textRuns":[[25002,25019]],"parentId":"363e0cf0:121","childIds":[]},{"id":"363e0cf0:123","tag":"p","openStart":25049,"attrEnd":25115,"openEnd":25116,"closeStart":25205,"closeEnd":25209,"styleAttr":[25059,25114],"textRuns":[[25116,25205]],"parentId":"363e0cf0:96","childIds":[]}]}</script></body></html>
