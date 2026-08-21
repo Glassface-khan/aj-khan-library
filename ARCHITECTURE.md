@@ -215,3 +215,49 @@ stillschweigend auf der alten Version hängen — der Editor zeigt den neuen
 Code, aber die Web-App führt ihn nie aus. Genau das ist beim Aufsetzen der
 Zugangscodes mehrfach passiert und hat viel Fehlersuche gekostet, obwohl
 der Code selbst korrekt war.
+
+## 8 · Nachtrag (21.08.2026, Teil 2) — Poems-TOC & Zugangscode-Anzeige
+
+- **Poems-Inhaltsübersicht sitzt jetzt an der richtigen Stelle.** Die
+  bisherige statische "Part I–IV"-Vorschau am Kopf der Poems-Sektion war
+  hartkodiertes HTML ohne jede Interaktivität — genau die Boxen, über die
+  eigentlich gehovert wurde. Der separate "Inhalt"-Link neben Previous/
+  Next (der tatsächlich funktionierte) war davon getrennt und wurde nicht
+  gefunden. Fix: die Part-Vorschau wird jetzt aus den echten Gedichtdaten
+  generiert (`poemTocParts`, gruppiert nach `poem.part`) und jede der vier
+  Karten ist selbst der Hover(PC)/Tap(iOS)-Trigger, mit demselben weichen
+  Übergangs-Rand (Schatten statt hartem Rahmen) wie zuvor konzipiert. Der
+  alte separate Link entfällt, da redundant.
+- **Zugangscode jetzt dauerhaft in der Zugänge-Liste sichtbar**, nicht
+  nur im "gerade erstellt"-Banner direkt nach dem Anlegen. Rein
+  client-seitige Änderung (der Code kam vom Server ohnehin schon mit),
+  kein Apps-Script-Update nötig.
+
+### Offen / vertagt
+
+- **Bio- und Autorenfoto-Bearbeitung im Admin-Panel** — vom Nutzer
+  bewusst vertagt ("hat Zeit"), aber nicht vergessen: Bio-Text wäre
+  einfach (gleiches Muster wie Bücher/Poems-Edit). Das Autorenfoto ist
+  aufwändiger, weil es aktuell ein eingebettetes Bundle-Asset ist
+  (referenziert per UUID, z. B. `c04870d1-a8e6-411c-a8f3-b89cb24984e7`)
+  und für Admin-Bearbeitung auf ein URL-/Upload-Feld umgestellt werden
+  müsste, ähnlich wie Buch-Cover.
+- **Google-Drive-Ordnerstruktur + Auto-Sync (volle Automatisierung
+  gewünscht)** — größtes offenes Vorhaben. Geplantes Muster pro Buch:
+  ```
+  /AJ Khan Bücher/<Buchtitel>/
+    /Manuskript/{DE,EN,BS,...}/   (nur Ordner für relevante Sprachen)
+    /Intern/                       (Checkliste Teil 1 A)
+    /Extern/                       (Checkliste Teil 1 B)
+    /Bilder/{Cover,Alt-Cover}/
+  ```
+  Sprach-/Status-Erkennung über Dateinamens-Präfix (`ENTWURF_` = in
+  Arbeit, `FINAL_` = fertig; fehlender Sprachordner = Sprache nicht
+  relevant). Es gibt **keine** direkte Schnittstelle zwischen separaten
+  Claude-Chats/Produkten — die Brücke zwischen einer Checklist-Review-
+  Session und dieser Seite läuft zwangsläufig asynchron über Google
+  Drive als Zwischenspeicher, wobei Apps Script das eigentliche Scannen/
+  Reagieren übernimmt. Offene Design-Frage vor der Umsetzung: manueller
+  "Sync jetzt"-Button pro Buch vs. echter zeitbasierter Apps-Script-
+  Trigger (Nutzer wünscht "volle Automatisierung", was eher auf einen
+  echten Zeit-Trigger hindeutet).
