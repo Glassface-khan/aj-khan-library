@@ -160,10 +160,58 @@ aktuellen Schema also nicht verletzt.
 
 ## 6 · Offene TODOs
 
-1. **Passwort-Fix** (priorisiert) — braucht Apps-Script-Zugriff, siehe
-   Abschnitt 4.
+1. ~~Passwort-Fix~~ — erledigt, siehe Abschnitt 7.
 2. **Alt-Cover als echte Galerie statt Einzellink** — falls gewünscht,
    wäre das eine Schema-Erweiterung (`altCovers: []` statt `altUrl`).
 3. **Cover-Upload-Limit (45 KB)** — falls hochauflösende Cover direkt über
    den Admin hochgeladen werden sollen, braucht es echte Bildablage
    (z. B. GitHub-Repo-Asset oder Drive-Upload-Flow statt Data-URL im Sheet).
+4. **Phase 2 (Inline-Reader)** — noch nicht gebaut, siehe Abschnitt 7.
+
+---
+
+## 7 · Nachtrag (21.08.2026) — was sich seit Abschnitt 1–6 geändert hat
+
+Abschnitte 1–6 oben beschreiben den Stand vom 20.08.2026 (Klartext-
+Passwörter, keine individuellen Zugänge). Seither:
+
+- **Klartext-Passwörter entfernt.** `settings.viewerPassword`/
+  `adminPassword` existieren im Client nicht mehr. Admin-Login prüft
+  weiterhin ein einzelnes Passwort, aber serverseitig gegen
+  `ADMIN_PASSWORD` in den Apps-Script Script Properties — nie im Code
+  oder im ausgelieferten HTML.
+- **Individuelle Zugangscodes statt geteiltem Viewer-Passwort.** Ein
+  neuer `Access`-Sheet-Tab (`Name, Code, CanDownload, CanCopy`) ersetzt
+  das alte `family2026`. Jede Person bekommt einen eigenen, im Admin-Panel
+  generierten Code; `canDownload` steuert aktuell nur den "Read"-Link
+  (öffentlicher PDF-/Drive-Link), `canCopy` ist vorbereitet, aber erst mit
+  Phase 2 (Inline-Reader) wirksam.
+- **Admin-Schreibzugriff (`saveBooks`, `addAccess`, `removeAccess`,
+  `syncWordCount`) ist jetzt serverseitig geschützt**, nicht mehr nur ein
+  Client-Flag. Admin-Login liefert ein Token, das der Client bei jeder
+  Schreibaktion mitschickt; der Server prüft es gegen `PropertiesService`
+  (mit eigener 24h-Ablauflogik). **Wichtig:** `CacheService` wurde für
+  dieses Token bewusst *nicht* verwendet — in der Praxis unzuverlässig
+  (Werte kamen nicht zurück, obwohl kurz zuvor gesetzt).
+- **Wortzahl pro Buch** (`wordCount`-Feld) wird jetzt per Klick
+  automatisch aus einem verlinkten Manuskript gezählt (`manuscriptDocUrl`-
+  Feld, getrennt vom öffentlichen Read-Link), statt manuell eingetragen zu
+  werden. Funktioniert zuverlässig bei nativen Google Docs; .docx wird
+  automatisch in eine temporäre Google-Doc-Kopie umgewandelt (braucht die
+  „Drive API" als aktivierten Advanced Service im Apps-Script-Projekt).
+  PDF wird bewusst nicht unterstützt (unzuverlässige OCR) — Empfehlung:
+  in Drive per „Öffnen mit → Google Docs" einmal manuell umwandeln.
+- **Admin-Bereich:** Books- und Poems-Listen sind standardmäßig
+  eingeklappt (mit Zähler in der Kopfzeile), wegen wachsender Buchanzahl.
+
+### Apps-Script deployen — die eine Falle, die uns mehrfach erwischt hat
+
+`Code.gs` speichern reicht **nicht**, damit die Live-Seite den neuen Code
+nutzt. Nötig: **Deploy → Manage deployments → Stift-Symbol bei der
+bestehenden Deployment-Zeile → Versions-Dropdown aktiv auf „New version"
+umstellen → erst dann ist der „Deploy"-Button unten rechts anklickbar →
+Deploy.** Wird das Dropdown nicht umgestellt, bleibt die Live-URL
+stillschweigend auf der alten Version hängen — der Editor zeigt den neuen
+Code, aber die Web-App führt ihn nie aus. Genau das ist beim Aufsetzen der
+Zugangscodes mehrfach passiert und hat viel Fehlersuche gekostet, obwohl
+der Code selbst korrekt war.
