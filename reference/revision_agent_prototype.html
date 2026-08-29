@@ -1,0 +1,624 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Covenant of Light — Revision Agent</title>
+<style>
+  :root{
+    --paper:#F5EFE2;
+    --paper-dim:#EDE4D0;
+    --ink:#2A2118;
+    --ink-soft:#6B5D4C;
+    --line:#DCCFB0;
+    --accent:#7C2B24;
+    --accent-soft:#B5564A;
+    --gold:#9C7A2E;
+    --done:#3E6B4F;
+    --done-bg:#E4EEE4;
+    --pending:#9C7A2E;
+    --pending-bg:#F3EBD4;
+    --active-bg:#E9DEC2;
+    --error:#A23B3B;
+    --error-bg:#F4E1DE;
+    --radius:10px;
+    font-family:'Iowan Old Style','Palatino Linotype',Georgia,serif;
+  }
+  *{box-sizing:border-box;}
+  body,.wrap{margin:0;padding:0;}
+  .wrap{
+    background:var(--paper);
+    color:var(--ink);
+    min-height:100%;
+    padding:0 0 60px 0;
+  }
+  .chrome-font{font-family:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;}
+  header.top{
+    padding:28px 20px 18px;
+    border-bottom:1px solid var(--line);
+    background:linear-gradient(180deg,var(--paper-dim),var(--paper));
+  }
+  .eyebrow{
+    font-family:'Inter',sans-serif;
+    font-size:11px;
+    letter-spacing:.14em;
+    text-transform:uppercase;
+    color:var(--accent-soft);
+    margin:0 0 6px 0;
+    font-weight:600;
+  }
+  h1{
+    margin:0 0 4px 0;
+    font-size:26px;
+    font-weight:600;
+    letter-spacing:.01em;
+    color:var(--ink);
+  }
+  .sub{
+    font-family:'Inter',sans-serif;
+    font-size:13px;
+    color:var(--ink-soft);
+    margin:0;
+    line-height:1.5;
+    max-width:640px;
+  }
+  .panel{
+    margin:20px;
+    background:#fff8ec;
+    border:1px solid var(--line);
+    border-radius:var(--radius);
+    padding:18px;
+  }
+  textarea{
+    width:100%;
+    min-height:160px;
+    font-family:'SF Mono',Menlo,Consolas,monospace;
+    font-size:12px;
+    line-height:1.5;
+    padding:12px;
+    border:1px solid var(--line);
+    border-radius:8px;
+    background:#FFFDF8;
+    color:var(--ink);
+    resize:vertical;
+  }
+  .btn{
+    font-family:'Inter',sans-serif;
+    font-size:13px;
+    font-weight:600;
+    padding:10px 16px;
+    border-radius:8px;
+    border:1px solid var(--accent);
+    background:var(--accent);
+    color:#fff;
+    cursor:pointer;
+    letter-spacing:.01em;
+  }
+  .btn:hover{background:var(--accent-soft);border-color:var(--accent-soft);}
+  .btn:disabled{opacity:.45;cursor:not-allowed;}
+  .btn.ghost{
+    background:transparent;
+    color:var(--accent);
+  }
+  .btn.ghost:hover{background:var(--active-bg);}
+  .btn.small{padding:5px 10px;font-size:11px;}
+  .row{display:flex;gap:10px;align-items:center;flex-wrap:wrap;}
+  .stats{
+    font-family:'Inter',sans-serif;
+    font-size:12px;
+    color:var(--ink-soft);
+    display:flex;
+    gap:18px;
+    flex-wrap:wrap;
+    margin-top:14px;
+  }
+  .stats b{color:var(--ink);}
+  .progress-outer{
+    height:8px;
+    background:var(--paper-dim);
+    border-radius:4px;
+    overflow:hidden;
+    margin:14px 0 4px;
+    border:1px solid var(--line);
+  }
+  .progress-inner{
+    height:100%;
+    background:linear-gradient(90deg,var(--gold),var(--accent));
+    transition:width .4s ease;
+  }
+  .list{margin:0 20px;}
+  .item{
+    border:1px solid var(--line);
+    border-radius:var(--radius);
+    margin-bottom:10px;
+    overflow:hidden;
+    background:#fff8ec;
+  }
+  .item-head{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    padding:12px 14px;
+    cursor:pointer;
+    gap:10px;
+  }
+  .item-head:hover{background:var(--active-bg);}
+  .item-title{
+    font-size:15px;
+    font-weight:600;
+    color:var(--ink);
+  }
+  .item-meta{
+    font-family:'Inter',sans-serif;
+    font-size:11px;
+    color:var(--ink-soft);
+    margin-top:2px;
+  }
+  .badge{
+    font-family:'Inter',sans-serif;
+    font-size:10px;
+    font-weight:700;
+    letter-spacing:.05em;
+    text-transform:uppercase;
+    padding:4px 9px;
+    border-radius:20px;
+    white-space:nowrap;
+  }
+  .badge.pending{background:var(--pending-bg);color:var(--pending);}
+  .badge.processing{background:var(--active-bg);color:var(--accent);}
+  .badge.done{background:var(--done-bg);color:var(--done);}
+  .badge.error{background:var(--error-bg);color:var(--error);}
+  .item-body{
+    padding:0 14px 16px;
+    display:none;
+    border-top:1px solid var(--line);
+  }
+  .item-body.open{display:block;}
+  .cols{display:grid;grid-template-columns:1fr;gap:14px;margin-top:12px;}
+  @media(min-width:820px){.cols{grid-template-columns:1fr 1fr;}}
+  .col h4{
+    font-family:'Inter',sans-serif;
+    font-size:11px;
+    text-transform:uppercase;
+    letter-spacing:.08em;
+    color:var(--ink-soft);
+    margin:0 0 6px;
+  }
+  .text-box{
+    max-height:280px;
+    overflow-y:auto;
+    padding:10px 12px;
+    background:#FFFDF8;
+    border:1px solid var(--line);
+    border-radius:8px;
+    font-size:13.5px;
+    line-height:1.65;
+    white-space:pre-wrap;
+  }
+  ul.changes{
+    margin:8px 0 0;
+    padding-left:18px;
+    font-family:'Inter',sans-serif;
+    font-size:12.5px;
+    color:var(--ink);
+    line-height:1.6;
+  }
+  ul.changes li{margin-bottom:4px;}
+  .footer-actions{
+    margin:24px 20px 0;
+    padding-top:16px;
+    border-top:1px solid var(--line);
+    display:flex;
+    gap:10px;
+    flex-wrap:wrap;
+  }
+  .empty{
+    margin:20px;
+    padding:40px 20px;
+    text-align:center;
+    color:var(--ink-soft);
+    font-family:'Inter',sans-serif;
+    font-size:13px;
+    border:1px dashed var(--line);
+    border-radius:var(--radius);
+  }
+  .hint{font-family:'Inter',sans-serif;font-size:11.5px;color:var(--ink-soft);margin-top:8px;line-height:1.5;}
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <header class="top">
+    <p class="eyebrow chrome-font">Covenant of Light &middot; Band I &middot; The Forgetting</p>
+    <h1>Revision Agent</h1>
+    <p class="sub chrome-font">Wendet die Constitution Improvement Instructions und die Leserlichkeits-Guideline automatisch, Kapitel für Kapitel, auf das Manuskript an. Straffung 15–30 %, Struktur/Theologie/Stimmen bleiben unverändert.</p>
+  </header>
+
+  <div id="intake" class="panel"></div>
+  <div id="controls" class="panel" style="display:none;"></div>
+  <div id="list" class="list"></div>
+  <div id="footer" class="footer-actions" style="display:none;"></div>
+</div>
+
+<script>
+(function(){
+
+// ---------- SYSTEM PROMPT ----------
+const SYSTEM_PROMPT = `Du bist ein Senior Fiction Line Editor für den Roman "The Covenant of Light — Book One: The Forgetting" von A. J. Khan (islamische eschatologische Fiction, englischsprachig). Du überarbeitest EINEN Abschnitt (Kapitel/Interlude/Prologue/Dream Fragment) gemäß den folgenden verbindlichen Regeln. Du triffst KEINE strukturellen Entscheidungen (keine Szenen streichen, keine Reihenfolge ändern, keine neuen Szenen erfinden) — nur Satz-, Absatz- und Formulierungsebene.
+
+=== LEITPRINZIP ===
+Nicht schöner schreiben — der Text ist bereits schön. Ziel: zugänglicher, klarer, weniger ermüdend, ohne die Seele zu vereinfachen.
+- Vertraue dem Leser früher.
+- Beende einen Gedanken, sobald seine Bedeutung emotional und inhaltlich angekommen ist.
+- Verkürze nicht die Geschichte, sondern den Weg zur Wirkung.
+- Bewahre Spiritualität, Mythologie, Atmosphäre und emotionale Tiefe vollständig.
+- Straffungskorridor für diesen Abschnitt: {{TARGET}} (Richtwert, nicht mechanisch, nicht um jeden Preis — Qualität vor Prozentzahl).
+
+=== DIAGNOSE: WAS ZU KORRIGIEREN IST ===
+1. Bedeutungswiederholung: Aussage wird formuliert, dann variiert, metaphorisch erklärt, dann theologisch eingeordnet — nur die stärkste Fassung behalten.
+2. Metaphernsättigung: mehrere Bildsysteme (Licht, Wärme, Musik, Wasser, Blumen, Garten, Stille, Drehung, Tiefe) gleichzeitig in einem Absatz — auf ein dominantes Bild pro Absatz reduzieren, höchstens ein unterstützendes Bild.
+3. Reflexion nach bereits gelungener Szene: Erzähler erklärt, was Handlung und Bild schon gezeigt haben — Erklärung streichen, Bild/Szene/Emotion behalten.
+4. Gleichbleibende Tonhöhe: fast jeder Absatz strebt nach maximaler Schönheit — Kontrast durch kürzere, schlichtere Sätze schaffen, besonders nach dichten Passagen.
+5. Verzögerte Kerninformation: neue Information erscheint erst nach mehreren poetischen Umwegen — Beobachtung → Information → Emotion → EIN starkes Bild → Weiterbewegung. Nicht: Beobachtung → Metapher → zweite Metapher → Erklärung → dritte Metapher → Information.
+6. Zu ähnliche Figurenregister — siehe Character Voice Constitution unten.
+
+Prüffrage vor jeder Kürzung: Versteht der Leser den Gedanken bereits? Wenn ja: nicht erneut erklären, sondern weiterbewegen.
+
+=== LESERLICHKEIT (satz-/absatzebene, direkt anwendbar) ===
+- Leser-Erfahrungstest: In jedem Kapitel soll der Leser durchgehend mindestens eines erleben: Neugier, Vorfreude, Sorge, Staunen, Ungewissheit, Empathie, Spannung, Befriedigung. Reine Reflexion ohne eines dieser Elemente über mehrere Absätze hinweg braucht Auflockerung (Handlung, Sinneswahrnehmung, Dialog-Fragment, kurzer Satz).
+- Metaphern-Dichte: ein dominantes Bild pro Absatz, höchstens ein weiteres unterstützendes Bild. Keine schöne Bildsprache entfernen — nur Bildkonkurrenz innerhalb desselben Absatzes reduzieren. Die mantraartige Wiederholung über das GESAMTE Kapitel hinweg ist ein Stilmerkmal und bleibt erhalten — es geht nur um Häufung INNERHALB eines Absatzes.
+- Trust the Reader: Wenn eine Wahrheit bereits gezeigt wurde, keine nachträgliche Erklärung/Klarstellung/Zusammenfassung/Wiederholung anhängen. Reihenfolge: Zeigen → Verstehen lassen → Weitergehen. Nicht: Zeigen → Erklären → Klarstellen → Umformulieren → Zusammenfassen.
+- Absatzstruktur/Satzrhythmus: lange, reflektierende Sätze sind eine Stärke und bleiben erhalten — aber sie gewinnen an Kraft, wenn kürzere Sätze als Kontrast folgen (z.B. nach mehreren langen Sätzen: ein sehr kurzer Satz von 2-5 Wörtern). Große Reflexionsblöcke in kleinere Absätze teilen, zentralen Gedanken eigenen Absatz geben.
+- Nach einer prägnanten Pointe/Offenbarung keinen erklärenden Nachsatz anhängen, der keinen neuen Inhalt bringt.
+- Drei nahezu gleichbedeutende Verben/Bilder nicht nebeneinander verwenden, sofern jedes keine neue Nuance beisteuert.
+
+=== HARTE STILGRENZEN (Literary Constitution, nicht verhandelbar) ===
+- Em-Dashes: höchstens 1 pro Absatz, höchstens 3 pro Seite (~500 Wörter). Überschüsse durch Kommas, Punkte oder Semikolons ersetzen.
+- Hedging-Wörter (somewhat, perhaps, a little, seemed to, almost as if, in a way — u.ä.): höchstens 1 pro 500 Wörter.
+- KI-Signalwörter (pivotal, tapestry, testament, intricate, delve, tapestried, ineffable u.ä. generisches "literarisches" Vokabular): praktisch nie verwenden.
+- Konnektoren (however, moreover, furthermore, indeed am Satzanfang): höchstens 1 pro Kapitel.
+- Niemals drei aufeinanderfolgende Sätze mit identischem Satzanfang oder nahezu identischer Satzlänge.
+
+=== CHARACTER VOICE CONSTITUTION ===
+Hana: intuitiv, empfänglich, klar, emotional unmittelbar. Erkennt Wahrheit vor der Analyse. Sprache weich, poetisch, aber einfacher als die Erzählerstimme. Bilder aus Nähe, Wärme, Ruhe, Fürsorge, Wahrnehmung.
+Adel: analytisch, präzise, strukturiert, fragend. Zerlegt Wahrheit in Unterschiede, Grenzen, Ursachen, Widersprüche. Sprache schärfer, geordneter, kühler. Wiederkehrende Motive (seams, edges, counting, weight, questions) sparsam einsetzen.
+Zarif: humorvoll, überraschend, warm, beweglich. Bringt Tempowechsel in dichte Passagen. Lebendiger, direkter, weniger feierlich. Komik transportiert Wahrheit, wird nie zu reinem comic relief.
+Hilal: knapp, ruhig, gewichtig, autoritativ. Jeder wichtige Satz zitierfähig. Erklärt selten vollständig, öffnet einen Denkraum. Wirkung nicht durch Übererklärung abschwächen — Hilal NIE ausführlich erklären lassen.
+Antagonistische Stimme: kalt, kontrolliert, geduldig, beinahe juristisch. Weniger lyrische Schönheit, mehr Präzision, Bilanzierung, Anspruch, Instrumentalisierung. Kontrast zur warmen Schöpfungssprache muss hörbar sein.
+Praxistest: Wären die Sprecher auch ohne Dialog-Tags unterscheidbar?
+
+=== UNVERHANDELBAR — NIEMALS KÜRZEN, ABSCHWÄCHEN ODER VERSCHIEBEN ===
+Präexistenz der Seelen; der Covenant / das ursprüngliche gemeinsame "Yes"; Erinnerung und Vergessen als Grundbewegung; Liebe als Grundstruktur der Schöpfung; freier Wille und echte moralische Verantwortung; Hana und Adel als komplementäre, nicht austauschbare Seelen; islamische Symbolik und theologische Verankerung; Musik und Licht als kosmische Ausdrucksformen; Barmherzigkeit vor Leistung; Fragen als mögliche Form der Hinwendung (nicht als Versagen). Keine theologische Aussage darf vereinfacht werden, nur weil sie komplex ist — vereinfacht wird die VERMITTLUNG, nie die Philosophie.
+
+=== SYMBOLIK — GRUNDFUNKTION KONSISTENT HALTEN ===
+Light = Wahrheit/Erkenntnis/Wirklichkeit. Warmth = göttliche Nähe/Getragensein. Music = göttliche Ordnung/Resonanz/Beziehung. Garden = Bestimmung/Möglichkeit/Heimat. Chord = Komplementarität, nicht vorschnelle Romantik. Cold = Trennung/Stolz/Berechnung. Seam/Edge = Adels Erkenntnismodus. Ledger/Debt = moralische Fehlentwicklung durch Anspruch.
+
+=== WAS NIEMALS GESCHEHEN DARF ===
+Bildsprache zu generischer Fantasy-Prosa glätten. Spirituelle Erfahrung durch nüchterne Erklärung ersetzen. Hana zu passiv oder Adel zu bloß kalt machen. Zarifs Humor in bedeutungslose Albernheit verwandeln. Hilal ausführlich erklären lassen. Das Geheimnis der Welt vollständig rationalisieren. Den Covenant auf romantische Seelenverwandtschaft reduzieren. Koranische Verweise dekorativ statt bedeutungstragend behandeln. Ein pauschales Kürzungsziel über die Qualität einzelner Passagen stellen. Namen, Handlungsfakten oder Reihenfolge verändern.
+
+=== ARBEITSWEISE ===
+1. Bestimme in Gedanken die neue Information jedes Abschnitts.
+2. Markiere Doppelungen, wähle die stärkste Formulierung.
+3. Prüfe pro Absatz das Leitbild, entferne konkurrierende Bilder.
+4. Streiche Erzählerkommentare, die nur bereits Gezeigtes erklären.
+5. Schärfe Figurenstimmen.
+6. Balanciere Rhythmus (kurze Sätze als Kontrast nach dichten Passagen).
+7. Prüfe: Philosophie vollständig erhalten? Bedeutung erhalten? Schönheit erhalten?
+
+=== AUSGABEFORMAT ===
+Antworte AUSSCHLIESSLICH mit einem validen JSON-Objekt, keine Markdown-Codeblöcke, kein Text davor oder danach:
+{"revised": "<vollständig überarbeiteter englischer Text des Abschnitts>", "changes": ["<kurzer Stichpunkt zur wichtigsten Änderung>", "<...>", "<3-6 Stichpunkte total, auf Deutsch, konkret>"], "words_after": <int>}
+Der Text in "revised" bleibt Englisch (Originalsprache des Manuskripts). Die "changes"-Liste ist auf Deutsch.`;
+
+// Target reduction guidance per section (from Constitution §8, Prologue–Chapter 10; default for the rest)
+function targetFor(heading){
+  const h = heading.toLowerCase();
+  if(h.startsWith('prologue')) return '25–35% (Wiederholung des Suchgefühls reduzieren, Kernkonflikt früher setzen, stärkste Regen-/Kompassbilder bewahren)';
+  if(h.startsWith('overture')) return '20–30% (Angst/Garten-Feuer-Gegensatz je einmal vollständig entfalten, Erklärungsschleifen kürzen)';
+  if(h.startsWith('chapter one')) return '20–25% (being/warmth/holding/turning verdichten, Hanas Staunen stärken)';
+  if(h.startsWith('chapter two')) return '20–25% (counting/seams nicht mehrfach erklären, Adels Stimme schärfen)';
+  if(h.startsWith('chapter three')) return 'leicht, ~8–12% (Zarifs Ankunft/Humor schützen)';
+  if(h.startsWith('chapter four')) return 'leicht, ~8–12% (Begegnung/chord-Motiv erhalten, Gegner präziser/kälter)';
+  if(h.startsWith('chapter five')) return 'moderat, ~15–20% (Hilal nicht übererklären, Nachklang statt Ausdeutung)';
+  if(h.startsWith('chapter six')) return 'leicht bis moderat, ~10–18% (Freundschaft echt lassen, Foreshadowing nicht doppelt absichern)';
+  if(h.startsWith('chapter seven')) return 'minimal, ~5% (Zarif/Nuri-Humor fast unangetastet)';
+  if(h.startsWith('chapter eight')) return '20–30% (grit/shoe/grievance/debt nicht mehrfach erzählen, Verschiebung in klaren Stufen)';
+  if(h.startsWith('chapter nine')) return 'minimal, ~5% (nur Redundanz in Größen-/Stillness-Beschreibung)';
+  if(h.startsWith('chapter ten')) return 'minimal, ~5% (Komik/Wahrheit bewahren, Adels Reaktion kürzer/schärfer)';
+  if(h.startsWith('interlude')) return 'leicht, ~10–15% (Interludes sind bereits kompakt — nur Sättigung, keine Substanz kürzen)';
+  if(h.startsWith('dream fragment')) return 'sehr leicht, ~5–10% (Traumlogik/Atmosphäre unbedingt bewahren)';
+  return '15–25% (allgemeiner Leitkorridor, nicht mechanisch)';
+}
+
+// ---------- STATE ----------
+const STORAGE_KEY = 'manuscript-state-v1';
+let state = { sections: [], running: false };
+let openIndex = null;
+
+async function loadState(){
+  try{
+    const r = await window.storage.get(STORAGE_KEY, false);
+    if(r && r.value){
+      const parsed = JSON.parse(r.value);
+      if(parsed && Array.isArray(parsed.sections)) state = parsed;
+    }
+  }catch(e){ /* no state yet */ }
+}
+let saveTimer = null;
+function saveState(){
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(async ()=>{
+    try{ await window.storage.set(STORAGE_KEY, JSON.stringify(state), false); }catch(e){ console.error('save failed', e); }
+  }, 250);
+}
+
+// ---------- PARSING ----------
+function parseManuscript(raw){
+  const parts = raw.split(/^###SECTION:\s*(.+?)\s*###$/m);
+  const sections = [];
+  // parts[0] is preamble junk; then alternating heading, body
+  for(let i=1;i<parts.length;i+=2){
+    const heading = parts[i].trim();
+    const body = (parts[i+1]||'').trim();
+    if(!body) continue;
+    sections.push({
+      id: sections.length,
+      heading,
+      original: body,
+      wordsOriginal: body.split(/\s+/).filter(Boolean).length,
+      status: 'pending',
+      revised: '',
+      changes: [],
+      wordsAfter: 0,
+      error: ''
+    });
+  }
+  return sections;
+}
+
+// ---------- API ----------
+async function reviseSection(sec){
+  const userMsg = `Abschnitt: "${sec.heading}"\nStraffungs-Richtwert für diesen Abschnitt: ${targetFor(sec.heading)}\n\n--- ORIGINALTEXT (Englisch) ---\n${sec.original}`;
+  const resp = await fetch('https://api.anthropic.com/v1/messages', {
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({
+      model:'claude-sonnet-4-6',
+      max_tokens: 6000,
+      system: SYSTEM_PROMPT.replace('{{TARGET}}', targetFor(sec.heading)),
+      messages:[{role:'user', content:userMsg}]
+    })
+  });
+  const data = await resp.json();
+  const textBlock = (data.content||[]).find(b=>b.type==='text');
+  if(!textBlock) throw new Error('Keine Textantwort erhalten.');
+  let raw = textBlock.text.trim();
+  raw = raw.replace(/^```json\s*/i,'').replace(/^```\s*/,'').replace(/```\s*$/,'');
+  let parsed;
+  try{ parsed = JSON.parse(raw); }
+  catch(e){
+    const m = raw.match(/\{[\s\S]*\}/);
+    if(m) parsed = JSON.parse(m[0]);
+    else throw new Error('Antwort konnte nicht als JSON gelesen werden.');
+  }
+  if(!parsed.revised) throw new Error('Kein "revised"-Feld in der Antwort.');
+  return parsed;
+}
+
+// ---------- AGENT LOOP ----------
+async function runAgent(){
+  if(state.running) return;
+  state.running = true;
+  render();
+  while(state.running){
+    const next = state.sections.find(s=>s.status==='pending' || s.status==='error');
+    if(!next) break;
+    next.status = 'processing';
+    render();
+    try{
+      const result = await reviseSection(next);
+      next.revised = result.revised;
+      next.changes = result.changes || [];
+      next.wordsAfter = result.words_after || result.revised.split(/\s+/).filter(Boolean).length;
+      next.status = 'done';
+      next.error = '';
+    }catch(e){
+      next.status = 'error';
+      next.error = e.message || String(e);
+    }
+    saveState();
+    render();
+    if(!state.running) break;
+  }
+  state.running = false;
+  saveState();
+  render();
+}
+function pauseAgent(){ state.running = false; render(); }
+async function redoSection(id){
+  const sec = state.sections.find(s=>s.id===id);
+  if(!sec) return;
+  sec.status = 'processing';
+  render();
+  try{
+    const result = await reviseSection(sec);
+    sec.revised = result.revised;
+    sec.changes = result.changes || [];
+    sec.wordsAfter = result.words_after || result.revised.split(/\s+/).filter(Boolean).length;
+    sec.status = 'done';
+    sec.error = '';
+  }catch(e){
+    sec.status = 'error';
+    sec.error = e.message || String(e);
+  }
+  saveState();
+  render();
+}
+
+// ---------- EXPORT ----------
+function exportManuscript(){
+  const lines = [];
+  state.sections.forEach(s=>{
+    lines.push(s.heading.toUpperCase());
+    lines.push('');
+    lines.push(s.status==='done' ? s.revised : s.original);
+    lines.push('');
+    lines.push('');
+  });
+  const blob = new Blob([lines.join('\n')], {type:'text/plain'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'Covenant_of_Light_Buch1_revised.txt';
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(()=>URL.revokeObjectURL(url), 2000);
+}
+
+// ---------- RENDER ----------
+function escapeHtml(s){
+  return (s||'').replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+function render(){
+  const intake = document.getElementById('intake');
+  const controls = document.getElementById('controls');
+  const list = document.getElementById('list');
+  const footer = document.getElementById('footer');
+
+  if(state.sections.length === 0){
+    intake.style.display = 'block';
+    intake.innerHTML = `
+      <div class="row" style="justify-content:space-between;align-items:flex-start;">
+        <div style="flex:1;min-width:260px;">
+          <h4 class="chrome-font" style="margin:0 0 8px;font-size:13px;text-transform:uppercase;letter-spacing:.06em;color:var(--ink-soft);">Manuskript einfügen</h4>
+          <p class="hint">Füge den vollständigen Text mit <code>###SECTION: Titel###</code>-Markern ein (aus dem bereitgestellten Export). Der Agent zerlegt automatisch in Kapitel und verarbeitet sie eines nach dem anderen.</p>
+        </div>
+      </div>
+      <textarea id="raw-input" placeholder="###SECTION: Prologue — The Echo###
+There is a particular kind of rain in that city...
+
+###SECTION: Overture — Before the First of the Worlds###
+..."></textarea>
+      <div class="row" style="margin-top:12px;">
+        <button class="btn" id="parse-btn">Manuskript parsen &amp; Agent vorbereiten</button>
+      </div>
+    `;
+    controls.style.display = 'none';
+    list.innerHTML = '';
+    footer.style.display = 'none';
+    document.getElementById('parse-btn').onclick = ()=>{
+      const raw = document.getElementById('raw-input').value;
+      const sections = parseManuscript(raw);
+      if(sections.length === 0){
+        alert('Keine ###SECTION:###-Marker gefunden. Bitte den bereitgestellten Export unverändert einfügen.');
+        return;
+      }
+      state = { sections, running:false };
+      saveState();
+      render();
+    };
+    return;
+  }
+
+  intake.style.display = 'none';
+
+  const total = state.sections.length;
+  const done = state.sections.filter(s=>s.status==='done').length;
+  const errored = state.sections.filter(s=>s.status==='error').length;
+  const wordsOrig = state.sections.reduce((a,s)=>a+s.wordsOriginal,0);
+  const wordsRevSoFar = state.sections.reduce((a,s)=>a + (s.status==='done' ? s.wordsAfter : s.wordsOriginal), 0);
+  const pct = total ? Math.round((done/total)*100) : 0;
+  const reduction = done>0 ? Math.round((1 - (state.sections.filter(s=>s.status==='done').reduce((a,s)=>a+s.wordsAfter,0) / state.sections.filter(s=>s.status==='done').reduce((a,s)=>a+s.wordsOriginal,0)))*100) : 0;
+
+  controls.style.display = 'block';
+  controls.innerHTML = `
+    <div class="row" style="justify-content:space-between;">
+      <div class="row">
+        <button class="btn" id="run-btn" ${state.running?'disabled':''}>${done===total ? 'Fertig' : (state.running ? 'Agent läuft…' : (done>0||errored>0 ? 'Agent fortsetzen' : 'Agent starten'))}</button>
+        <button class="btn ghost" id="pause-btn" ${state.running?'':'disabled'}>Pausieren</button>
+        <button class="btn ghost" id="reset-btn">Neues Manuskript laden</button>
+      </div>
+    </div>
+    <div class="progress-outer"><div class="progress-inner" style="width:${pct}%"></div></div>
+    <div class="stats chrome-font">
+      <span><b>${done}</b> / ${total} Abschnitte fertig</span>
+      <span>${errored>0 ? `<b style="color:var(--error)">${errored} Fehler</b>` : ''}</span>
+      <span>Wörter original: <b>${wordsOrig.toLocaleString('de-DE')}</b></span>
+      <span>Ø Straffung (fertige Abschnitte): <b>${done>0?reduction+'%':'–'}</b></span>
+    </div>
+  `;
+  document.getElementById('run-btn').onclick = runAgent;
+  document.getElementById('pause-btn').onclick = pauseAgent;
+  document.getElementById('reset-btn').onclick = ()=>{
+    if(confirm('Aktuellen Fortschritt verwerfen und neues Manuskript laden?')){
+      state = { sections: [], running:false };
+      saveState();
+      render();
+    }
+  };
+
+  list.innerHTML = state.sections.map((s)=>{
+    const isOpen = openIndex === s.id;
+    const badgeLabel = {pending:'Ausstehend', processing:'Wird bearbeitet…', done:'Fertig', error:'Fehler'}[s.status];
+    const wordDelta = s.status==='done' ? `${s.wordsOriginal} → ${s.wordsAfter} Wörter (${Math.round((1-s.wordsAfter/s.wordsOriginal)*100)}%)` : `${s.wordsOriginal} Wörter`;
+    return `
+      <div class="item">
+        <div class="item-head" data-id="${s.id}">
+          <div>
+            <div class="item-title">${escapeHtml(s.heading)}</div>
+            <div class="item-meta chrome-font">${wordDelta} &middot; Ziel: ${escapeHtml(targetFor(s.heading))}</div>
+          </div>
+          <span class="badge ${s.status}">${badgeLabel}</span>
+        </div>
+        <div class="item-body ${isOpen?'open':''}">
+          ${s.status==='error' ? `<p style="color:var(--error);font-family:'Inter',sans-serif;font-size:12.5px;">${escapeHtml(s.error)}</p>` : ''}
+          ${s.status==='done' ? `
+            <ul class="changes">${s.changes.map(c=>`<li>${escapeHtml(c)}</li>`).join('')}</ul>
+            <div class="cols">
+              <div class="col"><h4 class="chrome-font">Original</h4><div class="text-box">${escapeHtml(s.original)}</div></div>
+              <div class="col"><h4 class="chrome-font">Überarbeitet</h4><div class="text-box">${escapeHtml(s.revised)}</div></div>
+            </div>
+          ` : `<div class="text-box" style="margin-top:12px;">${escapeHtml(s.original)}</div>`}
+          <div class="row" style="margin-top:12px;">
+            <button class="btn small ghost redo-btn" data-id="${s.id}" ${s.status==='processing'?'disabled':''}>${s.status==='done'?'Neu generieren':'Jetzt bearbeiten'}</button>
+          </div>
+        </div>
+      </div>
+    `;
+  }).join('');
+
+  list.querySelectorAll('.item-head').forEach(el=>{
+    el.onclick = ()=>{
+      const id = parseInt(el.getAttribute('data-id'));
+      openIndex = openIndex === id ? null : id;
+      render();
+    };
+  });
+  list.querySelectorAll('.redo-btn').forEach(el=>{
+    el.onclick = (e)=>{
+      e.stopPropagation();
+      const id = parseInt(el.getAttribute('data-id'));
+      redoSection(id);
+    };
+  });
+
+  footer.style.display = 'flex';
+  footer.innerHTML = `
+    <button class="btn" id="export-btn">Manuskript exportieren (.txt)</button>
+    <p class="hint" style="margin:0;align-self:center;">Fertige Kapitel werden überarbeitet exportiert, offene/fehlerhafte im Original — damit nichts verloren geht.</p>
+  `;
+  document.getElementById('export-btn').onclick = exportManuscript;
+}
+
+// ---------- INIT ----------
+(async function init(){
+  await loadState();
+  render();
+})();
+
+})();
+</script>
+</body>
+</html>
