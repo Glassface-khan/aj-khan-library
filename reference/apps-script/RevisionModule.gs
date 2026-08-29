@@ -360,65 +360,76 @@ function revisionUpdateManuscriptSections_(payload) {
 }
 
 // ---------------------------------------------------------------------------
-// INTEGRATION IN handle(e)
+// INTEGRATION IN handle(e) — echter, ausführbarer Code (kein Kommentar mehr)
 // ---------------------------------------------------------------------------
 //
-// Bestätigt (29.08.2026, per Screenshot durchgesehen): doGet(e) und doPost(e)
-// leiten beide nur an eine gemeinsame handle(e) weiter; dort prüft checkAdmin(e)
-// das Token (e.parameter.adminToken, PropertiesService-Key 'admintoken_' +
-// token, 24h-Ablauf) und jsonOut(obj) baut die JSON-Antwort. Die folgende
-// handleRevisionAction(e) nutzt exakt diese beiden — kein eigenes
-// Antwortformat, kein eigener Auth-Mechanismus mehr, siehe assertAdminToken_
-// oben.
+// Bestätigt (29.08.2026, per Code.gs durchgesehen): doGet(e)/doPost(e) rufen
+// beide handle(e) auf; checkAdmin(e) prüft das Token (e.parameter.adminToken,
+// PropertiesService-Key 'admintoken_' + token, 24h-Ablauf), jsonOut(obj)
+// baut die JSON-Antwort im Muster {ok:true,...} bzw. {ok:false,error:...}.
+// handleRevisionAction(e) unten nutzt exakt diese beiden — kein eigenes
+// Antwortformat, kein eigener Auth-Mechanismus. Alle Apps-Script-Dateien
+// eines Projekts teilen sich einen globalen Namensraum, deshalb ist diese
+// Funktion hier in RevisionModule.gs genauso aufrufbar wie jede Funktion
+// aus Code.gs selbst — sie muss nicht dorthin verschoben werden.
 //
-// function handleRevisionAction(e) {
-//   var p = e.parameter;
-//   switch (p.action) {
-//     case 'revisionListNovels':
-//       assertAdminToken_(e);
-//       return jsonOut(revisionListNovels_());
-//     case 'revisionSaveNovel':
-//       assertAdminToken_(e);
-//       return jsonOut(revisionSaveNovel_(JSON.parse(p.payload)));
-//     case 'revisionListRulesets':
-//       assertAdminToken_(e);
-//       return jsonOut(revisionListRulesets_(p.novelId));
-//     case 'revisionSaveRuleset':
-//       assertAdminToken_(e);
-//       return jsonOut(revisionSaveRuleset_(JSON.parse(p.payload)));
-//     case 'revisionGetRuleset':
-//       assertAdminToken_(e);
-//       return jsonOut(revisionGetRuleset_(p.id));
-//     case 'revisionListManuscripts':
-//       assertAdminToken_(e);
-//       return jsonOut(revisionListManuscripts_(p.novelId));
-//     case 'revisionUploadManuscript':
-//       assertAdminToken_(e);
-//       return jsonOut(revisionUploadManuscript_(JSON.parse(p.payload)));
-//     case 'revisionGetManuscript':
-//       assertAdminToken_(e);
-//       return jsonOut(revisionGetManuscript_(p.id));
-//     case 'revisionUpdateManuscriptSections':
-//       assertAdminToken_(e);
-//       return jsonOut(revisionUpdateManuscriptSections_(JSON.parse(p.payload)));
-//     default:
-//       return null; // nicht zuständig — handle(e) macht mit seiner
-//                     // bestehenden Logik weiter
-//   }
-// }
+// Try/catch um den ganzen Zweig: ein Fehler in einer revisionXxx_-Funktion
+// (z. B. "Manuskript nicht gefunden") kommt dadurch als sauberes
+// {ok:false, error: "..."} zurück statt als rohe Server-Exception — gleiches
+// Verhalten wie der Rest von Code.gs bei ungültigem Input.
+function handleRevisionAction(e) {
+  var REVISION_ACTIONS = [
+    'revisionListNovels', 'revisionSaveNovel',
+    'revisionListRulesets', 'revisionSaveRuleset', 'revisionGetRuleset',
+    'revisionListManuscripts', 'revisionUploadManuscript',
+    'revisionGetManuscript', 'revisionUpdateManuscriptSections'
+  ];
+  var p = e.parameter;
+  if (REVISION_ACTIONS.indexOf(p.action) === -1) return null; // nicht zuständig
+
+  try {
+    switch (p.action) {
+      case 'revisionListNovels':
+        assertAdminToken_(e);
+        return jsonOut(revisionListNovels_());
+      case 'revisionSaveNovel':
+        assertAdminToken_(e);
+        return jsonOut(revisionSaveNovel_(JSON.parse(p.payload)));
+      case 'revisionListRulesets':
+        assertAdminToken_(e);
+        return jsonOut(revisionListRulesets_(p.novelId));
+      case 'revisionSaveRuleset':
+        assertAdminToken_(e);
+        return jsonOut(revisionSaveRuleset_(JSON.parse(p.payload)));
+      case 'revisionGetRuleset':
+        assertAdminToken_(e);
+        return jsonOut(revisionGetRuleset_(p.id));
+      case 'revisionListManuscripts':
+        assertAdminToken_(e);
+        return jsonOut(revisionListManuscripts_(p.novelId));
+      case 'revisionUploadManuscript':
+        assertAdminToken_(e);
+        return jsonOut(revisionUploadManuscript_(JSON.parse(p.payload)));
+      case 'revisionGetManuscript':
+        assertAdminToken_(e);
+        return jsonOut(revisionGetManuscript_(p.id));
+      case 'revisionUpdateManuscriptSections':
+        assertAdminToken_(e);
+        return jsonOut(revisionUpdateManuscriptSections_(JSON.parse(p.payload)));
+    }
+  } catch (err) {
+    return jsonOut({ ok: false, error: err.message });
+  }
+  return null;
+}
 //
-// UND GENAU EINE ZEILE in deiner bestehenden handle(e)-Funktion (Code.gs),
-// ganz am Anfang, VOR der ersten bestehenden if/else-Prüfung eingefügt:
+// Der einzige Eingriff in Code.gs bleibt diese eine Stelle, ganz am Anfang
+// von handle(e) (siehe die von Claude Code bereitgestellte, fertig
+// zusammengeführte Code.gs-Datei für die exakte Einfügestelle):
 //
 //   function handle(e) {
-//     var revisionResponse = handleRevisionAction(e);
+//     const revisionResponse = handleRevisionAction(e);
 //     if (revisionResponse) return revisionResponse;
 //     // ... ab hier dein bestehender Code unverändert ...
 //   }
-//
-// Das ist der einzige Eingriff in Code.gs. Ein Fehler in einer revisionXxx-
-// Funktion (z. B. "Manuskript nicht gefunden") wirft aktuell eine normale
-// JS-Exception — falls handle(e) selbst kein try/catch um den ganzen Body
-// hat, wirf gern Bescheid, dann ergänze ich hier ein try/catch mit
-// jsonOut({ error: ... }) statt der Exception.
 // ---------------------------------------------------------------------------
