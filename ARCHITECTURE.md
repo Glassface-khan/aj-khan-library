@@ -261,3 +261,69 @@ der Code selbst korrekt war.
   "Sync jetzt"-Button pro Buch vs. echter zeitbasierter Apps-Script-
   Trigger (Nutzer wünscht "volle Automatisierung", was eher auf einen
   echten Zeit-Trigger hindeutet).
+
+## 9 · Nachtrag (29.08.2026) — Stil-Revisions-Modul, Phase 2
+
+Neuer Admin-Bereich **"Stil-Revision"** (siehe
+`Claude_Code_Anweisung_Stil-Revisions-Modul.md` für die volle Anforderung).
+Umgesetzt wurde bisher nur **Phase 2** (Datenmodell + Upload + Splitting +
+Regelwerk-Verwaltung) — Revisions-Lauf-Engine, Cloud-Export und finaler
+KI-Gegencheck (Phasen 3–6) sind bewusst noch nicht gebaut, wie vom Nutzer
+selbst als phasenweises Vorgehen vorgegeben.
+
+**Kollision mit der ursprünglichen Anforderung, angepasst statt unangekündigt
+gebaut:** Die Anforderung ging von einem eigenen Backend mit SQLite/Postgres
+aus. Es gibt aber (Abschnitt 2) kein eigenes Backend, nur GitHub Pages +
+Google Apps Script. Lösung: das bestehende Apps-Script-Backend additiv
+erweitert (`reference/apps-script/RevisionModule.gs`), keine Parallel-
+Architektur. Neue Sheet-Tabs (`RevisionNovels`, `RevisionRulesets`,
+`RevisionManuscripts`, plus vorbereitete leere Schemas für `RevisionRuns`/
+`RevisionReviews`/`RevisionExports` für spätere Phasen) statt einer echten DB.
+Volltexte (Regelwerk-Inhalt, Kapiteltexte) liegen als Dateien in einem neuen
+Drive-Ordner `/AJ Khan Bücher/_StilRevision/...`, nicht in Sheet-Zellen — das
+45 000-Zeichen-Zellenlimit aus Abschnitt 3 träfe bei ganzen Kapiteln sofort.
+
+**Wie einbauen:** `reference/apps-script/RevisionModule.gs` ist NUR eine
+Zusatzdatei — sie muss manuell im Apps-Script-Editor ergänzt und einmalig
+`setupRevisionModule()` ausgeführt werden (legt Sheet-Tabs + Drive-Ordner an),
+danach neu deployen (siehe die "New version"-Falle oben in Abschnitt 7). Sie
+fasst `getBooks`/`saveBooks`/`checkPassword`/`addAccess`/`removeAccess`/
+`syncWordCount` nicht an. Die eine Stelle, die der Nutzer beim Einfügen noch
+per Hand anpassen muss, ist in der Datei mit "⚠ ANPASSEN" markiert: die
+Admin-Token-Prüfung verweist testweise auf eine eigenständige
+`PropertiesService`-Implementierung, weil diese Session **keinen Zugriff auf
+das echte Code.gs hatte** (kein Apps-Script-Connector verbunden, wie schon in
+Abschnitt 4 dokumentiert — ein Drive-Connector war zwar verfügbar, hat aber
+das Skript-Projekt nicht als durchsuchbare Datei geliefert). Der Nutzer muss
+diese eine Zeile durch den Aufruf seiner echten, bestehenden Token-Prüf-
+Funktion ersetzen.
+
+**Admin-UI:** neuer Abschnitt im Admin-Panel direkt nach "Zugänge", vor
+"Sign out" — Roman anlegen/auswählen, Regelwerk (Freitext/Markdown + optionale
+Straffungs-Zielkorridor-Notizen, global oder pro Roman, jede Speicherung
+erzeugt eine neue Version statt zu überschreiben) und Manuskript-Upload mit
+Kapitel-Splitting-Vorschau (eigene `###SECTION: Titel###`-Marker wie im
+Referenzprototyp, sonst automatische mehrsprachige Überschriften-Erkennung;
+manuelle Korrektur direkt in der Vorschau: Überschrift/Text bearbeiten,
+Abschnitt mit dem vorherigen zusammenführen, oder per `###SPLIT###`-Marker im
+Text an gewünschter Stelle teilen). `index.html` bleibt ein kompilierter
+Claude-Design-Canvas-Export (`<x-dc>`-Template mit `sc-if`/`sc-for`/`{{ }}`-
+Bindings + begleitender `text/x-dc`-Komponentenklasse mit `renderVals()` als
+View-Model-Builder) — die neue Sektion folgt exakt diesem bestehenden Muster
+(gleiche CSS-Variablen, gleiche fetch/URLSearchParams-Konvention wie
+`fetchAccessList`/`addAccessPerson`), keine neue Template-Sprache eingeführt.
+
+**Getestet vor dem Push:** Kopfloser Chromium-Testlauf (Playwright) hat
+`index.html` unverändert gegen den Original-Stand gegengeprüft — mit
+`isAdmin` clientseitig simuliert (localStorage) und jeder Request an die
+Live-Apps-Script-URL abgefangen/gemockt, damit nichts an das echte Backend
+ging. Ergebnis: bestehende Books-/Poems-/Zugänge-Bereiche rendern unverändert,
+neuer Stil-Revision-Bereich rendert fehlerfrei, keine zusätzlichen
+Konsolenfehler gegenüber dem unveränderten Original.
+
+**Offen für die nächste Phase (erst nach Rückmeldung):** Revisions-Lauf-Engine
+(sequenzieller Kapitel-Loop mit Pause/Fortsetzen, Claude-API-Proxy über
+`PropertiesService`-Key, Vorher/Nachher-UI), Google-Drive-Export,
+iCloud-Download-Export, finaler KI-Gegencheck mit Provider-Wahl
+(Copilot-Verfügbarkeit als Drittanbieter-API vorab klären, Gemini als
+realistischere Alternative zu Claude einplanen).
