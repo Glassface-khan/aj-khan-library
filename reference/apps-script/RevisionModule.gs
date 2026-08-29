@@ -15,11 +15,10 @@
  * 1. Im Apps-Script-Editor (script.google.com, dein bestehendes Projekt):
  *    Datei → Neu → Skript. Nenne die neue Datei z. B. "RevisionModule".
  * 2. Den kompletten Inhalt dieser Datei dort hineinkopieren.
- * 3. In deiner bestehenden doGet/doPost-Funktion (in Code.gs) an der Stelle,
- *    an der die "action"-Parameter ausgewertet werden (der große
- *    if/else- oder switch-Block), die neuen Fälle ergänzen — siehe
- *    Abschnitt "INTEGRATION IN doGet/doPost" ganz unten in dieser Datei.
- *    Das ist der EINZIGE Berührungspunkt mit deinem bestehenden Code.
+ * 3. In deiner bestehenden handle(e)-Funktion (Code.gs, wird von doGet/doPost
+ *    aufgerufen) ganz am Anfang EINE Zeile ergänzen — siehe Abschnitt
+ *    "INTEGRATION IN handle(e)" ganz unten in dieser Datei. Das ist der
+ *    EINZIGE Berührungspunkt mit deinem bestehenden Code.
  * 4. Einmalig die Funktion `setupRevisionModule` manuell ausführen
  *    (Dropdown oben im Editor auf "setupRevisionModule" stellen → ▶ Run).
  *    Das legt die neuen Sheet-Tabs und den Drive-Ordner an. Passiert
@@ -27,16 +26,13 @@
  * 5. Deploy → Manage deployments → Stift-Symbol → Version auf "New version"
  *    → Deploy. (Die Falle aus ARCHITECTURE.md §7: nur Speichern reicht nicht.)
  *
- * ⚠ WICHTIGER HINWEIS ZUR INTEGRATION (bitte zuerst lesen)
- * Diese Session hatte keinen Lese-/Schreibzugriff auf dein echtes Code.gs
- * (kein Apps-Script-Connector verbunden, siehe ARCHITECTURE.md §4). Die
- * Auth-Prüfung unten (`assertAdminToken_`) ist deshalb ein KOMPATIBLES
- * GERÜST, kein Verweis auf eine garantiert existierende Funktion. Du musst
- * beim Einfügen genau eine Zeile anpassen (klar mit "⚠ ANPASSEN" markiert):
- * den Aufruf deiner bestehenden Token-Prüf-Funktion aus Code.gs einsetzen
- * (die, die auch saveBooks/addAccess/removeAccess/syncWordCount schützt).
- * Alles andere in dieser Datei ist eigenständig und braucht keine weitere
- * Anpassung.
+ * INTEGRATION BESTÄTIGT (29.08.2026)
+ * Per Screenshot durchgesehen: doGet(e)/doPost(e) rufen beide handle(e) auf;
+ * checkAdmin(e) prüft das Token (e.parameter.adminToken gegen
+ * PropertiesService, Key-Präfix 'admintoken_', 24h-Ablauf), jsonOut(obj)
+ * baut die JSON-Antwort. assertAdminToken_ unten ruft checkAdmin(e) direkt
+ * auf — kein Rätselraten mehr nötig, keine weitere Anpassung an dieser
+ * Datei erforderlich außer dem einen Einfüge-Schritt in handle(e) (Punkt 3).
  *
  * DATENMODELL DIESER PHASE
  * Volltexte (Kapiteltexte, Regelwerk-Inhalt) NICHT in Sheet-Zellen — das
@@ -131,28 +127,19 @@ function getRevisionSubfolder_(pathParts) {
 }
 
 // ---------------------------------------------------------------------------
-// AUTH — ⚠ ANPASSEN (siehe Hinweis oben)
+// AUTH — bestätigt kompatibel mit dem echten Code.gs (Stand 29.08.2026)
 // ---------------------------------------------------------------------------
 
 /**
- * Wirft einen Fehler, wenn das Token ungültig/abgelaufen ist.
- * ⚠ ANPASSEN: Ersetze den Rumpf durch den Aufruf deiner bestehenden
- * Token-Prüf-Funktion aus Code.gs (die, die saveBooks/addAccess schützt).
- * Diese Platzhalter-Implementierung liest testweise direkt aus
- * PropertiesService — funktioniert eigenständig, dupliziert aber Logik,
- * die in Code.gs vermutlich schon existiert. Besser: dort aufrufen.
+ * Wirft einen Fehler, wenn das Admin-Token ungültig/abgelaufen ist.
+ * Delegiert an das bestehende checkAdmin(e) aus Code.gs — das liest
+ * e.parameter.adminToken selbst und prüft es gegen PropertiesService
+ * (Key-Präfix 'admintoken_', 24h-Ablauf). Erwartet deshalb das volle
+ * Event-Objekt `e` (nicht nur den Token-String) als Argument.
  */
-function assertAdminToken_(token) {
-  if (!token) throw new Error('Kein Admin-Token übergeben.');
-  // ⚠ ANPASSEN — Beispiel, falls in Code.gs z. B. `verifyAdminToken(token)`
-  // existiert, ersetze die folgenden Zeilen durch:
-  //   if (!verifyAdminToken(token)) throw new Error('Ungültiges oder abgelaufenes Admin-Token.');
-  //   return;
-  var props = PropertiesService.getScriptProperties();
-  var stored = props.getProperty('ADMIN_TOKEN_' + token);
-  if (!stored) throw new Error('Ungültiges oder abgelaufenes Admin-Token.');
-  var expiresAt = Number(stored);
-  if (Date.now() > expiresAt) throw new Error('Admin-Token abgelaufen.');
+function assertAdminToken_(e) {
+  var result = checkAdmin(e);
+  if (!result || !result.ok) throw new Error('Ungültiges oder abgelaufenes Admin-Token.');
 }
 
 // ---------------------------------------------------------------------------
@@ -373,65 +360,65 @@ function revisionUpdateManuscriptSections_(payload) {
 }
 
 // ---------------------------------------------------------------------------
-// INTEGRATION IN doGet/doPost
+// INTEGRATION IN handle(e)
 // ---------------------------------------------------------------------------
 //
-// In deiner bestehenden Funktion, die den "action"-Parameter auswertet,
-// diese Fälle ergänzen (Syntax an deinen bestehenden Stil anpassen — hier
-// als eigenständiger Dispatcher, den du entweder 1:1 aufrufst oder dessen
-// Fälle du in deinen bestehenden if/else-Block überträgst):
+// Bestätigt (29.08.2026, per Screenshot durchgesehen): doGet(e) und doPost(e)
+// leiten beide nur an eine gemeinsame handle(e) weiter; dort prüft checkAdmin(e)
+// das Token (e.parameter.adminToken, PropertiesService-Key 'admintoken_' +
+// token, 24h-Ablauf) und jsonOut(obj) baut die JSON-Antwort. Die folgende
+// handleRevisionAction(e) nutzt exakt diese beiden — kein eigenes
+// Antwortformat, kein eigener Auth-Mechanismus mehr, siehe assertAdminToken_
+// oben.
 //
-// function handleRevisionAction(action, params, token) {
-//   switch (action) {
+// function handleRevisionAction(e) {
+//   var p = e.parameter;
+//   switch (p.action) {
 //     case 'revisionListNovels':
-//       assertAdminToken_(token);
-//       return revisionListNovels_();
+//       assertAdminToken_(e);
+//       return jsonOut(revisionListNovels_());
 //     case 'revisionSaveNovel':
-//       assertAdminToken_(token);
-//       return revisionSaveNovel_(JSON.parse(params.payload));
+//       assertAdminToken_(e);
+//       return jsonOut(revisionSaveNovel_(JSON.parse(p.payload)));
 //     case 'revisionListRulesets':
-//       assertAdminToken_(token);
-//       return revisionListRulesets_(params.novelId);
+//       assertAdminToken_(e);
+//       return jsonOut(revisionListRulesets_(p.novelId));
 //     case 'revisionSaveRuleset':
-//       assertAdminToken_(token);
-//       return revisionSaveRuleset_(JSON.parse(params.payload));
+//       assertAdminToken_(e);
+//       return jsonOut(revisionSaveRuleset_(JSON.parse(p.payload)));
 //     case 'revisionGetRuleset':
-//       assertAdminToken_(token);
-//       return revisionGetRuleset_(params.id);
+//       assertAdminToken_(e);
+//       return jsonOut(revisionGetRuleset_(p.id));
 //     case 'revisionListManuscripts':
-//       assertAdminToken_(token);
-//       return revisionListManuscripts_(params.novelId);
+//       assertAdminToken_(e);
+//       return jsonOut(revisionListManuscripts_(p.novelId));
 //     case 'revisionUploadManuscript':
-//       assertAdminToken_(token);
-//       return revisionUploadManuscript_(JSON.parse(params.payload));
+//       assertAdminToken_(e);
+//       return jsonOut(revisionUploadManuscript_(JSON.parse(p.payload)));
 //     case 'revisionGetManuscript':
-//       assertAdminToken_(token);
-//       return revisionGetManuscript_(params.id);
+//       assertAdminToken_(e);
+//       return jsonOut(revisionGetManuscript_(p.id));
 //     case 'revisionUpdateManuscriptSections':
-//       assertAdminToken_(token);
-//       return revisionUpdateManuscriptSections_(JSON.parse(params.payload));
+//       assertAdminToken_(e);
+//       return jsonOut(revisionUpdateManuscriptSections_(JSON.parse(p.payload)));
 //     default:
-//       return null; // nicht zuständig — an bestehende Logik weiterreichen
+//       return null; // nicht zuständig — handle(e) macht mit seiner
+//                     // bestehenden Logik weiter
 //   }
 // }
 //
-// WICHTIG — Antwortformat: Der neue Client-Code (Admin-Panel) erwartet für
-// die revisionXxx-Aktionen das JSON von handleRevisionAction(...) UNVERPACKT
-// zurück, also z. B. für revisionListNovels ein rohes Array ([...], nicht
-// {ok:true, novels:[...]}). Binde es deshalb so ein, dass am Ende genau
-// das passiert (Fehlerfall separat abfangen, z. B. mit try/catch um den
-// gesamten revisionXxx-Zweig und {error: e.message} zurückgeben):
+// UND GENAU EINE ZEILE in deiner bestehenden handle(e)-Funktion (Code.gs),
+// ganz am Anfang, VOR der ersten bestehenden if/else-Prüfung eingefügt:
 //
-//   var revisionResult = handleRevisionAction(action, e.parameter, token);
-//   if (revisionResult !== null) {
-//     return ContentService.createTextOutput(JSON.stringify(revisionResult))
-//       .setMimeType(ContentService.MimeType.JSON);
+//   function handle(e) {
+//     var revisionResponse = handleRevisionAction(e);
+//     if (revisionResponse) return revisionResponse;
+//     // ... ab hier dein bestehender Code unverändert ...
 //   }
-//   // ... bestehende action-Auswertung läuft normal weiter ...
 //
-// Das ist unabhängig davon, wie dein bestehender Code andere Aktionen
-// wrapt (z. B. {ok:true, ...} bei addAccess) — die revisionXxx-Aktionen
-// haben absichtlich ihr eigenes, einfacheres Format, damit diese Datei
-// eigenständig bleibt und nichts an deiner bestehenden Wrapping-Logik
-// ändern muss.
+// Das ist der einzige Eingriff in Code.gs. Ein Fehler in einer revisionXxx-
+// Funktion (z. B. "Manuskript nicht gefunden") wirft aktuell eine normale
+// JS-Exception — falls handle(e) selbst kein try/catch um den ganzen Body
+// hat, wirf gern Bescheid, dann ergänze ich hier ein try/catch mit
+// jsonOut({ error: ... }) statt der Exception.
 // ---------------------------------------------------------------------------
