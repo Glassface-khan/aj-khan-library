@@ -526,3 +526,14 @@ Weitere Felder aus `metadata.json` automatisch übernehmen — `word_count`
 den bestehenden `FINAL_`/`KLAPPENTEXT_`-Feldern kollidieren könnte —
 zuerst klären, welche Quelle im Konfliktfall gewinnt, wenn ein Buch
 sowohl eine `metadata.json` als auch `FINAL_`/`KLAPPENTEXT_`-Dateien hat.
+
+**Ebenfalls für später vorgemerkt: KI-Genre-Erkennung.** Bei neuen
+Manuskripten ohne `metadata.json`/`GENRE_`-Datei automatisch einen
+Textausschnitt an eine KI (z. B. Claude-API) schicken und daraus einen
+Genre-Erstvorschlag ableiten lassen — als Startpunkt, jederzeit vom Autor
+überschreibbar (z. B. durch eine später nachgereichte `metadata.json` mit
+sorgfältig recherchierten Amazon-Kategorien/Comp-Titeln, die dann Vorrang
+hätte). Braucht einen API-Schlüssel (Kosten pro Aufruf, aber gering) und
+eine `UrlFetchApp`-Anbindung an die Claude-API aus `Code.gs` heraus —
+noch nicht gebaut, Nutzer möchte erst die einfacheren Datei-basierten
+Wege (`metadata.json`/`GENRE_`) nutzen.
