@@ -377,3 +377,68 @@ realistischere Alternative zu Claude einplanen).
   Apps-Script-Editor eingefügt und **neu deployt** werden (siehe die "New
   version"-Falle in Abschnitt 7) — ohne das bleibt die Live-Web-App auf dem
   alten Code, `getPoems`/`savePoems` liefen dann ins Leere.
+- **Handy/anderes Gerät zeigte kurzzeitig noch die alte Bücherliste** — beim
+  Live-Debugging dieses Symptoms stellte sich heraus: Speichern (`saveBooks`)
+  hatte korrekt funktioniert (BooksData-Sheet war bereits aktuell), auch die
+  Freigabe-Einstellungen (Drive-Ordner "Anyone with the link", Apps-Script-
+  Deployment "Who has access: Anyone") waren beide korrekt. Der direkte
+  Aufruf der `?action=getBooks`-URL lieferte auf einem Gerät (Edge/Notebook)
+  einen generischen Google-Fehler ("Datei kann derzeit nicht geöffnet
+  werden"), auf einem anderen (Safari/iPhone) sofort die korrekten Daten —
+  reine, einmalige Google-Infrastruktur-Aussetzer beim `script.google.com`-
+  Weiterleitungsmechanismus, kein Code- oder Konfigurationsfehler. Ein
+  harter Reload hat gereicht. Für künftige ähnliche Meldungen: zuerst
+  `?action=getBooks` direkt in der Adresszeile des betroffenen Geräts
+  aufrufen, um Server- von Konfigurations- von reinen Anzeige-/Cache-
+  Problemen zu unterscheiden, bevor an den Einstellungen gedreht wird.
+
+## 11 · Nachtrag (03.09.2026, Teil 2) — EPUB-Export pro Sprache
+
+Automatischer EPUB-Export als Ergänzung zum bisherigen PDF-/Drive-Leselink —
+liest sich auf Handy/iPad deutlich besser (verstellbare Schrift, echte
+Kapitel-Navigation) als ein eingebetteter PDF-Viewer.
+
+- **Läuft komplett automatisch im bestehenden Drive-Sync mit**, kein
+  Zusatzklick: Sobald `syncDriveForAllBooks()` für eine fertige Sprache
+  einen geänderten Manuskripttext feststellt (oder noch keine EPUB-URL
+  hinterlegt ist), baut `buildEpub_()` daraus eine valide EPUB-3-Datei —
+  komplett ohne externe Bibliothek, nur mit Apps Scripts eingebauter
+  `Utilities.zip()`. Landet als `manuscript.epub` im jeweiligen
+  Sprachordner (`Manuskript/<LANG>/`, überschreibt sich selbst bei jedem
+  neuen Sync statt sich anzuhäufen), Link liegt in `b.langs[code].epubUrl`
+  bzw. — abgeleitet von der bevorzugten Sprache, wie bei Wortzahl/
+  Klappentext — zusätzlich in `b.epubUrl`.
+- **Kapitel-Erkennung** (`splitIntoChapters_()`): sucht nach ganzen Zeilen,
+  die auf gängige Kapitelüberschrift-Muster passen (Kapitel/Chapter/Teil/
+  Part/Prolog/Epilog, optional mit Nummer). Findet sich keine einzige
+  solche Zeile, bleibt das ganze Buch ein einziges durchlaufendes Kapitel
+  (sicherer Fallback, funktioniert für jedes Manuskript, nur ohne
+  Kapitel-Sprungmarken im Reader).
+- **Design:** eigene Cover-Seite (nutzt dasselbe Titelbild wie die Website,
+  `Bilder/Cover/`), schlichte Titelseite (Titel + "A. J. Khan"), Fließtext
+  in Buchsatz-Optik (Serifenschrift, Erstzeilen ohne Einzug, Folgeabsätze
+  mit Einzug, Blocksatz) — bewusst nur mit Systemschriften (kein
+  Web-Font-Embedding, Lizenz-/Kompatibilitätsfragen vermieden).
+- **Website:** neuer "EPUB"-Button direkt neben "Read" auf jeder Buchkarte
+  (Einzelband wie Reihenbände), sprachabhängig wie Cover/Klappentext/
+  Wortzahl beim Sprach-Umschalter — dieselbe `visitorCanDownload`-Zugriffs-
+  prüfung wie beim bestehenden Read-Link, grau/inaktiv mit erklärendem
+  Hinweis, solange keine EPUB-Datei hinterlegt ist.
+- **Getestet vor dem Push:** Kapitel-Erkennung und XML-Erzeugung isoliert
+  in Node nachgebaut (Apps-Script-`Utilities`-Aufrufe gemockt) und die
+  erzeugten Dateien mit Pythons `xml.dom.minidom` auf Wohlgeformtheit
+  sowie manuell auf vollständige Manifest-Referenzen geprüft — dabei einen
+  echten Bug gefunden und behoben (Cover-Bild landete im Zip unter
+  `images/…` statt `OEBPS/images/…`, passte nicht zur Manifest-Referenz).
+  Danach die generierten Dateien zu einer echten `.epub` gepackt und mit
+  der Python-Bibliothek `ebooklib` (unabhängiger dritter EPUB-Parser)
+  eingelesen: Titel/Autor/Sprache/Spine/TOC/Cover-Bild-Bytes kommen korrekt
+  an. Den neuen "EPUB"-Button zusätzlich per Playwright gegen gemockte
+  Buchdaten geprüft (goldener Link bei vorhandener EPUB-URL, grau + Hinweis-
+  Dialog ohne Navigation bei fehlender URL, kein zusätzlicher Konsolenfehler).
+- **Offen:** Das erweiterte `Code.gs` muss wie bei den vorherigen
+  Nachträgen manuell im Apps-Script-Editor eingefügt und neu deployt
+  werden. Kapitel-Erkennung ist eine Heuristik ohne manuelle Korrektur-
+  möglichkeit (anders als das separate Stil-Revisions-Modul) — bei
+  Manuskripten ganz ohne erkennbare Kapitelüberschriften entsteht bewusst
+  ein einziges durchlaufendes Kapitel statt eines Rate-Versuchs.
