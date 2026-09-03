@@ -442,3 +442,62 @@ Kapitel-Navigation) als ein eingebetteter PDF-Viewer.
   möglichkeit (anders als das separate Stil-Revisions-Modul) — bei
   Manuskripten ganz ohne erkennbare Kapitelüberschriften entsteht bewusst
   ein einziges durchlaufendes Kapitel statt eines Rate-Versuchs.
+
+## 12 · Nachtrag (03.09.2026, Teil 3) — Background/Video-Auto-Sync, Genre-Erkennung,
+## Bücher-Sichtbarkeit pro Zugangscode, EPUB erst ab Status "Fertig"
+
+- **"Background"-Button** verlinkt jetzt automatisch den bisherigen
+  `Extern`-Ordner (bisher nur Ablage ohne Website-Anbindung, hieß intern
+  "Checkliste Teil 1 B"), sobald mindestens eine Datei drinliegt — bewusste
+  Doppelnutzung dieses Ordners, vom Nutzer so gewünscht statt eines neuen
+  eigenen Ordners.
+- **"Video"-Button:** neuer eigener `Video`-Unterordner pro Buch (Top-
+  Level, neben Manuskript/Intern/Extern/Bilder). Erste gefundene
+  Videodatei (`video/…`-MIME-Typ) wird verlinkt — Drive-eigene Ansichtsseite
+  (`/file/d/…/view`, spielt im eingebauten Player), nicht der Direkt-
+  Download-Link wie bei EPUB.
+- **Genre-Erkennung:** Datei mit Präfix `GENRE_` direkt im Buch-Wurzel-
+  ordner (nicht pro Sprache, wie `KLAPPENTEXT_`/`FINAL_`) — erste Zeile
+  des Dateiinhalts wird zum `kind`-Feld. Grund für eigene Datei statt
+  Ableitung aus Ordnerstruktur: Genre ist freier Text ohne Signal, das
+  sich sonst irgendwo in Drive ablesen ließe.
+- **EPUB erst ab Status "Fertig":** Der "EPUB"-Button wird erst aktiv,
+  wenn `book.status` mit `"Fertig"` beginnt (Status ist Freitext, z. B.
+  "Fertig (Submission-Materialien erstellt)" — `startsWith`, gleiches
+  Muster wie das bestehende `mark`-Feld, das umgekehrt auf
+  `"In Entwicklung"` prüft). Vorher bleibt nur "Read" (normaler Manuskript-
+  Link) verfügbar, auch wenn im Hintergrund längst eine EPUB-Datei aus dem
+  FINAL_-Manuskript erzeugt wurde — die Datei liegt bereit, wird aber erst
+  verlinkt, sobald der Autor den Status manuell umstellt.
+- **Bücher-Sichtbarkeit pro Zugangscode:** Jeder individuelle Zugang
+  (Access-Sheet, bisher Name/Code/CanDownload/CanCopy) hat jetzt eine
+  fünfte Spalte `VisibleBooks` — leer/fehlt = alle Bücher sichtbar
+  (Standard, rückwärtskompatibel zu alle bisherigen Zugängen), sonst
+  JSON-Array erlaubter Buchtitel. Neue Aktion `setAccessVisibleBooks`
+  ändert das nachträglich für einen bestehenden Code, ohne ihn neu zu
+  erzeugen (der ja schon weitergegeben sein kann) — Admin-Panel hat dafür
+  pro Zugang einen "Bücher"-Button, der eine Checkliste aller aktuellen
+  Buchtitel öffnet. Beim Anlegen eines neuen Zugangs ist dieselbe
+  Checkliste direkt mit dabei. Gefiltert wird rein clientseitig beim
+  Rendern der öffentlichen Bücherliste (`visitorVisibleBooks` aus
+  `checkAccess`, im selben `ajk_visitor_access`-localStorage-Objekt wie
+  Name/canDownload/canCopy gecacht) — **kein** serverseitiger Schutz, ein
+  technisch versierter Besucher könnte über die rohe `?action=getBooks`-
+  URL trotzdem alle Bücher sehen. Für den Anwendungsfall (Familie/Freunde
+  bekommen einen Überblick, keine Bücher, die sie (noch) nicht lesen
+  sollen) ausreichend, aber kein Zugriffsschutz im eigentlichen Sinne.
+  Admin sieht beim Verwalten der Seite immer alle Bücher, unabhängig von
+  einem eventuell selbst eingegebenen Gast-Zugangscode.
+- **Getestet vor dem Push:** Playwright mit gemockten Apps-Script-
+  Antworten — Gast mit `visibleBooks: ['Buch A']` sieht nur Buch A, Admin
+  sieht trotz gleicher Einschränkung im localStorage alles; EPUB-Button
+  golden bei Status "Fertig" + vorhandener URL, grau + korrekter Hinweis-
+  Dialog bei "In Entwicklung" trotz vorhandener EPUB-URL (Status- und
+  URL-Gate isoliert geprüft); neuen Zugang mit Bücher-Einschränkung
+  anlegen löst `addAccess`-POST mit korrektem `visibleBooks`-JSON aus;
+  bestehenden Zugang nachträglich einschränken (Checkliste öffnen, "Alle
+  Bücher sichtbar" abwählen, einzelnes Buch ankreuzen, Speichern) löst
+  `setAccessVisibleBooks`-POST mit korrektem Code + Buchliste aus. Keine
+  Konsolenfehler in allen Szenarien.
+- **Nötiger manueller Schritt:** Wie immer — erweitertes `Code.gs`
+  einfügen und neu deployen.
