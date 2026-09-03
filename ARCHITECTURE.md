@@ -327,3 +327,53 @@ Konsolenfehler gegenüber dem unveränderten Original.
 iCloud-Download-Export, finaler KI-Gegencheck mit Provider-Wahl
 (Copilot-Verfügbarkeit als Drittanbieter-API vorab klären, Gemini als
 realistischere Alternative zu Claude einplanen).
+
+## 10 · Nachtrag (03.09.2026) — Drive-Sync mehrsprachig, Poems-Reihenfolge, Poems-Backend
+
+- **Sprach-Umschalter für zweisprachige Bücher** (`book.langs`-Feld, EN|DE-
+  Tabs auf der Buchkarte) + **"Jetzt aus Drive synchronisieren"-Button** im
+  Admin-Panel (ruft `syncDriveForAllBooks()` sofort statt bis zu 1h auf den
+  Zeit-Trigger zu warten). `syncDriveForAllBooks()` liest jetzt für **jede**
+  `fertig`-Sprache (nicht nur eine "bevorzugte") Wortzahl + Klappentext ein
+  und schreibt sie nach `b.langs[code]`; die alten Top-Level-Felder
+  `b.wordCount`/`b.hook` bleiben zusätzlich gepflegt (abgeleitet aus
+  `SYNC_PREFERRED_LANGUAGE`, sonst der einzigen/alphabetisch ersten fertigen
+  Sprache) — rückwärtskompatibel für Bücher ohne Umschalter.
+  **Wichtige Falle beim Debuggen live erlebt:** `ensureBookFolders()` legt
+  nur die vier festen Hauptordner an (Manuskript, Intern, Extern, Bilder) —
+  Sprachordner (z. B. `DE`) darin **nicht automatisch**, die legt der Autor
+  selbst an. Und `findFileByPrefix()` prüft `FINAL_`/`KLAPPENTEXT_`
+  **zeichengenau groß geschrieben** — `Final_...` oder `Klappentext_...`
+  wird stillschweigend ignoriert (kein Fehler, einfach kein Treffer). Beide
+  Punkte haben bei der Erstinbetriebnahme für ein Buch zu stundenlanger
+  Fehlersuche geführt, obwohl der Code korrekt war.
+- **Poems-Reihenfolge** (Part I–IV) ergibt sich aus der Reihenfolge der
+  Einträge im `poems`-Array (Gruppierung nach erstem Auftreten von
+  `poem.part`), nicht aus einem Sortierfeld — Part IV lag vor I–III, stabil
+  nach Teilnummer sortiert.
+- **Poems liegen jetzt auch serverseitig** in einem eigenen `PoemsData`-
+  Sheet-Tab (exakt dasselbe Ein-Zeile-pro-Eintrag-Muster wie `BooksData`:
+  Spalte A Titel, Spalte B JSON — aus demselben 50.000-Zeichen-Zellenlimit-
+  Grund), über neue Aktionen `getPoems`/`savePoems` (`savePoems` admin-
+  geschützt wie `saveBooks`). Vorher lag die Admin-Bearbeitung einzelner
+  Gedichte nur in `localStorage` (`persist()`/`ajk_author_poems_draft`) —
+  unsichtbar für andere Besucher/Geräte, verloren bei gelöschten
+  Browserdaten. Jetzt: `fetchPoems()` beim Laden (analog `fetchBooks()`,
+  überschreibt nie mit leerem Ergebnis — Seed/Cache bleiben Fallback, falls
+  `PoemsData` noch leer ist), `persistPoems()` beim Speichern/Löschen eines
+  Gedichts schickt die komplette Liste an `savePoems`. **Kein manueller
+  Migrationsschritt nötig** — sobald einmal im Admin-Panel ein Gedicht
+  gespeichert wird, schreibt das automatisch die komplette bestehende Liste
+  ins neue Sheet (das Sheet ist bis dahin einfach leer, Website läuft in der
+  Zwischenzeit unverändert vom eingebauten Seed weiter).
+  **Getestet vor dem Push:** Playwright, Apps-Script-Aufrufe gemockt (wie in
+  Abschnitt 9 beschrieben) — leeres `PoemsData` fällt korrekt auf den Seed
+  zurück, gefülltes `PoemsData` überschreibt korrekt, ein simuliertes
+  Bearbeiten+Speichern eines Gedichts im Admin-Panel löst genau einen
+  `savePoems`-POST mit der vollständigen, korrekt aktualisierten Liste plus
+  gültigem Admin-Token aus.
+- **Nötiger manueller Schritt für den Nutzer:** Das erweiterte `Code.gs`
+  (mit `getPoemsArray`/`setPoemsArray`/`getPoems`/`savePoems`) muss im
+  Apps-Script-Editor eingefügt und **neu deployt** werden (siehe die "New
+  version"-Falle in Abschnitt 7) — ohne das bleibt die Live-Web-App auf dem
+  alten Code, `getPoems`/`savePoems` liefen dann ins Leere.
