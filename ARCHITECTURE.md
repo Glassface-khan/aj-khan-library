@@ -461,6 +461,23 @@ Kapitel-Navigation) als ein eingebetteter PDF-Viewer.
   des Dateiinhalts wird zum `kind`-Feld. Grund für eigene Datei statt
   Ableitung aus Ordnerstruktur: Genre ist freier Text ohne Signal, das
   sich sonst irgendwo in Drive ablesen ließe.
+  **Nachtrag noch am selben Tag:** Der Nutzer hat einen separaten, bereits
+  bestehenden Buch-Vorbereitungs-Workflow (Query Letter/Synopsis/
+  Klappentext/Autor-Bio als B02/B03/B14/B07/…-nummerierte Dateien —
+  passt exakt zur schon vorhandenen `KLAPPENTEXT_B14 Klappentext.md`-
+  Namenskonvention) mit einer kanonischen `metadata.json` pro Buch
+  (`genre.primary`/`genre.secondary`, `word_count`, `logline`, `keywords`,
+  Dateiverweise). Genre-Erkennung liest jetzt **bevorzugt** diese
+  `metadata.json` (falls im Buch-Wurzelordner vorhanden) —
+  `genre.primary` + bis zu zwei `genre.secondary`-Einträge, z. B.
+  "Politthriller · Dystopie, Gegenwartsliteratur" — die einfache
+  `GENRE_`-Datei bleibt Fallback für Bücher ohne `metadata.json`.
+  `docTextById()` um `application/json`-Mimetyp erweitert (wie
+  `text/plain`/`text/markdown` behandelt). Weitere Felder aus
+  `metadata.json` (Wortzahl, Logline als Klappentext, Kapitelstruktur)
+  bewusst noch nicht angebunden — erst nach Rücksprache, da das mit den
+  bestehenden `FINAL_`/`KLAPPENTEXT_`-Feldern kollidieren könnte
+  (welche Quelle gewinnt im Konfliktfall).
 - **EPUB erst ab Status "Fertig":** Der "EPUB"-Button wird erst aktiv,
   wenn `book.status` mit `"Fertig"` beginnt (Status ist Freitext, z. B.
   "Fertig (Submission-Materialien erstellt)" — `startsWith`, gleiches
