@@ -518,3 +518,11 @@ Kapitel-Navigation) als ein eingebetteter PDF-Viewer.
   Konsolenfehler in allen Szenarien.
 - **Nötiger manueller Schritt:** Wie immer — erweitertes `Code.gs`
   einfügen und neu deployen.
+
+**Für später vom Nutzer vorgemerkt (noch nicht gebaut, erst nach Rücksprache):**
+Weitere Felder aus `metadata.json` automatisch übernehmen — `word_count`
+(Wortzahl), `logline` (als Klappentext/`hook`), Kapitelstruktur
+(`chapter_count`/`structure_parts`). Nicht einfach gebaut, weil das mit
+den bestehenden `FINAL_`/`KLAPPENTEXT_`-Feldern kollidieren könnte —
+zuerst klären, welche Quelle im Konfliktfall gewinnt, wenn ein Buch
+sowohl eine `metadata.json` als auch `FINAL_`/`KLAPPENTEXT_`-Dateien hat.
