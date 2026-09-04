@@ -553,3 +553,39 @@ deaktiviert. Wirkt sich nur auf die Reihenfolge aus, nicht auf die
 Bandnummer/Reihen-Zugehörigkeit selbst — die Position innerhalb einer
 gruppierten Reihe folgt weiterhin der Array-Reihenfolge, nicht der
 `seriesNumber` (unverändert gegenüber Abschnitt 12).
+
+## 14 · Nachtrag (04.09.2026) — Gedichte (Heartfelt) pro Zugangscode ein-/ausblendbar
+
+Gleiches Muster wie `VisibleBooks` (Abschnitt 12), nur als einzelner
+Schalter statt einer Buchliste, weil es nur eine Gedichtsammlung gibt.
+Neu im Access-Datensatz: `showPoems` (Default `true`, rückwärtskompatibel
+zu allen bisherigen Zugängen ohne dieses Feld). Checkbox „Gedichte
+(Heartfelt) sichtbar" sowohl beim Anlegen eines neuen Zugangs als auch
+beim nachträglichen Bearbeiten (`editAccessBooks`/`saveAccessBooks`,
+gleicher Dialog wie die Bücher-Sichtbarkeits-Checkliste). Die öffentliche
+`<section id="poems">` ist jetzt in `<sc-if value="{{ showPoemsSection }}">`
+gehüllt — `showPoemsSection` ist `true` für Admins und für Besucher mit
+`visitorShowPoems !== false`.
+
+**Backend erledigt (04.09.2026), `Code.gs` (nicht in diesem Repo, lebt im
+Apps-Script-Editor):** Nutzer hat den kompletten Datei-Inhalt hier im Chat
+geteilt (mobil per Command-Palette-„Select All"-Workaround kopiert, siehe
+Chat-Verlauf — normales Markieren/Kopieren im Apps-Script-Mobile-Editor
+funktioniert nicht zuverlässig). Claude hat daraus eine vollständige neue
+Datei erzeugt (gezielte Ergänzung an 5 Stellen, per Diff gegen das
+Original geprüft, nichts Bestehendes verändert) und als fertige Datei
+zurückgegeben — Nutzer musste nur die ganze Datei ersetzen, nicht einzelne
+Schnipsel von Hand einfügen. Die 5 Ergänzungen:
+- Neue Hilfsfunktion `parseShowPoems_` (Default `true` bei leerer Zelle —
+  gleiches Rückwärtskompatibilitäts-Muster wie `parseVisibleBooks_`, nur
+  mit umgekehrtem Default, weil hier "leer" = sichtbar statt "leer" = alle
+  Bücher).
+- `checkAccess` liefert jetzt `showPoems: parseShowPoems_(rows[i][5])` mit.
+- `getAccessList` liefert `showPoems` ebenfalls pro Zugang mit.
+- `addAccess` legt beim ersten Anlegen die 6. Access-Sheet-Spalte
+  `ShowPoems` an und schreibt den Wert.
+- `updateAccess` schreibt die `ShowPoems`-Spalte beim nachträglichen
+  Bearbeiten eines bestehenden Zugangs mit (Range-Schreibweite von 3 auf 4
+  Spalten erweitert).
+
+Vom Nutzer deployt (04.09.2026) — Funktion ist live.
