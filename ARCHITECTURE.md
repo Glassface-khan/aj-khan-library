@@ -589,3 +589,34 @@ Schnipsel von Hand einfügen. Die 5 Ergänzungen:
   Spalten erweitert).
 
 Vom Nutzer deployt (04.09.2026) — Funktion ist live.
+
+## 15 · Nachtrag (04.09.2026) — Alt-Cover-Galerie inline statt Drive-Weiterleitung
+
+Erster Teil der beiden im Chat besprochenen "keine Drive-Weiterleitung
+mehr"-Wünsche (TODO 2 aus Abschnitt 6); der Inline-EPUB-Reader (zweiter
+Teil, deutlich größer) folgt danach.
+
+**Frontend:** Der bestehende "Alt. covers"-Button (`<a href="{{ item.altUrl
+}}">`, sowohl in der Einzelbuch- als auch in der Buchreihen-Kartenvorlage)
+bleibt strukturell unverändert — kein Template-Umbau nötig. Stattdessen
+öffnet `onAlt` jetzt, falls `b.altCovers` (neues Array-Feld) Bilder enthält,
+per `e.preventDefault()` + `this.openAltGallery(b.altCovers, b.title)` eine
+neue Lightbox (State: `altGalleryImages`/`altGalleryIndex`/
+`altGalleryTitle`; Methoden `openAltGallery`/`closeAltGallery`/
+`nextAltCover`/`prevAltCover`) statt zum Drive-Ordner zu verlinken.
+`altUrl` (der alte Ordner-Link) bleibt als Fallback bestehen, solange ein
+Buch noch keine `altCovers` hat (z. B. direkt nach Anlegen, vor dem
+nächsten stündlichen Drive-Sync) — kein Bruch für Bücher im Übergang.
+Lightbox-Modal (neuer `<sc-if value="{{ showAltGallery }}">`-Block direkt
+neben dem bestehenden Admin-Login-Modal) zeigt ein Bild groß, mit
+Zurück/Weiter bei mehreren Bildern und Zähler ("Buchtitel — 2 / 5").
+
+**Backend (`Code.gs`):** Neue Hilfsfunktion `allImageFiles_` (Gegenstück
+zu `firstImageFile`, sammelt alle statt nur das neueste Bild eines
+Ordners, sortiert nach Alter für stabile Reihenfolge). Im Alt-Cover-Block
+von `syncDriveForAllBooks` wird jetzt zusätzlich zum Ordner-Link
+`b.altCovers` befüllt — ein Array einzelner Bild-URLs über dieselbe
+`publicViewUrlFor`-Funktion (lh3.googleusercontent.com-CDN-Links), die
+auch für das normale Buch-Cover verwendet wird. Rebuild nur bei
+tatsächlicher Änderung (Array-Vergleich per `.join('|')`), damit nicht bei
+jedem stündlichen Sync unnötig `changed = true` gesetzt wird.
