@@ -567,21 +567,25 @@ gleicher Dialog wie die Bücher-Sichtbarkeits-Checkliste). Die öffentliche
 gehüllt — `showPoemsSection` ist `true` für Admins und für Besucher mit
 `visitorShowPoems !== false`.
 
-**Offen — Backend (`Code.gs`, nicht in diesem Repo, manuell im Apps-
-Script-Editor nachzuziehen):**
-- `checkAccess`: Antwort um `showPoems: <Wert aus Access-Sheet>` erweitern
-  (analog zu `visibleBooks`).
-- `addAccess`: neuen Parameter `showPoems` (`'true'`/`'false'`-String)
-  entgegennehmen und in eine neue Access-Sheet-Spalte `ShowPoems`
-  schreiben (Default `TRUE`, wie bei `VisibleBooks` leer = alle sichtbar).
-- `updateAccess`: ebenfalls `showPoems`-Parameter entgegennehmen und die
-  `ShowPoems`-Spalte des bestehenden Zugangs aktualisieren.
-- Zeilen ohne `ShowPoems`-Wert (alle bisherigen Zugänge) müssen als
-  „sichtbar" gelten (leer/fehlt → `true`), exakt das gleiche
-  Rückwärtskompatibilitäts-Muster wie bei `VisibleBooks`.
+**Backend erledigt (04.09.2026), `Code.gs` (nicht in diesem Repo, lebt im
+Apps-Script-Editor):** Nutzer hat den kompletten Datei-Inhalt hier im Chat
+geteilt (mobil per Command-Palette-„Select All"-Workaround kopiert, siehe
+Chat-Verlauf — normales Markieren/Kopieren im Apps-Script-Mobile-Editor
+funktioniert nicht zuverlässig). Claude hat daraus eine vollständige neue
+Datei erzeugt (gezielte Ergänzung an 5 Stellen, per Diff gegen das
+Original geprüft, nichts Bestehendes verändert) und als fertige Datei
+zurückgegeben — Nutzer musste nur die ganze Datei ersetzen, nicht einzelne
+Schnipsel von Hand einfügen. Die 5 Ergänzungen:
+- Neue Hilfsfunktion `parseShowPoems_` (Default `true` bei leerer Zelle —
+  gleiches Rückwärtskompatibilitäts-Muster wie `parseVisibleBooks_`, nur
+  mit umgekehrtem Default, weil hier "leer" = sichtbar statt "leer" = alle
+  Bücher).
+- `checkAccess` liefert jetzt `showPoems: parseShowPoems_(rows[i][5])` mit.
+- `getAccessList` liefert `showPoems` ebenfalls pro Zugang mit.
+- `addAccess` legt beim ersten Anlegen die 6. Access-Sheet-Spalte
+  `ShowPoems` an und schreibt den Wert.
+- `updateAccess` schreibt die `ShowPoems`-Spalte beim nachträglichen
+  Bearbeiten eines bestehenden Zugangs mit (Range-Schreibweite von 3 auf 4
+  Spalten erweitert).
 
-Bis dieser Backend-Teil eingefügt und neu deployt ist, wirkt der neue
-Schalter im Admin-Panel optisch, aber ohne Effekt (Server ignoriert den
-zusätzlichen Parameter, `showPoems` kommt bei `checkAccess` nicht zurück
-→ `visitorShowPoems` bleibt bei `true`, Gedichte bleiben für alle
-sichtbar — sicherer Fallback, kein versehentliches Verstecken).
+Vom Nutzer deployt (04.09.2026) — Funktion ist live.
