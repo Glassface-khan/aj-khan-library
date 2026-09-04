@@ -553,3 +553,35 @@ deaktiviert. Wirkt sich nur auf die Reihenfolge aus, nicht auf die
 Bandnummer/Reihen-Zugehörigkeit selbst — die Position innerhalb einer
 gruppierten Reihe folgt weiterhin der Array-Reihenfolge, nicht der
 `seriesNumber` (unverändert gegenüber Abschnitt 12).
+
+## 14 · Nachtrag (04.09.2026) — Gedichte (Heartfelt) pro Zugangscode ein-/ausblendbar
+
+Gleiches Muster wie `VisibleBooks` (Abschnitt 12), nur als einzelner
+Schalter statt einer Buchliste, weil es nur eine Gedichtsammlung gibt.
+Neu im Access-Datensatz: `showPoems` (Default `true`, rückwärtskompatibel
+zu allen bisherigen Zugängen ohne dieses Feld). Checkbox „Gedichte
+(Heartfelt) sichtbar" sowohl beim Anlegen eines neuen Zugangs als auch
+beim nachträglichen Bearbeiten (`editAccessBooks`/`saveAccessBooks`,
+gleicher Dialog wie die Bücher-Sichtbarkeits-Checkliste). Die öffentliche
+`<section id="poems">` ist jetzt in `<sc-if value="{{ showPoemsSection }}">`
+gehüllt — `showPoemsSection` ist `true` für Admins und für Besucher mit
+`visitorShowPoems !== false`.
+
+**Offen — Backend (`Code.gs`, nicht in diesem Repo, manuell im Apps-
+Script-Editor nachzuziehen):**
+- `checkAccess`: Antwort um `showPoems: <Wert aus Access-Sheet>` erweitern
+  (analog zu `visibleBooks`).
+- `addAccess`: neuen Parameter `showPoems` (`'true'`/`'false'`-String)
+  entgegennehmen und in eine neue Access-Sheet-Spalte `ShowPoems`
+  schreiben (Default `TRUE`, wie bei `VisibleBooks` leer = alle sichtbar).
+- `updateAccess`: ebenfalls `showPoems`-Parameter entgegennehmen und die
+  `ShowPoems`-Spalte des bestehenden Zugangs aktualisieren.
+- Zeilen ohne `ShowPoems`-Wert (alle bisherigen Zugänge) müssen als
+  „sichtbar" gelten (leer/fehlt → `true`), exakt das gleiche
+  Rückwärtskompatibilitäts-Muster wie bei `VisibleBooks`.
+
+Bis dieser Backend-Teil eingefügt und neu deployt ist, wirkt der neue
+Schalter im Admin-Panel optisch, aber ohne Effekt (Server ignoriert den
+zusätzlichen Parameter, `showPoems` kommt bei `checkAccess` nicht zurück
+→ `visitorShowPoems` bleibt bei `true`, Gedichte bleiben für alle
+sichtbar — sicherer Fallback, kein versehentliches Verstecken).
