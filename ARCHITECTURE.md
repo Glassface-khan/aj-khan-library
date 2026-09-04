@@ -620,3 +620,61 @@ von `syncDriveForAllBooks` wird jetzt zusätzlich zum Ordner-Link
 auch für das normale Buch-Cover verwendet wird. Rebuild nur bei
 tatsächlicher Änderung (Array-Vergleich per `.join('|')`), damit nicht bei
 jedem stündlichen Sync unnötig `changed = true` gesetzt wird.
+
+## 16 · Nachtrag (04.09.2026) — Inline-EPUB-Reader statt Drive-Weiterleitung
+
+Zweiter und größerer Teil der "keine Drive-Weiterleitung mehr"-Wünsche
+(TODO 4/Phase 2 aus Abschnitt 6) — nur für fertige Bücher mit vorhandenem
+EPUB (Status startsWith "Fertig" + `epubUrl` gesetzt); Admin kann wie
+gewohnt weiterhin direkt über Drive lesen, das war nie eingeschränkt.
+
+**Bibliothek:** [epub.js](https://github.com/futurepress/epub.js) (+ jszip
+als Absicherung, falls der epub.js-Build es nicht selbst mitbringt) — per
+`<script src="…jsdelivr…">` **im echten, unverpackten `<head>`** der Seite
+geladen (vor `</head>`, Zeile ~26–29), nicht irgendwo im kompilierten
+Bundle-String weiter unten. Grund: die komplette App-HTML (inkl. der
+`<script type="text/x-dc">` mit der Component-Klasse) wird zur Laufzeit als
+ein großer String entpackt und eingefügt — ein `<script src="…">`, das
+darin stünde, würde vom Browser beim Einfügen nicht ausgeführt (Browser
+führen per `innerHTML` eingefügte `<script>`-Tags nicht aus). Im echten
+`<head>` geladen läuft es dagegen ganz normal beim ersten Seitenaufruf,
+lange bevor die App überhaupt mountet, und steht als globales `ePub` sicher
+bereit, wenn die App später darauf zugreift.
+
+**Frontend:** `onOpen` (der "Read"-Button) öffnet jetzt für fertige Bücher
+mit EPUB (`bookIsFinished && effEpubUrl && typeof ePub !== 'undefined'`)
+einen neuen Vollbild-Reader (State: `readerOpen`/`readerBookTitle`/
+`readerLoading`/`readerError`; Methoden `openReader`/`mountEpubReader`/
+`closeReader`) statt zum `pdfUrl`-Link zu springen. Bücher ohne EPUB
+(Status "In Entwicklung") bleiben unverändert beim direkten Link. Fällt
+`ePub` aus irgendeinem Grund aus (CDN blockiert, Skript nicht geladen),
+greift automatisch der alte Direktlink als Fallback — kein kaputter Button.
+Reader-Modal zeigt einen leeren `<div id="epub-reader-viewport">`, sobald
+`readerOpen` true wird (schon während des Ladens, damit `epub.js` beim
+späteren `renderTo()`-Aufruf garantiert ein existierendes DOM-Element
+vorfindet), mit Lade-/Fehleranzeige als Overlay darüber. Lesemodus
+`scrolled-doc` (durchlaufendes Scrollen statt Seiten-Umblättern) für einen
+einfachen, robusten ersten Wurf.
+
+**Backend (`Code.gs`):** Neue Aktion `getEpubData` — nimmt die `epubUrl`
+entgegen, extrahiert die Drive-Datei-ID (gleiches Regex-Muster wie bei
+`syncWordCount`), prüft die ID gegen die tatsächlich in `getBooksArray()`
+hinterlegten `epubUrl`-Werte (Top-Level und pro Sprache in `b.langs`) und
+liefert bei Treffer die rohen Datei-Bytes Base64-codiert zurück. Kein
+Admin-Token nötig (öffentlicher Lese-Endpunkt wie `getBooks`) — die
+ID-Prüfung ist die einzige Schranke, verhindert aber immerhin, dass der
+Endpunkt als beliebiger Drive-Datei-Oracle missbraucht werden könnte, statt
+nur tatsächlich verlinkte EPUBs auszuliefern. Grund für den Umweg über den
+Server statt direktem Browser-Fetch auf den Drive-Link: Cross-Origin-
+`fetch()` auf `drive.google.com`-Download-Links scheitert in der Praxis an
+CORS; der Apps-Script-Endpunkt funktioniert zuverlässig, weil die Seite
+ihn ohnehin schon für alle anderen Aktionen benutzt.
+
+**Nicht getestet — noch offen:** Diese Session hatte keinen Zugriff auf
+das echte Backend/eine echte EPUB-Datei, konnte den Reader also nicht live
+durchklicken. Insbesondere unklar/zu prüfen: ob die gepinnte epub.js-
+Version (`0.3.93`) über den CDN-Link tatsächlich lädt, ob `dist/epub.min.js`
+JSZip wirklich mitbringt oder das separat geladene `jszip.min.js` greifen
+muss, und ob sehr große EPUB-Dateien (viele Bilder) an Apps-Script-
+Antwortgrößenlimits stoßen. Nutzer testet nach Backend-Deploy live an
+einem echten fertigen Buch mit EPUB.
