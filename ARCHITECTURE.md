@@ -537,3 +537,19 @@ hätte). Braucht einen API-Schlüssel (Kosten pro Aufruf, aber gering) und
 eine `UrlFetchApp`-Anbindung an die Claude-API aus `Code.gs` heraus —
 noch nicht gebaut, Nutzer möchte erst die einfacheren Datei-basierten
 Wege (`metadata.json`/`GENRE_`) nutzen.
+
+## 13 · Nachtrag (04.09.2026) — Bücher-Reihenfolge im Admin-Panel
+
+Anzeige-Reihenfolge auf der öffentlichen Seite entspricht der Reihenfolge
+im `books`-Array (Mehrteiler werden dabei an der Position ihres ersten
+Bandes zu einem Regal-Block gruppiert, siehe `bookDisplayItems`-Logik).
+Bisher gab es keine Möglichkeit, diese Reihenfolge nachträglich zu ändern
+außer über Löschen/Neuanlegen. Neu: pro Buch im Admin-Panel zwei Buttons
+(↑/↓) neben Edit/Delete — vertauschen die Position mit dem Nachbarn im
+`books`-Array (`moveBookUp`/`moveBookDown`, analog zu `removeBook`: State-
+Update gefolgt von `persistBooks()`) und sind am jeweiligen Rand
+(`isFirst`/`isLast`) über das bestehende `disabled="{{ ... }}"`-Muster
+deaktiviert. Wirkt sich nur auf die Reihenfolge aus, nicht auf die
+Bandnummer/Reihen-Zugehörigkeit selbst — die Position innerhalb einer
+gruppierten Reihe folgt weiterhin der Array-Reihenfolge, nicht der
+`seriesNumber` (unverändert gegenüber Abschnitt 12).
