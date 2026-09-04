@@ -678,3 +678,70 @@ JSZip wirklich mitbringt oder das separat geladene `jszip.min.js` greifen
 muss, und ob sehr große EPUB-Dateien (viele Bilder) an Apps-Script-
 Antwortgrößenlimits stoßen. Nutzer testet nach Backend-Deploy live an
 einem echten fertigen Buch mit EPUB.
+
+## 17 · Nachtrag (04.09.2026) — Feingranulare EPUB-Rechte pro Zugang + Drive komplett gesperrt für Nutzer ohne vollen Zugriff
+
+Nutzer-Feedback nach Abschnitt 16: Der volle Lesezugriff (`canDownload`)
+sollte weiterhin bedingungslos alles erlauben (Read + EPUB, unabhängig vom
+Buchstatus — das war schon immer so, siehe Abschnitt 5/12). Aber Nutzer
+*ohne* vollen Lesezugriff sollen (a) pro einzelnem **fertigen** Buch
+gezielt zum Lesen und/oder Downloaden freigeschaltet werden können, und
+(b) grundsätzlich **keine** Möglichkeit mehr haben, auf rohe Drive-Links
+zu stoßen (weder Manuskript-Dokumente noch Background/Video/Alt-Cover-
+Ordner) — konsequent, nicht nur für EPUB.
+
+**Neues Datenfeld pro Zugang: `epubAccess`** — `{ "Buchtitel": { read:
+bool, download: bool } }`. Anders als `visibleBooks`/`showPoems` ist der
+Default hier bewusst **"kein Zugriff"**, nicht "alles erlaubt" — das soll
+eine gezielte, positive Freigabe pro Buch sein, kein nachträglich
+abschaltbares Feature. Nur relevant für Zugänge mit `canDownload=false`;
+bei `canDownload=true` komplett irrelevant (der darf ohnehin alles, wie
+bisher).
+
+**Frontend-Zugriffslogik (public-facing), Nutzer ohne `canDownload`:**
+- **Read** (`onOpen`): nur für fertige Bücher mit EPUB **und** `epubAccess[titel].read` — öffnet dann den Inline-Reader wie in Abschnitt 16. Sonst Hinweis „kein Lesezugriff", **kein** Fallback auf den rohen `pdfUrl`-Link (der für unfertige Bücher ein Google-Doc-Link wäre) — Nutzer ohne vollen Zugriff kommen für nicht freigegebene/unfertige Bücher grundsätzlich nicht mehr auf Drive.
+- **EPUB-Button** (`onEpub`): nur bei `epubAccess[titel].download` — löst jetzt `downloadEpub()` aus (siehe unten), **kein** direkter Drive-Link mehr für diese Nutzergruppe (war vorher schon `href="#"`, aber der Button war komplett wirkungslos statt einen echten Download anzustoßen).
+- **Background/Video** (`onBg`/`onVideo`): komplett gesperrt (`e.preventDefault()` + Hinweis) für `canDownload=false`, unabhängig von `epubAccess` — dafür gibt's keine granulare Freigabe, nur an/aus über den vollen Zugriff.
+- **Alt-Cover** (`onAlt`): Inline-Galerie (`altCovers`, Abschnitt 15) bleibt für alle verfügbar (kein Drive-Redirect) — nur der alte **Fallback-Link** auf den Drive-Ordner (bei Büchern ohne `altCovers`) ist jetzt ebenfalls auf `canDownload` beschränkt.
+- **Neue `hrefs`** (`bgHref`/`videoHref`/`altHref`) ersetzen die bisher rohen `b.bgUrl`/`b.videoUrl`/`b.altUrl` als `href`-Attribut — vorher stand die echte Drive-URL immer im `href`, auch wenn der Klick-Handler blockierte; das genügte zwar für normales Klicken, aber ein Mittelklick/Strg-Klick ("In neuem Tab öffnen") umgeht `onClick`/`preventDefault()` und wäre trotzdem zu Drive durchgekommen. Jetzt liefert der `href` selbst schon `'#'`, wenn kein voller Zugriff besteht.
+
+**`downloadEpub()`** (neue Methode): holt die EPUB-Bytes über denselben
+`getEpubData`-Endpunkt (mit `intent:'download'`), baut daraus einen
+`Blob` und stößt den Download über ein unsichtbares `<a download>`-Element
+an — kein direkter (öffentlich freigegebener) Drive-Link wird dem Browser
+je bekannt gemacht.
+
+**Backend (`Code.gs`):**
+- Neue Hilfsfunktion `parseEpubAccess_` (Default `{}`, siehe oben).
+- `checkAccess`/`getAccessList`: liefern `epubAccess` aus Spalte 7 (`EpubAccess`) mit.
+- `addAccess`/`updateAccess`: legen/schreiben die neue Spalte.
+- `getEpubData` **jetzt mit echter serverseitiger Berechtigungsprüfung**
+  statt reinem Client-Vertrauen: nimmt zusätzlich `code`, `bookTitle`,
+  `intent` (`read`/`download`) entgegen, schlägt den Zugang im Access-Sheet
+  nach (`canDownload` + `epubAccess`) und lehnt ab, wenn weder voller
+  Zugriff noch die passende Buch-Freigabe vorliegt — **bevor** überhaupt
+  Datei-Bytes gelesen werden. Der bestehende Datei-ID-Abgleich gegen
+  bekannte EPUB-URLs (Abschnitt 16) bleibt zusätzlich bestehen.
+
+**Ehrliche Grenze dieser Absicherung:** Die zugrunde liegenden Drive-
+Dateien/Ordner sind weiterhin technisch „jeder mit Link" freigegeben
+(nötig, damit `DriveApp`/die Website überhaupt zugreifen kann) — wer die
+rohe Drive-URL direkt kennt (z. B. weil sie ihm mal zugespielt wurde),
+kommt an ihr vorbei an den Dateien, unabhängig von `epubAccess`. Das
+betrifft **ausschließlich EPUB-Dateien**, die jetzt über den Server-Umweg
+laufen — Background/Video/Alt-Cover-Ordner bleiben, wie im gesamten
+Projekt an mehreren Stellen dokumentiert (Abschnitt 12/16), reine UI-Ebene-
+Absicherung ohne kryptographische Garantie. Für den Anwendungsfall
+(Familie/Freunde, keine feindliche Bedrohungslage) ist das der bewusst
+gewählte, im Projekt durchgängige Kompromiss.
+
+**Admin-Panel:** Neuer Abschnitt „EPUB-Zugriff pro fertigem Buch" (nur
+Bücher mit Status „Fertig…") sowohl beim Anlegen eines neuen Zugangs als
+auch beim nachträglichen Bearbeiten — zwei Checkboxen „Lesen"/„Downloaden"
+pro Buch, mit Hinweis, dass das wirkungslos ist, solange „Darf
+herunterladen" oben aktiviert ist.
+
+**Nicht getestet:** Wie bei Abschnitt 16 kein Zugriff auf echtes
+Backend/echte Zugänge in dieser Session — nur Syntax/Struktur-Checks
+möglich. Nutzer testet nach Backend-Deploy live mit einem Zugang ohne
+`canDownload`.
