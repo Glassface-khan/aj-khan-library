@@ -745,3 +745,20 @@ herunterladen" oben aktiviert ist.
 Backend/echte Zugänge in dieser Session — nur Syntax/Struktur-Checks
 möglich. Nutzer testet nach Backend-Deploy live mit einem Zugang ohne
 `canDownload`.
+
+## 18 · Nachtrag (05.09.2026) — Fix: Inline-Reader zeigte nur das Cover
+
+Nutzer-Test nach Abschnitt 16/17: Der Reader öffnete sich, zeigte aber nur
+das EPUB-Cover-Bild und keinen Fließtext. Ursache: `buildEpub_()` setzt bei
+vorhandenem Cover die Cover-Seite als **erstes** Spine-Element (vor
+Titelseite und Kapiteln). `book.renderTo(...)` lief mit
+`flow: 'scrolled-doc'`, aber **ohne** `manager: 'continuous'` — epub.js'
+Standard-Manager rendert dabei nur ein Spine-Element auf einmal und
+bräuchte explizite `.next()`-Aufrufe (z. B. über eine Seiten-Navigation),
+um zum nächsten zu wechseln; die gibt es hier nicht. Ergebnis: der Reader
+blieb dauerhaft auf der Cover-Seite stehen.
+
+**Fix:** `manager: 'continuous'` zur `renderTo()`-Konfiguration ergänzt —
+lässt epub.js alle Spine-Elemente (Cover → Titelseite → Kapitel) als ein
+einziges durchlaufendes Dokument rendern, genau wie ursprünglich mit
+"scrolled-doc" beabsichtigt.
