@@ -858,3 +858,150 @@ dort jeweils eigene Bookmarks. Für einen wirklich geräteübergreifenden
 Bookmark bräuchte es ein neues Backend-Feld (z. B. pro Zugangscode +
 Buchtitel in einer neuen Sheet-Spalte oder einem eigenen Tab) — bewusst
 nicht gebaut, da nicht angefragt; bei Bedarf später nachrüstbar.
+
+## 20 · Nachtrag (09.09.2026, Teil 2) — Schriftgröße, Inhaltsverzeichnis & Fortschrittsanzeige im Inline-Reader
+
+Drei weitere Reader-Komfortfunktionen, bewusst **alle drei rein clientseitig**
+(kein Backend-Feld, kein Redeploy nötig) — anders als der geräteübergreifende
+Bookmark aus Abschnitt 19, der weiterhin offen ist.
+
+- **Schriftgröße:** Zwei neue Buttons „A-"/„A+" in der Reader-Kopfzeile
+  (`changeReaderFontSize`, Schritt 10 %, Grenzen 70–200 %). Setzt
+  `rendition.themes.fontSize()` von epub.js. Die zuletzt gewählte Größe wird
+  geräteweit (nicht pro Buch) in `localStorage`
+  (`ajk_epub_fontsize`) gemerkt und beim nächsten Öffnen egal welches Buch
+  direkt angewendet.
+- **Inhaltsverzeichnis:** `mountEpubReader` liest über `book.loaded.navigation`
+  die EPUB-eigene Navigation (nav.xhtml/toc.ncx) aus, eine Ebene tief geflacht
+  (Kapitel + direkte Unterpunkte) in `readerToc`. Ein „Inhalt"-Button (nur
+  sichtbar, wenn `readerToc` nicht leer ist) öffnet ein Overlay-Panel
+  (`readerTocOpen`) mit der Kapitelliste; Klick auf einen Eintrag springt via
+  `rendition.display(href)` direkt dorthin (`goToTocHref`) und schließt das
+  Panel wieder. Kein neuer Bookmark-Konflikt: die zuletzt gespeicherte CFI
+  bleibt unberührt, der Sprung ist rein navigatorisch.
+- **Fortschrittsanzeige:** Ein dünner Balken unter der Kopfzeile
+  (`readerProgress`, 0–100 %). Berechnet im `relocated`-Handler aus
+  `location.start.index / (book.spine.items.length - 1)` — also Position im
+  Spine (Kapitel-/Dateireihenfolge der EPUB), nicht aus `book.locations`
+  (das würde ein einmaliges, bei großen Büchern spürbar langsames
+  `book.locations.generate()` brauchen). Etwas gröber als eine echte
+  Zeichen-genaue Prozentanzeige, aber ohne Performance-Kosten.
+
+**Getestet vor dem Push:** `node --check` gegen den aus dem Bundle
+extrahierten Klassen-Code (Syntax-Fehler ausgeschlossen) sowie ein
+Tag-Bilanz-Check (`sc-if`/`sc-for`/`div`/`button` open vs. close, vor/nach
+Patch) am aus dem `__bundler/template`-Blob per `JSON.parse` dekodierten
+HTML — beides sauber. **Kein Playwright-Klicktest gegen eine echte EPUB**
+in dieser Session (kein Live-Backend-Zugriff) — Autor sollte nach dem Push
+einmal live gegenlesen (Schriftgröße ändern, Inhaltsverzeichnis öffnen und
+springen, Fortschrittsbalken beim Scrollen beobachten).
+
+**Offen / als Nächstes vorgeschlagen:** geräteübergreifender Bookmark-Sync
+(Abschnitt 19) und eine KI-Vorlesefunktion (Kostenvergleich ElevenLabs vs.
+OpenAI TTS steht noch aus, separat vom Autor angefragt).
+
+## 21 · Nachtrag (09.09.2026, Teil 3) — Geräteübergreifender Lese-Bookmark
+
+Löst die in Abschnitt 19 benannte bewusste Grenze auf: die Leseposition wird
+jetzt zusätzlich zum localStorage-Bookmark **serverseitig pro Zugangscode +
+EPUB-Datei** gespeichert — Handy und Laptop mit demselben Zugangscode
+landen an derselben Stelle.
+
+**Frontend (index.html, bereits gepusht):**
+- `openReader` fragt beim Öffnen **parallel** (`Promise.all`) sowohl
+  `getEpubData` (unverändert) als auch die neue Aktion `getBookmark` ab —
+  kein zusätzlicher Round-Trip zur bereits laufenden EPUB-Ladezeit. Ohne
+  Zugangscode wird `getBookmark` gar nicht erst angefragt.
+- `mountEpubReader(base64, serverCfi)` bevorzugt `serverCfi`, fällt nur ohne
+  Server-Antwort auf den localStorage-Bookmark zurück (Offline-/Fallback-Kopie,
+  bleibt bestehen).
+- Im `relocated`-Handler wird die aktuelle CFI weiterhin sofort in
+  localStorage geschrieben, zusätzlich aber **gedrosselt (2s Debounce)** per
+  neuer Methode `syncBookmarkToServer` an die Aktion `saveBookmark` gepostet
+  — verhindert einen Request pro Scroll-Tick.
+
+**Backend — NICHT automatisch live, manueller Schritt nötig:**
+Fertiger, additiver Codeblock liegt bereit unter
+`reference/apps-script/BookmarkSync.gs` (gleiches bewährte Muster wie
+`RevisionModule.gs`, Abschnitt 15: eigener Sheet-Tab `Bookmarks`
+(Code, EpubUrl, Cfi, UpdatedAt), zwei neue Aktionen `getBookmark`/
+`saveBookmark`, einziger Eingriff in bestehenden Code ist eine Zeile ganz am
+Anfang von `handle(e)`). **Muss vom Autor manuell in den Apps-Script-Editor
+eingefügt, `setupBookmarkSync` einmalig ausgeführt und neu deployt werden**
+(siehe die „New version"-Falle in Abschnitt 7) — ohne diesen Schritt bleibt
+`getBookmark`/`saveBookmark` unbekannt und der Reader fällt automatisch auf
+den bisherigen rein lokalen Bookmark zurück (kein kaputter Reader, nur kein
+Sync).
+
+**09.09.2026, Teil 5 — echtes Code.gs erhalten, Integration bestätigt und
+bequemer gemacht:** Nutzer hat den kompletten aktuellen `Code.gs`-Inhalt im
+Chat eingefügt. Bestätigt: `handle(e)`/`jsonOut(obj)`-Muster stimmt exakt
+mit der Annahme in `BookmarkSync.gs` überein, keine Namenskollisionen
+(weder Funktionsnamen noch die Actions `getBookmark`/`saveBookmark`).
+Zwei Ablagen ergänzt:
+- `reference/apps-script/Code.gs` — Referenz-Snapshot des echten Backends
+  (kein Auto-Sync, kann von der Live-Version abweichen, siehe Kopfkommentar
+  der Datei). Erspart künftigen Sessions das erneute Blind-Raten bei
+  Backend-Änderungen.
+- Dieser Snapshot enthält bereits **beide** additiven Integrationszeilen
+  (Stil-Revisions-Modul UND Lese-Bookmark-Sync) ganz am Anfang von
+  `handle(e)` — der Autor kann die Datei jetzt komplett 1:1 über sein
+  bestehendes `Code.gs` im Apps-Script-Editor kopieren, statt die eine
+  Zeile manuell zu suchen und einzufügen. `BookmarkSync.gs` weiterhin
+  zusätzlich als eigene neue Datei im Editor anlegen (Schritt 2 der
+  Anleitung oben bleibt gleich), nur der Integrationsschritt (Schritt 3)
+  entfällt durch den fertigen Snapshot.
+
+**Auth-Modell bewusst einfach:** `code` wird hier nur als opaker Schlüssel
+zur Trennung der Bookmarks genutzt, nicht erneut gegen das Access-Sheet
+geprüft — eine CFI ist keine schützenswerte Information (der Nutzer hat die
+zugehörige EPUB-Datei ohnehin schon über `getEpubData`/`epubAccess`
+bekommen müssen). Details und eine optionale strengere Variante stehen im
+Kommentarblock von `BookmarkSync.gs`.
+
+**Nicht getestet in dieser Session** (kein Live-Backend-Zugriff, kein
+Playwright-Klicktest) — nur `node --check` auf den aus dem Bundle
+extrahierten JS-Code sowie JSON.parse-Validierung des `__bundler/template`-
+Blobs. Autor sollte nach Backend-Deploy auf zwei Geräten mit demselben Code
+gegenlesen.
+
+## 22 · Nachtrag (09.09.2026, Teil 4) — Kostenlose Vorlesefunktion (Web-Speech-API, Übergangslösung)
+
+Nutzer-Wunsch: bis zu einer möglichen KI-Vorlesestimme (ElevenLabs/OpenAI
+TTS, Kostenvergleich in dieser Session gegeben, noch keine Entscheidung)
+etwas Kostenloses zum Vorlesen. Umgesetzt über die **browsereigene Web-
+Speech-API** (`window.speechSynthesis`) — kein Backend, kein API-Key, keine
+Kosten. Klingt spürbar synthetischer/monotoner als ElevenLabs/OpenAI, aber
+sofort nutzbar.
+
+- Neuer „Vorlesen"/„Stop"-Button in der Reader-Kopfzeile (nur sichtbar, wenn
+  der Browser `speechSynthesis` unterstützt — `hasSpeechSupport`, praktisch
+  alle aktuellen Desktop-/Mobile-Browser).
+- `startReadingAloud` liest den Text der **aktuell im Reader gerenderten
+  Sektion(en)** (`rendition.getContents()` → `textContent`), nicht das ganze
+  Buch — bewusste Grenze, siehe unten.
+- Text wird in ~300-Zeichen-Häppchen zerlegt (`speechChunks`, an Satzenden
+  wo möglich) und nacheinander per `SpeechSynthesisUtterance` vorgelesen
+  (`speakNextChunk_`) — manche Browser brechen sehr lange Utterances sonst
+  kommentarlos ab.
+- Sprache der Stimme: aus den EPUB-Metadaten (`book.package.metadata.language`)
+  übernommen, Fallback `document.documentElement.lang`, dann `de-DE`. Welche
+  konkrete System-/Browser-Stimme dafür verwendet wird, entscheidet der
+  Browser (nicht steuerbar ohne eigene Stimmauswahl-UI — hier bewusst nicht
+  gebaut, wäre der nächste Ausbauschritt).
+- Wird automatisch gestoppt beim Schließen des Readers (`closeReader`) und
+  beim Sprung über das Inhaltsverzeichnis (`goToTocHref`) — sonst würde
+  veralteter Text weiterlaufen.
+
+**Bewusste Grenze:** Liest nur die aktuell sichtbare/geladene Sektion vor,
+nicht automatisch das nächste Kapitel beim Erreichen des Endes (kein
+Auto-Advance über Kapitelgrenzen). Für „einfach nebenbei zuhören, während
+man länger unterwegs ist" müsste man aktuell nach jedem Kapitel erneut auf
+„Vorlesen" klicken. Bei Bedarf nachrüstbar (z. B. am Ende der Chunks in den
+nächsten Spine-Eintrag springen und automatisch weiterlesen).
+
+**Nicht getestet in dieser Session** (kein Browser mit echter EPUB
+verfügbar) — nur `node --check` + JSON.parse-Validierung wie bei den
+vorherigen Nachträgen. Klingt je nach Betriebssystem/Browser unterschiedlich
+(z. B. deutlich besser mit den neueren macOS-/Chrome-Systemstimmen als mit
+älteren Windows-Stimmen) — einmal live probehören.
