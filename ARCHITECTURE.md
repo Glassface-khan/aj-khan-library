@@ -899,3 +899,49 @@ springen, Fortschrittsbalken beim Scrollen beobachten).
 **Offen / als Nächstes vorgeschlagen:** geräteübergreifender Bookmark-Sync
 (Abschnitt 19) und eine KI-Vorlesefunktion (Kostenvergleich ElevenLabs vs.
 OpenAI TTS steht noch aus, separat vom Autor angefragt).
+
+## 21 · Nachtrag (09.09.2026, Teil 3) — Geräteübergreifender Lese-Bookmark
+
+Löst die in Abschnitt 19 benannte bewusste Grenze auf: die Leseposition wird
+jetzt zusätzlich zum localStorage-Bookmark **serverseitig pro Zugangscode +
+EPUB-Datei** gespeichert — Handy und Laptop mit demselben Zugangscode
+landen an derselben Stelle.
+
+**Frontend (index.html, bereits gepusht):**
+- `openReader` fragt beim Öffnen **parallel** (`Promise.all`) sowohl
+  `getEpubData` (unverändert) als auch die neue Aktion `getBookmark` ab —
+  kein zusätzlicher Round-Trip zur bereits laufenden EPUB-Ladezeit. Ohne
+  Zugangscode wird `getBookmark` gar nicht erst angefragt.
+- `mountEpubReader(base64, serverCfi)` bevorzugt `serverCfi`, fällt nur ohne
+  Server-Antwort auf den localStorage-Bookmark zurück (Offline-/Fallback-Kopie,
+  bleibt bestehen).
+- Im `relocated`-Handler wird die aktuelle CFI weiterhin sofort in
+  localStorage geschrieben, zusätzlich aber **gedrosselt (2s Debounce)** per
+  neuer Methode `syncBookmarkToServer` an die Aktion `saveBookmark` gepostet
+  — verhindert einen Request pro Scroll-Tick.
+
+**Backend — NICHT automatisch live, manueller Schritt nötig:**
+Fertiger, additiver Codeblock liegt bereit unter
+`reference/apps-script/BookmarkSync.gs` (gleiches bewährte Muster wie
+`RevisionModule.gs`, Abschnitt 15: eigener Sheet-Tab `Bookmarks`
+(Code, EpubUrl, Cfi, UpdatedAt), zwei neue Aktionen `getBookmark`/
+`saveBookmark`, einziger Eingriff in bestehenden Code ist eine Zeile ganz am
+Anfang von `handle(e)`). **Muss vom Autor manuell in den Apps-Script-Editor
+eingefügt, `setupBookmarkSync` einmalig ausgeführt und neu deployt werden**
+(siehe die „New version"-Falle in Abschnitt 7) — ohne diesen Schritt bleibt
+`getBookmark`/`saveBookmark` unbekannt und der Reader fällt automatisch auf
+den bisherigen rein lokalen Bookmark zurück (kein kaputter Reader, nur kein
+Sync).
+
+**Auth-Modell bewusst einfach:** `code` wird hier nur als opaker Schlüssel
+zur Trennung der Bookmarks genutzt, nicht erneut gegen das Access-Sheet
+geprüft — eine CFI ist keine schützenswerte Information (der Nutzer hat die
+zugehörige EPUB-Datei ohnehin schon über `getEpubData`/`epubAccess`
+bekommen müssen). Details und eine optionale strengere Variante stehen im
+Kommentarblock von `BookmarkSync.gs`.
+
+**Nicht getestet in dieser Session** (kein Live-Backend-Zugriff, kein
+Playwright-Klicktest) — nur `node --check` auf den aus dem Bundle
+extrahierten JS-Code sowie JSON.parse-Validierung des `__bundler/template`-
+Blobs. Autor sollte nach Backend-Deploy auf zwei Geräten mit demselben Code
+gegenlesen.
