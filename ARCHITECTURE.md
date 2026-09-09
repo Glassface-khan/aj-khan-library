@@ -762,3 +762,32 @@ blieb dauerhaft auf der Cover-Seite stehen.
 lässt epub.js alle Spine-Elemente (Cover → Titelseite → Kapitel) als ein
 einziges durchlaufendes Dokument rendern, genau wie ursprünglich mit
 "scrolled-doc" beabsichtigt.
+
+## 19 · Nachtrag (09.09.2026) — Lese-Bookmark im Inline-Reader
+
+Nutzer-Wunsch: Beim erneuten Öffnen eines Buchs im Inline-Reader soll die
+Leseposition erhalten bleiben statt jedes Mal von vorn zu beginnen.
+
+**Bewusst ohne Backend-Änderung umgesetzt** — die Position wird im
+`localStorage` des jeweiligen Geräts/Browsers gespeichert
+(`ajk_epub_bookmark_<epubUrl>`, eindeutig pro Datei, unterscheidet damit
+automatisch auch zwischen Sprachfassungen eines Buchs). Kein neues
+Sheet-Feld, kein Redeploy nötig.
+
+- `epub.js` liefert über CFIs (Canonical Fragment Identifiers) eine
+  stabile Positions-Referenz. Das `relocated`-Event der Rendition (feuert
+  bei jedem Positionswechsel, auch beim Scrollen im `continuous`-Manager
+  aus Abschnitt 18) schreibt die aktuelle CFI laufend in den
+  `localStorage`.
+- Beim Öffnen (`mountEpubReader`) wird die gespeicherte CFI gelesen und
+  direkt an `rendition.display(cfi)` übergeben statt an den Buchanfang zu
+  springen. Schlägt das fehl (z. B. weil sich die EPUB-Struktur seither
+  geändert hat, ungültige CFI), fängt ein `.catch()` das ab und springt
+  stattdessen sicher an den Anfang — kein kaputter Reader.
+
+**Bewusste Grenze:** Das ist **pro Gerät/Browser**, nicht geräteübergreifend
+synchronisiert — wer auf dem Handy und später am Laptop weiterliest, hat
+dort jeweils eigene Bookmarks. Für einen wirklich geräteübergreifenden
+Bookmark bräuchte es ein neues Backend-Feld (z. B. pro Zugangscode +
+Buchtitel in einer neuen Sheet-Spalte oder einem eigenen Tab) — bewusst
+nicht gebaut, da nicht angefragt; bei Bedarf später nachrüstbar.
