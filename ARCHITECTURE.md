@@ -945,3 +945,44 @@ Playwright-Klicktest) — nur `node --check` auf den aus dem Bundle
 extrahierten JS-Code sowie JSON.parse-Validierung des `__bundler/template`-
 Blobs. Autor sollte nach Backend-Deploy auf zwei Geräten mit demselben Code
 gegenlesen.
+
+## 22 · Nachtrag (09.09.2026, Teil 4) — Kostenlose Vorlesefunktion (Web-Speech-API, Übergangslösung)
+
+Nutzer-Wunsch: bis zu einer möglichen KI-Vorlesestimme (ElevenLabs/OpenAI
+TTS, Kostenvergleich in dieser Session gegeben, noch keine Entscheidung)
+etwas Kostenloses zum Vorlesen. Umgesetzt über die **browsereigene Web-
+Speech-API** (`window.speechSynthesis`) — kein Backend, kein API-Key, keine
+Kosten. Klingt spürbar synthetischer/monotoner als ElevenLabs/OpenAI, aber
+sofort nutzbar.
+
+- Neuer „Vorlesen"/„Stop"-Button in der Reader-Kopfzeile (nur sichtbar, wenn
+  der Browser `speechSynthesis` unterstützt — `hasSpeechSupport`, praktisch
+  alle aktuellen Desktop-/Mobile-Browser).
+- `startReadingAloud` liest den Text der **aktuell im Reader gerenderten
+  Sektion(en)** (`rendition.getContents()` → `textContent`), nicht das ganze
+  Buch — bewusste Grenze, siehe unten.
+- Text wird in ~300-Zeichen-Häppchen zerlegt (`speechChunks`, an Satzenden
+  wo möglich) und nacheinander per `SpeechSynthesisUtterance` vorgelesen
+  (`speakNextChunk_`) — manche Browser brechen sehr lange Utterances sonst
+  kommentarlos ab.
+- Sprache der Stimme: aus den EPUB-Metadaten (`book.package.metadata.language`)
+  übernommen, Fallback `document.documentElement.lang`, dann `de-DE`. Welche
+  konkrete System-/Browser-Stimme dafür verwendet wird, entscheidet der
+  Browser (nicht steuerbar ohne eigene Stimmauswahl-UI — hier bewusst nicht
+  gebaut, wäre der nächste Ausbauschritt).
+- Wird automatisch gestoppt beim Schließen des Readers (`closeReader`) und
+  beim Sprung über das Inhaltsverzeichnis (`goToTocHref`) — sonst würde
+  veralteter Text weiterlaufen.
+
+**Bewusste Grenze:** Liest nur die aktuell sichtbare/geladene Sektion vor,
+nicht automatisch das nächste Kapitel beim Erreichen des Endes (kein
+Auto-Advance über Kapitelgrenzen). Für „einfach nebenbei zuhören, während
+man länger unterwegs ist" müsste man aktuell nach jedem Kapitel erneut auf
+„Vorlesen" klicken. Bei Bedarf nachrüstbar (z. B. am Ende der Chunks in den
+nächsten Spine-Eintrag springen und automatisch weiterlesen).
+
+**Nicht getestet in dieser Session** (kein Browser mit echter EPUB
+verfügbar) — nur `node --check` + JSON.parse-Validierung wie bei den
+vorherigen Nachträgen. Klingt je nach Betriebssystem/Browser unterschiedlich
+(z. B. deutlich besser mit den neueren macOS-/Chrome-Systemstimmen als mit
+älteren Windows-Stimmen) — einmal live probehören.
