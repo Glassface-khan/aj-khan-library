@@ -933,6 +933,25 @@ eingefügt, `setupBookmarkSync` einmalig ausgeführt und neu deployt werden**
 den bisherigen rein lokalen Bookmark zurück (kein kaputter Reader, nur kein
 Sync).
 
+**09.09.2026, Teil 5 — echtes Code.gs erhalten, Integration bestätigt und
+bequemer gemacht:** Nutzer hat den kompletten aktuellen `Code.gs`-Inhalt im
+Chat eingefügt. Bestätigt: `handle(e)`/`jsonOut(obj)`-Muster stimmt exakt
+mit der Annahme in `BookmarkSync.gs` überein, keine Namenskollisionen
+(weder Funktionsnamen noch die Actions `getBookmark`/`saveBookmark`).
+Zwei Ablagen ergänzt:
+- `reference/apps-script/Code.gs` — Referenz-Snapshot des echten Backends
+  (kein Auto-Sync, kann von der Live-Version abweichen, siehe Kopfkommentar
+  der Datei). Erspart künftigen Sessions das erneute Blind-Raten bei
+  Backend-Änderungen.
+- Dieser Snapshot enthält bereits **beide** additiven Integrationszeilen
+  (Stil-Revisions-Modul UND Lese-Bookmark-Sync) ganz am Anfang von
+  `handle(e)` — der Autor kann die Datei jetzt komplett 1:1 über sein
+  bestehendes `Code.gs` im Apps-Script-Editor kopieren, statt die eine
+  Zeile manuell zu suchen und einzufügen. `BookmarkSync.gs` weiterhin
+  zusätzlich als eigene neue Datei im Editor anlegen (Schritt 2 der
+  Anleitung oben bleibt gleich), nur der Integrationsschritt (Schritt 3)
+  entfällt durch den fertigen Snapshot.
+
 **Auth-Modell bewusst einfach:** `code` wird hier nur als opaker Schlüssel
 zur Trennung der Bookmarks genutzt, nicht erneut gegen das Access-Sheet
 geprüft — eine CFI ist keine schützenswerte Information (der Nutzer hat die
