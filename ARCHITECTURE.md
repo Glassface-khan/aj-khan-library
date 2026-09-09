@@ -858,3 +858,44 @@ dort jeweils eigene Bookmarks. Für einen wirklich geräteübergreifenden
 Bookmark bräuchte es ein neues Backend-Feld (z. B. pro Zugangscode +
 Buchtitel in einer neuen Sheet-Spalte oder einem eigenen Tab) — bewusst
 nicht gebaut, da nicht angefragt; bei Bedarf später nachrüstbar.
+
+## 20 · Nachtrag (09.09.2026, Teil 2) — Schriftgröße, Inhaltsverzeichnis & Fortschrittsanzeige im Inline-Reader
+
+Drei weitere Reader-Komfortfunktionen, bewusst **alle drei rein clientseitig**
+(kein Backend-Feld, kein Redeploy nötig) — anders als der geräteübergreifende
+Bookmark aus Abschnitt 19, der weiterhin offen ist.
+
+- **Schriftgröße:** Zwei neue Buttons „A-"/„A+" in der Reader-Kopfzeile
+  (`changeReaderFontSize`, Schritt 10 %, Grenzen 70–200 %). Setzt
+  `rendition.themes.fontSize()` von epub.js. Die zuletzt gewählte Größe wird
+  geräteweit (nicht pro Buch) in `localStorage`
+  (`ajk_epub_fontsize`) gemerkt und beim nächsten Öffnen egal welches Buch
+  direkt angewendet.
+- **Inhaltsverzeichnis:** `mountEpubReader` liest über `book.loaded.navigation`
+  die EPUB-eigene Navigation (nav.xhtml/toc.ncx) aus, eine Ebene tief geflacht
+  (Kapitel + direkte Unterpunkte) in `readerToc`. Ein „Inhalt"-Button (nur
+  sichtbar, wenn `readerToc` nicht leer ist) öffnet ein Overlay-Panel
+  (`readerTocOpen`) mit der Kapitelliste; Klick auf einen Eintrag springt via
+  `rendition.display(href)` direkt dorthin (`goToTocHref`) und schließt das
+  Panel wieder. Kein neuer Bookmark-Konflikt: die zuletzt gespeicherte CFI
+  bleibt unberührt, der Sprung ist rein navigatorisch.
+- **Fortschrittsanzeige:** Ein dünner Balken unter der Kopfzeile
+  (`readerProgress`, 0–100 %). Berechnet im `relocated`-Handler aus
+  `location.start.index / (book.spine.items.length - 1)` — also Position im
+  Spine (Kapitel-/Dateireihenfolge der EPUB), nicht aus `book.locations`
+  (das würde ein einmaliges, bei großen Büchern spürbar langsames
+  `book.locations.generate()` brauchen). Etwas gröber als eine echte
+  Zeichen-genaue Prozentanzeige, aber ohne Performance-Kosten.
+
+**Getestet vor dem Push:** `node --check` gegen den aus dem Bundle
+extrahierten Klassen-Code (Syntax-Fehler ausgeschlossen) sowie ein
+Tag-Bilanz-Check (`sc-if`/`sc-for`/`div`/`button` open vs. close, vor/nach
+Patch) am aus dem `__bundler/template`-Blob per `JSON.parse` dekodierten
+HTML — beides sauber. **Kein Playwright-Klicktest gegen eine echte EPUB**
+in dieser Session (kein Live-Backend-Zugriff) — Autor sollte nach dem Push
+einmal live gegenlesen (Schriftgröße ändern, Inhaltsverzeichnis öffnen und
+springen, Fortschrittsbalken beim Scrollen beobachten).
+
+**Offen / als Nächstes vorgeschlagen:** geräteübergreifender Bookmark-Sync
+(Abschnitt 19) und eine KI-Vorlesefunktion (Kostenvergleich ElevenLabs vs.
+OpenAI TTS steht noch aus, separat vom Autor angefragt).
