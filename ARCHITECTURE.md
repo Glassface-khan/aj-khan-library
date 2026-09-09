@@ -8,6 +8,73 @@ fest, die als Ergebnis dieser Analyse getroffen wurde.
 
 ---
 
+## 0 · Aktueller Stand (Kurzfassung, Stand 09.09.2026)
+
+**Für eine neue Chat-Session zum schnellen Reinkommen — Details/Begründungen
+in den chronologischen Nachträgen unten (Abschnitte 1–19).**
+
+**Architektur:** `index.html` ist ein kompilierter Claude-Design-Canvas-
+Export (Bundler-Format, siehe Abschnitt 1) — **dieses Repo ist seit
+20.08.2026 die Source of Truth**, nicht mehr Claude Design. Backend ist ein
+Google-Apps-Script-Web-App (`Code.gs`) — **liegt NICHT in diesem Repo**,
+lebt nur im Apps-Script-Editor im Google-Konto des Autors. Jede Backend-
+Änderung muss der Autor manuell einfügen (kompletten Dateiinhalt ersetzen,
+nicht einzelne Schnipsel) und deployen (**„New version"-Falle**, siehe
+Abschnitt 7 — sonst merkt die Live-URL den neuen Code nicht).
+
+**Was aktuell alles funktioniert (öffentliche Seite):**
+- Bücher- und Gedichte-Anzeige, Bewertungen/Kommentare.
+- Individuelle Zugangscodes (Access-Sheet) mit granularen Rechten pro
+  Zugang: welche Bücher sichtbar (`VisibleBooks`), Gedichte/Heartfelt an
+  oder aus (`ShowPoems`), und — neu — pro **fertigem** Buch einzeln
+  „Lesen"/„Downloaden" (`EpubAccess`, Abschnitt 17). Voller Zugriff
+  (`CanDownload=true`) übersteuert alles, unabhängig vom Buchstatus.
+- Nutzer *ohne* vollen Zugriff kommen an **keiner** Stelle mehr auf einen
+  rohen Google-Drive-Link (weder Manuskript-Doc noch Background/Video/
+  Alt-Cover-Ordner) — Abschnitt 17.
+- Alt-Cover-Galerie **inline** auf der Seite (Lightbox), nicht mehr
+  Weiterleitung zu Drive (Abschnitt 15).
+- **Inline-EPUB-Reader** (epub.js) für fertige Bücher — öffnet sich beim
+  „Read"-Klick statt zu Drive zu verlinken (Abschnitt 16), inkl.
+  **Lese-Bookmark** pro Gerät/Browser (Abschnitt 19, kein Cross-Device-
+  Sync).
+- Admin-Panel: Bücher-Reihenfolge per ↑/↓ änderbar (Abschnitt 13),
+  Zugangscode-Verwaltung inkl. aller obigen Rechte.
+- Automatischer stündlicher Drive-Sync (`syncDriveForAllBooks`): Cover,
+  Wortzahl, Klappentext pro Sprache, EPUB-Bau, Genre aus `metadata.json`/
+  `GENRE_`-Datei, Alt-Cover-Bilder, Background-/Video-Links.
+
+**Offene TODOs (nicht gebaut, teils bewusst zurückgestellt):**
+- Weitere `metadata.json`-Felder automatisch übernehmen (Wortzahl,
+  Logline, Kapitelstruktur) — Konfliktfrage mit `FINAL_`/`KLAPPENTEXT_`
+  ungeklärt (Abschnitt 12).
+- KI-Genre-Erkennung als Erstvorschlag (Abschnitt 12).
+- Bio- und Autorenfoto-Bearbeitung im Admin-Panel (Abschnitt 8).
+- Google-Drive-Ordnerstruktur + volle Auto-Sync-Automatisierung — größtes
+  ursprünglich offenes Vorhaben (Abschnitt 8), inzwischen aber größtenteils
+  durch `syncDriveForAllBooks` erledigt; offene Detailfrage war „Sync
+  jetzt"-Button vs. reiner Zeit-Trigger — aktuell nur Zeit-Trigger.
+- Stil-Revisions-Modul Phasen 3–6 (Revisions-Lauf-Engine, Cloud-Export,
+  KI-Gegencheck) — nur Phase 2 gebaut (Abschnitt 9).
+- Geräteübergreifender Sync des Lese-Bookmarks (Abschnitt 19) — aktuell
+  bewusst nur lokal pro Gerät.
+- Alt-Cover als echte Galerie: **erledigt** (Abschnitt 15, war früher TODO
+  #2 in Abschnitt 6).
+- Cover-Upload-Limit (45 000 Zeichen) für hochauflösende Cover — noch offen.
+
+**Gelernte Fallstricke dieser Session (fürs nächste Mal):**
+- Mobiles Kopieren/Einfügen sehr langer `Code.gs`-Dateien kann
+  unbemerkt Teile verlieren (→ „unknown action"-Fehler bei eigentlich
+  längst existierenden Aktionen). Nach dem Einfügen: Zeilenzahl und
+  Dateiende prüfen, bevor deployt wird.
+- `index.html` ist eine ~9-MB-Datei mit dem gesamten Seiteninhalt als ein
+  einziger, escapter JSON-String in einer Zeile — direkte Text-Edits nur
+  über gezielte, verifizierte String-Ersetzungen (nie freihändig tippen),
+  danach immer: JSON-Parse der Zeile + `node --check` der extrahierten
+  Component-Klasse + Tag-Balance-Check, bevor gepusht wird.
+
+---
+
 ## 1 · Was `index.html` wirklich ist
 
 Die 9-MB-Datei ist **kein handgeschriebenes Monolith-HTML**, sondern der
