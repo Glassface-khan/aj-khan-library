@@ -1048,3 +1048,44 @@ war, kein Template-Markup). Ein Zwischenstand hatte kurzzeitig einen
 Self-Reference-Bug (`const canRead = s.isAdmin || canRead`, durch ein zu
 grobes Suchen-und-Ersetzen) — vor dem Commit gefunden und korrigiert, indem
 gezielt nur die Deklarationszeile geprüft wurde.
+
+## 24 · Nachtrag (10.09.2026) — Bugfix: Buttons liefen trotz flex-wrap-Fix weiter am rechten Rand aus dem Bild
+
+Nach PR #10 (Abschnitt 23) hat der Autor per Screenshot bestätigt: die
+Reader-Kopfzeile und das Zugänge-Panel sahen auf dem iPhone (Safari)
+weiterhin "abgeschnitten" aus, obwohl der `flex-wrap`-Fix drin war und die
+Seite frisch neu geladen wurde.
+
+**Root Cause — nicht der einzelne flex-Container, sondern die ganze
+Seite:** `flex-wrap` wrapt nur, wenn der *eigene* Flex-Container zu schmal
+wird. Hat aber IRGENDEIN anderes Element auf der Seite (egal wo) eine
+Breite über 100 % Viewport, bekommt `<body>` horizontalen Overflow — und
+iOS Safari erlaubt dann das ganze Dokument seitlich zu schieben
+("Panning"), **inklusive** `position:fixed`-Overlays wie den Reader oder
+das Admin-Panel. Diese haben zwar selbst korrekt `width:100%`/`inset:0`,
+werden aber beim seitlichen Scrollen der Seite optisch mitgeschoben und
+wirken dadurch rechts abgeschnitten — unabhängig davon, ob der einzelne
+Button-Container selbst umbricht. Screenshot-Indiz: mehrere unabhängige
+Elemente (Buttons UND Eingabefelder) waren an exakt derselben rechten
+Kante gekappt — typisches Muster für Seiten-weiten Overflow, nicht für
+einen einzelnen kaputten Container.
+
+**Fix:** Globale Absicherung statt lokaler Einzelfälle —
+`html,body{overflow-x:hidden; max-width:100%;}` ganz oben im globalen
+`<style>`-Block der Seite (vor der ersten `body{...}`-Regel). Verhindert
+grundsätzlich, dass irgendein zu breites Element (egal welches, auch
+zukünftige) die ganze Seite horizontal aufreißt — deutlich robuster als
+jeden einzelnen Container einzeln zu jagen.
+
+**Stolperstein in dieser Session:** Der erste Versuch hat versehentlich
+`//`-Kommentare (JS-Stil) in den CSS-`<style>`-Block geschrieben — CSS
+kennt nur `/* */`-Blockkommentare, `//` ist dort kein gültiger
+Kommentar-Start. Vor dem Commit bemerkt (beim erneuten Decodieren/
+Validieren) und auf `/* */` korrigiert.
+
+**Getestet:** JSON.parse-Validierung des `__bundler/template`-Blobs,
+`node --check` gegen den extrahierten JS-Code, Tag-Bilanz-Check
+(unverändert — nur CSS-Regel ergänzt, keine Tags), zusätzlich
+Geschweifte-Klammern-Balance beider `<style>`-Blöcke geprüft (43/43 bzw.
+23/23). Kein Live-Browser-Test in dieser Session — Autor sollte nach
+Merge + Cache-Reset erneut auf dem iPhone gegenlesen.
