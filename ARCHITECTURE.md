@@ -1166,3 +1166,47 @@ falls weitere ähnliche „quetscht sich zusammen"-Meldungen kommen (z. B.
 bei der Gedichte-Liste, die vermutlich dasselbe Muster nutzt), lohnt sich
 ein gezielter Blick auf alle `justify-content:space-between`-Zeilen mit
 `flex-shrink:0`-Button-Gruppe auf einmal, statt einzeln nachzujagen.
+
+## 27 · Nachtrag (10.09.2026, Teil 4) — Bugfix: Buch-Bearbeiten-Formular im Admin-Panel lief bei langen Platzhaltertexten aus dem Bild
+
+Per Screenshot gemeldet: die Bearbeiten-Ansicht eines Buchs (Titel, Genre,
+Reihe/Band, Summary, Status, Übersetzungen, Manuskript-Link, Wortzahl,
+Cover-URL) sah auf dem iPhone zerschossen aus — mehrere Eingabefelder und
+ein Button liefen über den rechten Bildschirmrand hinaus, obwohl die
+vorherigen Fixes (Abschnitt 24/26) bereits griffen.
+
+**Root Cause — eine dritte Variante desselben Grundproblems, diesmal
+nicht fehlendes `flex-wrap`, sondern `min-width:auto`:** CSS-Grid- und
+Flex-Kindelemente haben standardmäßig `min-width:auto`, was bei
+Formularfeldern heißt: die Mindestbreite orientiert sich am Inhalt
+(inkl. Platzhaltertext). Felder mit langem `placeholder` — z. B. „Reihe
+(z. B. 'Die Nil-Trilogie') — leer lassen bei Einzelband" oder „Manuskript
+(Google-Doc-Link, für automatische Wortzahl)" — weigern sich dadurch,
+unter ihre Inhalts-Mindestbreite zu schrumpfen, selbst wenn der
+Container schmaler ist. Anders als bei Abschnitt 24 (ganze Seite rutscht
+seitlich weg) blieb hier dank des globalen `overflow-x:hidden`-Fixes die
+Seite selbst stabil — die einzelnen Felder wurden am Viewport-Rand
+schlicht abgeschnitten, statt die Seite wegrutschen zu lassen. Sichtbar
+nur bei Feldern mit langem Platzhalter, kurze Felder (Titel, Status)
+fielen bisher nicht auf.
+
+**Fix:** `min-width:0` (bei Flex-Items zusätzlich ein sinnvoller fester
+`min-width`-Wert, damit sie nicht auf 0 kollabieren) an allen
+Formularfeldern im Buch-Bearbeiten-Formular, plus `width:100%;
+box-sizing:border-box;` an den vollbreiten Einzelfeldern (Title, Kind,
+Status, Summary-Textarea, Übersetzungen, Manuskript-Link, Cover-URL) und
+`flex-wrap:wrap; row-gap:8px;` an den beiden zweispaltigen Zeilen
+(Reihe/Band; Wortzahl + „Aus Manuskript berechnen"-Button).
+
+**Getestet:** JSON.parse-Validierung, `node --check`, Tag-Bilanz-Check
+(unverändert — nur Style-Attribute geändert, `input`/`textarea`-Anzahl
+gleich geblieben). Kein Live-Browser-Test in dieser Session.
+
+**Für spätere Sessions vorgemerkt:** `min-width:auto` auf Grid-/Flex-
+Kindelementen mit langem `placeholder`-Text ist ein eigenständiges
+Muster, unabhängig von den bereits gefixten `justify-content:space-
+between`-Zeilen aus Abschnitt 24/26 — beide Muster können gleichzeitig
+im selben Formular auftreten (wie hier). Bei künftigen „läuft aus dem
+Bild"-Meldungen im Admin-Panel beides parallel prüfen: fehlendes
+`flex-wrap` UND fehlendes `min-width:0` auf Formularfeldern mit langen
+Platzhaltern.
