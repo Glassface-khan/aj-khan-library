@@ -1089,3 +1089,41 @@ Validieren) und auf `/* */` korrigiert.
 Geschweifte-Klammern-Balance beider `<style>`-Blöcke geprüft (43/43 bzw.
 23/23). Kein Live-Browser-Test in dieser Session — Autor sollte nach
 Merge + Cache-Reset erneut auf dem iPhone gegenlesen.
+
+## 25 · Nachtrag (10.09.2026, Teil 2) — Portrait auf der About-Seite austauschbar über das Admin-Panel
+
+Nutzer-Wunsch: eigenes Portrait nicht mehr fest im kompilierten Bundle
+eingebacken haben, sondern jederzeit selbst über das Admin-Panel
+austauschen können (wie schon bei den Part-Bildern) — ohne dafür jedes
+Mal eine Code-Änderung/einen Push zu brauchen.
+
+**Bewusst ohne Backend-Änderung umgesetzt** — nutzt exakt dieselbe
+bereits vorhandene generische `SettingsData`-Ablage (`getSettings`/
+`saveSettings`, ein JSON-Blob in Zelle A1 eines eigenen Sheet-Tabs), die
+auch die Part-Bilder der Poems-Sektion speichert. Kein neues Sheet-Feld,
+kein Redeploy nötig.
+
+- Neuer Admin-Panel-Abschnitt „Portrait (About-Seite)" direkt über
+  „Part-Bilder" — ein URL-Eingabefeld (`portraitUrlInput` →
+  `setPortraitUrl`), das denselben `normalizeDriveImageUrl`-Helfer
+  wiederverwendet wie die Part-Bilder (wandelt einen eingefügten
+  Drive-„Freigeben"-Link automatisch in die eingebettete
+  `lh3.googleusercontent.com`-Form um). Vorschau-Bild erscheint sofort,
+  sobald eine URL gesetzt ist. Teilt sich den bestehenden
+  „Speichern"-Button/`saveSettings`-Aufruf mit den Part-Bildern (spart
+  einen zweiten Button, speichert ohnehin das ganze `settings`-Objekt).
+- About-Seite: der bisher fest eingebackene Portrait-`<img>`
+  (Bundle-Asset-UUID) bleibt als **Fallback** erhalten (`hasNoCustomPortrait`),
+  wird aber durch das per Settings gesetzte Bild ersetzt, sobald
+  `portraitUrl` nicht leer ist (`hasCustomPortrait`) — zwei sich
+  gegenseitig ausschließende `sc-if`-Zweige. Leeres Feld = alter Zustand
+  bleibt unverändert sichtbar, nichts kann dadurch kaputtgehen.
+
+**Getestet:** JSON.parse-Validierung des Templates, `node --check` gegen
+den extrahierten JS-Code, Tag-Bilanz-Check (+4 `sc-if`, +1 `div`, +1
+`button`, +1 `img`, +1 `input` — passt exakt zu den vier neuen Blöcken).
+Kein Live-Browser-Test in dieser Session. Nächster Schritt für den Autor:
+sein Portrait-Bild (z. B. die im Chat geteilte Illustration) irgendwo mit
+öffentlichem Link ablegen (Drive reicht, gleicher Mechanismus wie bei
+Buch-Covern/Part-Bildern) und den Link im neuen Admin-Feld einfügen +
+Speichern.
