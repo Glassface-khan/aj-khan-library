@@ -1005,3 +1005,46 @@ verfügbar) — nur `node --check` + JSON.parse-Validierung wie bei den
 vorherigen Nachträgen. Klingt je nach Betriebssystem/Browser unterschiedlich
 (z. B. deutlich besser mit den neueren macOS-/Chrome-Systemstimmen als mit
 älteren Windows-Stimmen) — einmal live probehören.
+
+## 23 · Nachtrag (09.09.2026, Teil 6) — Bugfix: Admin ohne Gast-Zugangscode konnte den Reader nicht öffnen
+
+**Gemeldet vom Autor:** Nach Merge von PR #9 im Notebook-Browser als Admin
+eingeloggt (nur Admin-Passwort, kein zusätzlicher Gast-Zugangscode
+eingegeben) → Klick auf „Read" bei einem Buch → „Kein Zugriff auf dieses
+Buch." Auf dem Handy ging es, weil dort noch ein alter Gast-Zugangscode mit
+vollem Zugriff in `localStorage` lag — auf dem Notebook fehlte der.
+
+**Root Cause — vorbestehende Lücke, nicht durch die neuen Reader-Features
+verursacht:** Admin-Login (`checkPassword`/`adminToken`) und
+Gast-Zugangscode (`visitorAccessCode`, für `checkAccess`) sind zwei
+komplett getrennte Systeme. `getEpubData` im Backend hat bisher **nur**
+den Gast-Zugangscode gegen das Access-Sheet geprüft — den Admin-Status nie.
+Dasselbe clientseitig: `onOpen`/`onEpub`/`onBg`/`onVideo`/die `*Href`-Links
+prüften nur `s.visitorCanDownload`, nie `s.isAdmin`. Nur die
+**Bücher-Sichtbarkeit** (welche Bücher überhaupt in der Liste erscheinen)
+hatte schon einen Admin-Bypass (Abschnitt 9, „Admin sieht immer alle
+Bücher") — das Lesen/Downloaden selbst nicht.
+
+**Fix — Admin bekommt jetzt konsequent volle Rechte, wie bei der
+Sichtbarkeit:**
+- **Frontend (index.html):** neue lokale Variable `canRead = s.isAdmin ||
+  s.visitorCanDownload` pro Buch, ersetzt alle 15 bisherigen
+  `s.visitorCanDownload`-Vorkommen (Read-/EPUB-/Background-/Video-Links,
+  Klick-Handler, Farbgebung der Icons). `openReader`/`downloadEpub` senden
+  jetzt zusätzlich `adminToken: this.state.adminToken || ''` mit.
+- **Backend (`reference/apps-script/Code.gs`, `getEpubData`):**
+  `hasFullAccess` startet jetzt mit `checkAdmin(e).ok` statt `false` —
+  admin-eingeloggte Requests überspringen die Access-Sheet-/EpubAccess-
+  Prüfung komplett, exakt wie bei den anderen admin-geschützten Aktionen.
+  **Muss erneut manuell im Apps-Script-Editor eingefügt und neu deployt
+  werden** (siehe die „New version"-Falle in Abschnitt 7) — der
+  Referenz-Snapshot in `reference/apps-script/Code.gs` ist bereits
+  aktualisiert und kann wie zuvor 1:1 kopiert werden.
+
+**Getestet:** `node --check` gegen den aus dem Bundle extrahierten
+JS-Code sowie gegen `Code.gs` separat, JSON.parse-Validierung des
+Templates, Tag-Bilanz-Check (unverändert, da nur die JS-Logik betroffen
+war, kein Template-Markup). Ein Zwischenstand hatte kurzzeitig einen
+Self-Reference-Bug (`const canRead = s.isAdmin || canRead`, durch ein zu
+grobes Suchen-und-Ersetzen) — vor dem Commit gefunden und korrigiert, indem
+gezielt nur die Deklarationszeile geprüft wurde.

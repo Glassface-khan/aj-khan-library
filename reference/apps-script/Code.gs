@@ -1095,10 +1095,14 @@ function handle(e) {
     // Buch und GENAU diese Aktion (lesen/downloaden) eine explizite
     // Freigabe in EpubAccess; ohne gueltigen Code oder ohne Freigabe: kein
     // Zugriff. Gleiche Access-Sheet-Logik wie bei 'checkAccess'.
+    // Admin-Login (adminToken) zaehlt ebenfalls als voller Zugriff — analog
+    // zu "Admin sieht immer alle Buecher" bei der Sichtbarkeit, sonst
+    // braeuchte der Autor zusaetzlich zum Admin-Login noch einen separaten
+    // Gast-Zugangscode nur zum Lesen im Inline-Reader.
     const accessSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Access');
-    let hasFullAccess = false;
+    let hasFullAccess = checkAdmin(e).ok;
     let epubAccess = {};
-    if (accessSheet && requestCode) {
+    if (!hasFullAccess && accessSheet && requestCode) {
       const accessRows = accessSheet.getDataRange().getValues();
       for (let i = 1; i < accessRows.length; i++) {
         if (String(accessRows[i][1]).trim() === requestCode) {
