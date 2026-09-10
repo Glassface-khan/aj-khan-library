@@ -1089,3 +1089,80 @@ Validieren) und auf `/* */` korrigiert.
 Geschweifte-Klammern-Balance beider `<style>`-Blöcke geprüft (43/43 bzw.
 23/23). Kein Live-Browser-Test in dieser Session — Autor sollte nach
 Merge + Cache-Reset erneut auf dem iPhone gegenlesen.
+
+## 25 · Nachtrag (10.09.2026, Teil 2) — Portrait auf der About-Seite austauschbar über das Admin-Panel
+
+Nutzer-Wunsch: eigenes Portrait nicht mehr fest im kompilierten Bundle
+eingebacken haben, sondern jederzeit selbst über das Admin-Panel
+austauschen können (wie schon bei den Part-Bildern) — ohne dafür jedes
+Mal eine Code-Änderung/einen Push zu brauchen.
+
+**Bewusst ohne Backend-Änderung umgesetzt** — nutzt exakt dieselbe
+bereits vorhandene generische `SettingsData`-Ablage (`getSettings`/
+`saveSettings`, ein JSON-Blob in Zelle A1 eines eigenen Sheet-Tabs), die
+auch die Part-Bilder der Poems-Sektion speichert. Kein neues Sheet-Feld,
+kein Redeploy nötig.
+
+- Neuer Admin-Panel-Abschnitt „Portrait (About-Seite)" direkt über
+  „Part-Bilder" — ein URL-Eingabefeld (`portraitUrlInput` →
+  `setPortraitUrl`), das denselben `normalizeDriveImageUrl`-Helfer
+  wiederverwendet wie die Part-Bilder (wandelt einen eingefügten
+  Drive-„Freigeben"-Link automatisch in die eingebettete
+  `lh3.googleusercontent.com`-Form um). Vorschau-Bild erscheint sofort,
+  sobald eine URL gesetzt ist. Teilt sich den bestehenden
+  „Speichern"-Button/`saveSettings`-Aufruf mit den Part-Bildern (spart
+  einen zweiten Button, speichert ohnehin das ganze `settings`-Objekt).
+- About-Seite: der bisher fest eingebackene Portrait-`<img>`
+  (Bundle-Asset-UUID) bleibt als **Fallback** erhalten (`hasNoCustomPortrait`),
+  wird aber durch das per Settings gesetzte Bild ersetzt, sobald
+  `portraitUrl` nicht leer ist (`hasCustomPortrait`) — zwei sich
+  gegenseitig ausschließende `sc-if`-Zweige. Leeres Feld = alter Zustand
+  bleibt unverändert sichtbar, nichts kann dadurch kaputtgehen.
+
+**Getestet:** JSON.parse-Validierung des Templates, `node --check` gegen
+den extrahierten JS-Code, Tag-Bilanz-Check (+4 `sc-if`, +1 `div`, +1
+`button`, +1 `img`, +1 `input` — passt exakt zu den vier neuen Blöcken).
+Kein Live-Browser-Test in dieser Session. Nächster Schritt für den Autor:
+sein Portrait-Bild (z. B. die im Chat geteilte Illustration) irgendwo mit
+öffentlichem Link ablegen (Drive reicht, gleicher Mechanismus wie bei
+Buch-Covern/Part-Bildern) und den Link im neuen Admin-Feld einfügen +
+Speichern.
+
+## 26 · Nachtrag (10.09.2026, Teil 3) — Bugfix: Bücher-Zeile im Admin-Panel quetschte sich bei langem Serien-Label zusammen
+
+Per Screenshot gemeldet: die Bücher-Verwaltungsliste im Admin-Panel sah
+bei „The Arche" (hat ein Serien-Label, z. B. „Corpus · Band 2") kaputt
+aus — Titel und Label quetschten sich auf mehrere sehr schmale Zeilen
+zusammen, während die Buttons (↑ ↓ Edit Delete) unverändert breit blieben.
+Bei Büchern ohne Serien-Label (kürzerer Textinhalt links) fiel es nicht
+auf.
+
+**Root Cause — exakt dasselbe Muster wie Abschnitt 24, nur an einer
+Stelle, die dort übersehen wurde:** Die Bücher-Zeile
+(`display:flex; justify-content:space-between; gap:16px; align-items:center;`)
+hatte kein `flex-wrap`, und der linke Info-Block (Titel + Serien-Label)
+keine `min-width:0`. Ohne Umbruch-Option quetscht ein Flex-Container den
+schrumpfbaren linken Block beliebig eng zusammen, statt die Zeile auf
+zwei Zeilen umzubrechen — bei genug Textinhalt links (hier: das
+zusätzliche Serien-Label) wird das sichtbar hässlich, obwohl der globale
+`overflow-x:hidden`-Fix aus Abschnitt 24 das seitliche Wegrutschen der
+ganzen Seite bereits verhindert hatte (das war ein anderes Problem: Seite
+komplett aus dem Bild vs. ein einzelner Container quetscht sich intern
+zusammen).
+
+**Fix:** Gleiches Muster wie bei der Zugänge-Liste und den EPUB-Zugriff-
+Zeilen — `flex-wrap:wrap; row-gap:8px;` auf dem äußeren Zeilen-Container,
+`flex:1 1 auto; min-width:0;` auf dem linken Info-`<div>`.
+
+**Getestet:** JSON.parse-Validierung, `node --check`, Tag-Bilanz-Check
+(unverändert, nur Style-Attribute geändert). Kein Live-Browser-Test in
+dieser Session.
+
+**Für spätere Sessions vorgemerkt:** Dieses Zeilen-Muster
+(`justify-content:space-between` + nicht-schrumpfender Button-Block ohne
+`flex-wrap`) kommt an mehreren Stellen im Admin-Panel vor. Drei Stellen
+sind jetzt gefixt (Zugänge-Liste, EPUB-Zugriff-Zeilen, Bücher-Liste) —
+falls weitere ähnliche „quetscht sich zusammen"-Meldungen kommen (z. B.
+bei der Gedichte-Liste, die vermutlich dasselbe Muster nutzt), lohnt sich
+ein gezielter Blick auf alle `justify-content:space-between`-Zeilen mit
+`flex-shrink:0`-Button-Gruppe auf einmal, statt einzeln nachzujagen.
