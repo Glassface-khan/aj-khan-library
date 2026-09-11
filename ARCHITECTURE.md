@@ -858,3 +858,37 @@ dort jeweils eigene Bookmarks. Für einen wirklich geräteübergreifenden
 Bookmark bräuchte es ein neues Backend-Feld (z. B. pro Zugangscode +
 Buchtitel in einer neuen Sheet-Spalte oder einem eigenen Tab) — bewusst
 nicht gebaut, da nicht angefragt; bei Bedarf später nachrüstbar.
+
+## 20 · Nachtrag (11.09.2026) — Fix: Neu angelegtes Buch verschwand spurlos wieder
+
+Nutzer-Bug-Report: Ein neu angelegtes Buch tauchte im Admin-Panel kurz auf,
+verschwand nach ein paar Minuten aber wieder — ohne Fehlermeldung. Diagnose:
+Der Drive-Ordner für das Buch existierte nie (`syncDriveForAllBooks` legt
+Ordner automatisch für jedes Buch in `getBooksArray()` an — kein Ordner
+heißt, das Buch war zum Zeitpunkt des Sync-Laufs serverseitig gar nicht
+mehr in `BooksData` vorhanden).
+
+**Ursache gefunden:** `persistBooks()`/`persistPoems()` hatten ein leeres
+`.catch(() => {})` am `fetch(...)`-Aufruf, der die eigentliche Speicherung
+ans Backend schickt — und prüften nie, ob die Server-Antwort `ok:true`
+oder `ok:false` war. Schlug das Speichern fehl (z. B. abgelaufenes Admin-
+Token nach den in `checkAdmin` hart codierten 24 Stunden, oder ein
+Netzwerkfehler), wurde das **komplett stillschweigend verschluckt** — die
+UI zeigte die Änderung trotzdem an (kommt direkt aus `this.state`), weil
+`setState` ja lokal bereits gelaufen war, bevor der Server-Request überhaupt
+startet. Erst beim nächsten `fetchBooks()`/Neuladen kam die tatsächliche
+(unveränderte) Serverliste zurück und überschrieb den lokalen Stand — das
+Buch „verschwand" ohne jede Erklärung.
+
+**Fix:** Beide Funktionen prüfen jetzt `data.ok` aus der Serverantwort und
+zeigen bei Fehlschlag einen deutlichen `window.alert` mit der Fehlerursache
+(inkl. Hinweis „nur lokal sichtbar, nicht für andere") und dem Vorschlag,
+sich neu als Admin einzuloggen. Gleiches bei einem reinen Verbindungsfehler
+(vorheriges leeres `.catch` ersetzt). Kein Backend-Update nötig, rein
+Frontend.
+
+**Nicht behoben, weil außerhalb des ursprünglichen Bug-Reports:** Die
+zugrunde liegende 24h-Token-Ablaufzeit selbst bleibt bestehen — bei langen
+Admin-Sitzungen kann das Token also weiterhin mitten in der Arbeit
+ablaufen. Jetzt bekommt man es nur wenigstens sofort angezeigt, statt es
+erst Minuten später am verschwundenen Buch zu bemerken.
