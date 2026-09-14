@@ -1244,3 +1244,21 @@ zugrunde liegende 24h-Token-Ablaufzeit selbst bleibt bestehen — bei langen
 Admin-Sitzungen kann das Token also weiterhin mitten in der Arbeit
 ablaufen. Jetzt bekommt man es nur wenigstens sofort angezeigt, statt es
 erst Minuten später am verschwundenen Buch zu bemerken.
+
+## 29 · Nachtrag (14.09.2026) — Fix: „Fertig"-Status-Check war groß-/kleinschreibungsempfindlich
+
+Nutzer-Bug-Report: Neu angelegtes Buch mit fertigem EPUB (Wortzahl, Cover,
+Genre — alles laut `DriveSyncLog` korrekt übernommen) zeigte trotzdem
+„Noch kein Lesezugriff hinterlegt." beim Klick auf „Read". Ursache: Der
+Status im Admin-Panel war als **„fertig"** (klein) eingetragen, aber
+`bookIsFinished = (b.status || '').trim().startsWith('Fertig')` prüfte
+**exakt** auf ein großes „F" — „fertig" bestand die Prüfung nicht, das
+Buch galt seiten-intern also als „nicht fertig", obwohl es das inhaltlich
+war. Gleiches Muster (`b.status.startsWith('In Entwicklung')`) betraf auch
+das `mark`-Feld (◆/○-Symbol neben dem Buchtitel).
+
+**Fix:** Alle drei Stellen (`bookIsFinished`, `finishedBookTitles` für die
+EPUB-Zugriffs-Checkliste im Admin-Panel, `mark`) vergleichen jetzt
+groß-/kleinschreibungsunabhängig (`.toLowerCase().startsWith('fertig')`
+bzw. `'in entwicklung'`) — „Fertig", „fertig" und „FERTIG" zählen jetzt
+alle gleich. Rein Frontend, kein Backend-Update nötig.
