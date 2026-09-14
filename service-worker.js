@@ -11,8 +11,18 @@
 // Version im Cache-Namen erhöhen, wenn sich die zwischengespeicherten
 // Dateien strukturell ändern (z.B. neue Kern-Dateien) — alte Caches werden
 // beim activate-Event automatisch aufgeräumt.
-const SHELL_CACHE = 'ajk-shell-v1';
-const DATA_CACHE = 'ajk-data-v1';
+//
+// v1 -> v2 (14.09.2026): direkt nach dem ersten Deploy dieses Service
+// Workers kam es bei einem Nutzer zu "JSON Parse error: Unterminated
+// string" beim Laden der Seite — der Quellcode auf GitHub war zu diesem
+// Zeitpunkt nachweislich valide (per json.loads geprüft), es handelte
+// sich also um eine im Browser zwischengespeicherte kaputte/unvollständige
+// Kopie (sehr wahrscheinlich durch die schnelle Folge mehrerer Deploys
+// kurz hintereinander, während GitHub Pages noch am Propagieren war).
+// Versionssprung erzwingt, dass jeder Browser seinen alten Cache verwirft
+// und die Seite beim nächsten Laden komplett frisch vom Netz holt.
+const SHELL_CACHE = 'ajk-shell-v2';
+const DATA_CACHE = 'ajk-data-v2';
 const SHELL_FILES = ['./', './index.html', './manifest.webmanifest', './icons/icon-192.png', './icons/icon-512.png'];
 
 // Aktionen, deren Antwort für Offline-Nutzung zwischengespeichert werden
@@ -61,9 +71,12 @@ self.addEventListener('fetch', (event) => {
   // zuletzt gecachten Stand, wenn offline.
   if (req.method === 'GET' && req.mode === 'navigate') {
     event.respondWith(
-      fetch(req)
+      // no-store: umgeht jeden HTTP-Zwischencache (Browser/CDN), damit wir
+      // nie eine unvollständige/veraltete Antwort in den Service-Worker-
+      // Cache übernehmen (siehe Versionskommentar oben, v1 -> v2).
+      fetch(req, { cache: 'no-store' })
         .then((res) => {
-          caches.open(SHELL_CACHE).then((c) => c.put('./index.html', res.clone()));
+          if (res && res.ok) caches.open(SHELL_CACHE).then((c) => c.put('./index.html', res.clone()));
           return res;
         })
         .catch(() => caches.match('./index.html'))
