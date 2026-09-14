@@ -1560,3 +1560,74 @@ Methodik für `index.html` (siehe Abschnitt 2/CLAUDE.md) muss daher ab
 sofort für diese beiden Script-Tags immer über `readChunked`-kompatible
 Mehrfach-Tags erfolgen, nicht mehr über eine einzelne
 `"<!DOCTYPE html>`-Zeile.
+
+**KORREKTUR (14.09.2026, Teil 8): §35 war die falsche Diagnose — siehe
+§36.** Das Chunking wurde wieder rückgängig gemacht (zurück auf je EINEN
+`<script>`-Block wie ursprünglich), weil sich a) beim Chunking selbst ein
+Bug einschlich (echte Zeilenumbrüche landeten im rekonstruierten Text,
+siehe §36) und b) die eigentliche Ursache ohnehin eine andere war.
+
+## 36 · Nachtrag (14.09.2026, Teil 8) — Die WIRKLICHE Ursache: unescapetes `</script>` innerhalb des Templates + eigener Bug beim Chunking-Versuch aus §35
+
+Nach dem Chunking-Deploy (§35) trat der Fehler weiterhin auf. Verifikation
+diesmal nicht nur per Regex/`json.loads()` auf isolierte Blöcke, sondern
+mit einem ECHTEN HTML-Parser (Python `BeautifulSoup`, verhält sich wie
+der DOM-Aufbau eines echten Browsers) — und DAMIT zwei Bugs gefunden, die
+die vorherige, laxere Regex-Prüfung beide durchgewunken hatte:
+
+**Bug 1 (selbst verursacht, §35-Chunking):** Beim Aufteilen in
+`data-chunk`-Tags landete je ein echter Zeilenumbruch VOR und NACH dem
+Inhalt jedes Chunks (`<script ...>\nINHALT\n</script>`) — der echte
+Browser-DOM liefert diese Zeilenumbrüche als Teil von `.textContent`
+mit, wodurch beim Zusammenfügen mehrerer Chunks echte Newline-Zeichen
+MITTEN im JSON landeten (nicht nur am Rand, wo sie harmlos wären). Die
+eigene Regex-Prüfung hatte das nicht bemerkt, weil ihr Muster diese
+Newlines beim Extrahieren stillschweigend mit wegschnitt.
+
+**Bug 2 (eigentliche Ursache, seit Langem vorhanden — nicht durch diese
+Session verursacht):** Das `__bundler/template`-Script-Tag enthält an
+drei Stellen (u.a. bereits bei Zeichen ~185, ganz am Anfang) ein
+UN-escapetes `</script>` innerhalb des als JSON-String codierten
+HTML-Inhalts (z. B. `<script src="…"></script>` als eingebettete
+Ressourcen-Referenz). Der HTML-Parser jedes Browsers beendet ein
+`<script>`-Element bei JEDEM literalen `</script`-Vorkommen — unabhängig
+vom `type`-Attribut und unabhängig davon, dass es "eigentlich" nur Daten
+innerhalb eines JSON-Strings sein soll. Der Browser bricht also das
+äußere `__bundler/template`-Script-Tag genau an dieser Stelle ab, `.
+textContent` liefert nur den abgeschnittenen Anfang zurück, und
+`JSON.parse()` scheitert exakt mit "unterminated string" — **absolut
+deterministisch, identisch auf jedem Gerät/Browser**, weil das eine
+feste HTML-Spezifikationsregel ist, kein Netzwerk-/Cache-/
+Umgebungsproblem. Das erklärt rückblickend zweifelsfrei, warum der
+Fehler auf 4 unabhängigen Geräten/Netzwerken UND über zwei unabhängige
+Auslieferungswege exakt gleich auftrat (§34/§35 gingen faelschlich von
+einer Netzwerk-/Infrastruktur-Ursache aus).
+
+**Fix:** Zurück auf je einen einzelnen `<script>`-Block pro Datenblock
+(Chunking aus §35 rückgängig gemacht — unnötig und selbst fehleranfällig,
+siehe Bug 1). Alle drei `</script`-Vorkommen im Template-Inhalt per
+`\/` escaped (`<\/script` statt `</script`) — laut JSON-Spezifikation ein
+gültiges, bedeutungsgleiches Escape für `/`, das der HTML-Tokenizer aber
+NICHT mehr als Tag-Ende erkennt, weil kein literales `/` direkt auf `<`
+folgt. Inhaltlich beim `JSON.parse()` exakt identisch zu vorher (per
+Vergleich verifiziert). Der Manifest-Block enthielt zufällig keine
+`</script`-Vorkommen, wurde aber vorsorglich mit demselben Mechanismus
+behandelt.
+
+**Verifiziert diesmal mit dem strengeren Test:** vollständiger
+HTML-Parse via `BeautifulSoup`, `.get_text()` auf das gefundene
+Script-Element (nicht nur Regex), `json.loads()` auf das Ergebnis, UND
+Vergleich des decodierten Inhalts gegen den bekannten korrekten Stand
+(`==`-Vergleich, nicht nur Längenvergleich) — alle vier Prüfungen
+bestanden.
+
+**Lehre für künftige Sessions:** Bei Aenderungen an `__bundler/manifest`
+oder `__bundler/template` in `index.html` reicht ein reiner
+`json.loads()`-Test auf eine per Regex/Zeilen-Split extrahierte
+Teilzeichenkette NICHT aus, um sicherzustellen, dass der Inhalt auch als
+ECHTES `<script>`-Tag im Browser korrekt ankommt — ein `</script`
+irgendwo im codierten Inhalt bleibt für so einen Test unsichtbar, bricht
+aber echte Browser zuverlässig. Vor jedem Deploy einer Änderung an
+diesen beiden Bloecken zusaetzlich pruefen: `re.findall(r'</script',
+raw_line, re.IGNORECASE)` muss leer sein (bzw. alle Treffer muessen als
+`<\/script` escaped sein).
