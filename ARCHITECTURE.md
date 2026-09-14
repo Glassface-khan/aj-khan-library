@@ -1452,3 +1452,60 @@ Bücher-/Gedichteliste samt Einstellungen.
 
 Reine Frontend-/Static-Asset-Änderung (`index.html`-Kopf, `manifest.
 webmanifest`, `service-worker.js`, `icons/`), kein Backend-Redeploy nötig.
+
+## 34 · Nachtrag (14.09.2026, Teil 6) — Rollback: Offline/PWA wieder entfernt (ungeklärter "JSON Parse error")
+
+Kurz nach dem Deploy von §33 meldete der Nutzer wiederholt einen Fehler
+beim Laden der Seite: **"Error unpacking: JSON Parse error: unterminated
+string at line 2 column 186"** — reproduzierbar auf mehreren Geräten
+(iPhone/Safari, Windows-Notebook/Firefox und Edge, auch in einem neuen
+Tab), sowohl mit als auch ohne VPN.
+
+**Untersucht und AUSGESCHLOSSEN:**
+- Kaputter Quellcode auf `main` — mehrfach per `git show origin/main:
+  index.html` + `json.loads` geprüft (auch byte-genau an der vom Fehler
+  genannten Stelle), durchgehend valide.
+- Fehlgeschlagener/hängender GitHub-Pages-Deploy — `pages build and
+  deployment`-Workflow-Runs zeigten durchgehend `conclusion: success` für
+  den jeweils neuesten Commit.
+- Client-seitiger Cache/Service-Worker (§33 v1→v2-Fix, `no-store`) — half
+  nicht, Fehler blieb identisch (gleiche Zeile/Spalte).
+- VPN — Fehler exakt gleich mit UND ohne VPN.
+- Browser-Erweiterungen/-Cache — Fehler exakt gleich auch in neuem Tab.
+
+**NICHT ausschließbar geprüft** (Nutzer am Arbeitsrechner, konnte
+Antiviren-/Web-Schutz-Software nicht deaktivieren): eine
+Sicherheits-Software mit HTTPS-Content-Inspection, die bei der recht
+großen Seite (~9,6 MB, u.a. wegen der eingebetteten Bilder im
+`__bundler/manifest`-Script-Tag, einer einzelnen JSON-Zeile mit ca. 9,3
+Mio. Zeichen) ins Straucheln gerät. Auffällig: der Fehler
+("line 2 column 186") zeigt auf eine sehr frühe Position innerhalb dieses
+Manifests — genau der Teil, der in dieser gesamten Session **kein
+einziges Mal verändert wurde** (keine Bild-/Cover-Änderungen). Die
+eigentliche Ursache ist damit **nicht abschließend geklärt**.
+
+**Entscheidung:** Da der Service Worker der einzige Teil war, der
+grundlegend verändert hat, WIE die Seite geladen/zwischengespeichert
+wird, und einen plausiblen (wenn auch nicht bewiesenen) Zusammenhang mit
+"Antivirus kommt mit Service-Worker-Interception + großer Seite nicht
+klar" haben könnte, wurde er zur Risikominimierung komplett entfernt:
+- `service-worker.js`, `manifest.webmanifest`, `icons/*` gelöscht.
+- Im echten `<head>` von `index.html`: aktive Abmeldung
+  (`navigator.serviceWorker.getRegistrations().forEach(r => r.unregister())`)
+  + Cache-Löschung (`caches.keys().then(...caches.delete...)`) für alle
+  Bestandsbesucher, bei denen der Service Worker bereits registriert war
+  — reines Entfernen der Registrierung hätte NICHT gereicht, da einmal
+  installierte Service Worker aktiv bleiben, bis sie sich selbst
+  abmelden.
+
+**Falls der Fehler danach weiterhin auftritt:** liegt es nachweislich
+NICHT am Service Worker / an dieser Session's Änderungen, sondern an
+etwas Grundlegenderem (Netzwerk-/Sicherheits-Software beim Nutzer, oder
+ein Problem mit der Größe/Struktur des `__bundler/manifest` selbst, das
+vom Design-Canvas-Bundler stammt und außerhalb der Kontrolle dieses Repos
+liegt) — dann als nächstes prüfen: Seite auf einem dritten, unbeteiligten
+Netzwerk/Gerät testen, um Nutzer-lokale Ursachen endgültig auszuschließen.
+Offline/PWA bleibt als Feature-Wunsch bestehen, müsste bei einem erneuten
+Anlauf aber mit dieser Fehlerursache im Hinterkopf vorsichtiger
+angegangen werden (z. B. Service Worker NUR fürs Caching einzelner
+kleiner Dateien, nicht der ganzen App-Shell).
