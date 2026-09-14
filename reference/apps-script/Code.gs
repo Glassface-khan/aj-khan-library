@@ -153,12 +153,17 @@ function getOrCreateSubfolder(parent, name) {
   return parent.createFolder(name);
 }
 
+// Groß-/Kleinschreibungsunabhaengig (case-insensitive), damit z.B.
+// "klappentext_Roman" oder "Final_Roman" genauso erkannt werden wie
+// "KLAPPENTEXT_Roman"/"FINAL_Roman" — betrifft alle Aufrufer (FINAL_,
+// ENTWURF_, KLAPPENTEXT_, GENRE_, metadata.json).
 function findFileByPrefix(folder, prefix) {
   const it = folder.getFiles();
   let best = null;
+  const prefixLower = prefix.toLowerCase();
   while (it.hasNext()) {
     const f = it.next();
-    if (f.getName().indexOf(prefix) === 0) {
+    if (f.getName().toLowerCase().indexOf(prefixLower) === 0) {
       if (!best || f.getLastUpdated() > best.getLastUpdated()) best = f;
     }
   }
