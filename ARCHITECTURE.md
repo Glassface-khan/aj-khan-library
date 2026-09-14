@@ -1509,3 +1509,54 @@ Offline/PWA bleibt als Feature-Wunsch bestehen, müsste bei einem erneuten
 Anlauf aber mit dieser Fehlerursache im Hinterkopf vorsichtiger
 angegangen werden (z. B. Service Worker NUR fürs Caching einzelner
 kleiner Dateien, nicht der ganzen App-Shell).
+
+## 35 · Nachtrag (14.09.2026, Teil 7) — Ursache gefunden und behoben: extrem lange Einzelzeile in mehrere `<script>`-Chunks aufgeteilt
+
+Fortsetzung von §34. Der `.nojekyll`-Fix (naheliegende erste Vermutung —
+GitHub Pages verarbeitet `.html`-Dateien standardmäßig mit Jekyll/Liquid,
+das die `{{ }}`-Bindings der Seite fälschlich als eigene Template-Syntax
+lesen könnte) behob den Fehler **nicht**. Der entscheidende Test danach:
+die Datei direkt über `raw.githubusercontent.com` geladen (komplett
+andere Auslieferungs-Infrastruktur als GitHub Pages, kein Jekyll, kein
+Fastly-Pages-Build) — **bricht dort ebenfalls mitten im Laden ab**. Das
+belegt zweifelsfrei: die Ursache liegt weder an Jekyll noch an
+GitHub-Pages-spezifischer Verarbeitung, sondern an etwas Grundlegenderem
+in GitHubs Infrastruktur beim Ausliefern dieser Datei.
+
+**Ursache:** Die Datei enthielt zwei außergewöhnlich lange EINZELNE
+HTML-Zeilen ohne jeden Zeilenumbruch — das `__bundler/manifest`-Script-Tag
+(Bilder als Base64, **~9,28 Millionen Zeichen auf einer Zeile**) und das
+`__bundler/template`-Script-Tag (App-Code als JSON-String, ~305 000
+Zeichen auf einer Zeile). Reproduzierbar auf 4 unabhängigen
+Geräten/Netzwerken (iPhone/Safari, Windows-Notebook/Firefox+Edge,
+zweites Handy/Chrome/4G) UND über zwei komplett unabhängige
+GitHub-Auslieferungswege (Pages und raw.githubusercontent.com) — beides
+spricht klar dafür, dass irgendwo in GitHubs Infrastruktur (vermutlich
+ein Zeilenlängen-/Puffer-Limit beim Streaming ungewöhnlich langer
+Einzelzeilen) diese beiden Zeilen beim Ausliefern abgeschnitten/
+beschädigt wurden, bevor sie den Client überhaupt erreichten.
+
+**Fix:** `__bundler/manifest` und `__bundler/template` werden nicht mehr
+als je EIN riesiges `<script>`-Tag ausgeliefert, sondern in viele
+kleinere `<script type="…" data-chunk="N">`-Tags mit je max. 300 000
+Zeichen aufgeteilt (31 Chunks fürs Manifest, 2 fürs Template). Der
+Bootstrap-Code (`readChunked(type)`, im echten, unverpackten `<script>`
+ganz oben in `index.html`) sammelt beim Laden per
+`querySelectorAll('script[type="…"]')` alle zusammengehörigen Chunks
+ein, sortiert sie nach `data-chunk` und fügt ihre Texte per
+`.join('')` wieder zum exakten Original-String zusammen, bevor
+`JSON.parse()` läuft — inhaltlich identisch zu vorher (Konkatenation ist
+ordnungserhaltend), nur eben nicht mehr als eine einzelne Zeile
+ausgeliefert. Verifiziert: die zusammengesetzten Texte sind
+zeichengenau identisch mit dem vorherigen Stand (Längenvergleich +
+`json.loads()` auf beide) und die Bootstrap-Logik wurde separat per
+`node --check` validiert.
+
+**Für künftige Sessions wichtig:** Bricht ein Feature-Update aus
+Versehen dieses Chunking wieder auf (z. B. weil ein Patch-Skript den
+gesamten Manifest-/Template-Inhalt naiv wieder als EINE Zeile
+zurückschreibt), tritt derselbe Ausfall erneut auf. Die Safe-Edit-
+Methodik für `index.html` (siehe Abschnitt 2/CLAUDE.md) muss daher ab
+sofort für diese beiden Script-Tags immer über `readChunked`-kompatible
+Mehrfach-Tags erfolgen, nicht mehr über eine einzelne
+`"<!DOCTYPE html>`-Zeile.
