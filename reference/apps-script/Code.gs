@@ -37,6 +37,28 @@ function checkAdmin(e) {
   return { ok: valid, token: token, cached: stored };
 }
 
+// E-Mail-Benachrichtigung an den Autor beim ERSTEN Login eines Zugangscodes
+// (Wiedererkennung via PropertiesService, damit es nicht bei jedem erneuten
+// Besuch spammt). Empfänger ist automatisch das eigene Google-Konto, in dem
+// dieses Skript läuft — keine zusätzliche Konfiguration nötig. Ein Fehler
+// beim Mailversand darf den eigentlichen Login-Check niemals blockieren,
+// daher komplett in try/catch gekapselt.
+function notifyFirstLogin_(code, name) {
+  try {
+    const props = PropertiesService.getScriptProperties();
+    const key = 'firstlogin_' + code;
+    if (props.getProperty(key)) return; // schon mal begrüßt
+    props.setProperty(key, String(Date.now()));
+    MailApp.sendEmail({
+      to: Session.getEffectiveUser().getEmail(),
+      subject: 'Autorenseite: ' + (name || code) + ' hat sich zum ersten Mal eingeloggt',
+      body: (name || '(ohne Namen)') + ' (Code: ' + code + ') hat sich soeben zum ersten Mal auf der Autorenseite eingeloggt.'
+    });
+  } catch (err) {
+    // still — nichts weiter zu tun, Login funktioniert trotzdem normal.
+  }
+}
+
 // null = alle Bücher sichtbar (Standard); sonst Array erlaubter Titel.
 function parseVisibleBooks_(cellValue) {
   const raw = String(cellValue || '').trim();
@@ -985,6 +1007,7 @@ function handle(e) {
     const rows = accessSheet.getDataRange().getValues();
     for (let i = 1; i < rows.length; i++) {
       if (String(rows[i][1]).trim() === code) {
+        notifyFirstLogin_(code, rows[i][0]);
         return jsonOut({
           ok: true,
           name: rows[i][0],
