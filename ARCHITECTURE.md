@@ -1328,3 +1328,87 @@ Endpunkt (Datei-Bytes empfangen, in den richtigen Drive-Unterordner mit
 korrektem Namensmuster ablegen) und eine mehrstufige Wizard-UI. Noch nicht
 begonnen — als nächstes größeres Vorhaben vorgemerkt, eigene
 Aufwandseinschätzung nötig, bevor losgelegt wird.
+
+## 31 · Nachtrag (14.09.2026, Teil 3) — Usability-Runde Phase 1 ("Schnell & sinnvoll")
+
+Auf Wunsch des Nutzers eine strukturierte Sammlung möglicher weiterer
+Verbesserungen erstellt (kurz-, mittel- und langfristig gestaffelt) und die
+als "schnell & sinnvoll" eingestuften vier Punkte direkt umgesetzt:
+
+**1. Admin-Token-Laufzeit 24h → 7 Tage** (`Code.gs`, `checkAdmin`/
+`ADMIN_TOKEN_LIFETIME_MS`). Löst die in §28 dokumentierte Ursache der
+wiederholten "unauthorized"-Überraschungen — war dort bewusst
+zurückgestellt, jetzt auf expliziten Nutzerwunsch umgesetzt.
+
+**2. Erfolgs-Bestätigung ("Gespeichert ✓").** Neuer `savedToast`-State +
+`showSavedToast()`-Helfer, zeigt einen kurzen grünen Hinweis unten am
+Bildschirmrand (2,5 Sek., dann automatisch weg) nach erfolgreichem
+Speichern von Büchern, Gedichten sowie Zugang anlegen/bearbeiten/entfernen.
+Bisher gab es (seit §28/§17) nur bei FEHLERN eine Rückmeldung — bei Erfolg
+blieb die UI stumm, was verunsicherte ("hat es jetzt geklappt?").
+
+**3. Kopier-Button für Zugangscodes.** `copyAccessCode()` nutzt
+`navigator.clipboard.writeText`, mit Fallback-Alert (Code manuell
+markieren) falls die Clipboard-API im Browser fehlt. Sowohl in der
+Admin-Zugangsliste (neben jedem bestehenden Code) als auch direkt beim neu
+generierten Code nach dem Anlegen.
+
+**4. Buch-Vorschau ("Vorschau"-Button im Bearbeiten-Formular).** Zeigt
+Cover, Titel, Genre und Klappentext sowie den Fertig-Status in einem Modal
+so an, wie ein Leser das Buch sehen würde — **inklusive noch
+ungespeicherter Änderungen** (liest direkt aus `s.books[i]`, da
+`setBookField` ohnehin sofort in den State schreibt, kein separates
+Draft-Objekt). Zweck: Tippfehler/Formatierungsfehler im Klappentext oder
+ein falsches Cover VOR dem Speichern erkennen, statt danach auf der Live-
+Seite.
+
+Alle vier Änderungen in `index.html`, Punkt 1 zusätzlich in `Code.gs`
+(erfordert Redeploy).
+
+## 32 · Nachtrag (14.09.2026, Teil 4) — Usability-Runde Phase 2 (ohne Statistik-Dashboard)
+
+Fortsetzung der Verbesserungsrunde ("mittlerer Aufwand", auf Wunsch ohne
+den Statistik/Dashboard-Punkt):
+
+**1. Buchsuche für Leser.** Neues Suchfeld über der Werke-Liste, filtert
+client-seitig (kein Backend-Roundtrip) nach Titel, Genre und
+Klappentext-Text (`bookSearchQueryNorm`, angewendet auf
+`visibleBooksSourceRaw` vor der bestehenden Sichtbarkeits-Filterung).
+Zeigt "Keine Bücher gefunden für ..." wenn nichts passt.
+
+**2. E-Mail-Benachrichtigung bei Erst-Login.** `notifyFirstLogin_()` in
+`Code.gs`, aufgerufen aus `checkAccess`. Schickt eine Mail an
+`Session.getEffectiveUser().getEmail()` (= das eigene Google-Konto, in dem
+das Skript läuft — keine Konfiguration nötig), sobald sich ein
+Zugangscode zum ALLERERSTEN Mal einloggt. Wiedererkennung über einen
+`PropertiesService`-Marker (`firstlogin_<code>`), damit nicht bei jedem
+weiteren Besuch erneut gemailt wird. Komplett in try/catch gekapselt —
+ein Mail-Fehler darf den Login selbst niemals blockieren.
+(Die zweite Hälfte der ursprünglichen Idee — Leser per Mail benachrich-
+tigen, wenn ein neues Buch für sie freigeschaltet wird — ist NICHT
+umgesetzt: es gibt aktuell keine Leser-E-Mail-Adressen im System, nur
+Name+Code. Bräuchte ein neues Datenfeld, falls gewünscht.)
+
+**3. Sprachumschalter DE/EN für die öffentliche Leser-Seite.** Auf
+explizite Nachfrage bewusst auf die Leser-Seite beschränkt (Admin-Bereich
+bleibt deutsch, da nur der Autor ihn nutzt — ca. 390 Textstellen dort,
+unverhältnismäßiger Aufwand gegenüber Nutzen). Kleiner Umschalter-Button
+im Kopfbereich, merkt Wahl in `localStorage` (`ajk_ui_lang`). Ein
+`ui`-Objekt (berechnet aus `uiStrings[s.uiLang]`) für Template-Bindings
+sowie ein `this.tr(de, en)`-Helfer für dynamisch erzeugte Meldungen
+(Alerts, `viewerError`). Übersetzt wurden die bislang deutschen
+Leser-Texte: Zugangscode-Feld, Absenden/Schließen/Zurück/Weiter/
+Inhalt/Lädt…, Such-Platzhalter, Fehlermeldungen bei falschem Zugangscode/
+Verbindungsfehler, sowie die Zugriffs-Hinweise (kein Lese-/Download-
+Zugriff, EPUB/Hintergrund/Video/Alt-Cover noch nicht verfügbar). Der Rest
+der öffentlichen Seite (Überschriften, Marketing-Text) war bereits auf
+Englisch verfasst und blieb unverändert.
+
+Punkt 1 und 3 nur `index.html` (kein Redeploy nötig), Punkt 2 zusätzlich
+`Code.gs` (Redeploy nötig).
+
+**Offen aus der ursprünglichen Liste:** der geführte Buch-Upload-
+Assistent mit direktem Datei-Upload (weiterhin als eigenes, größeres
+Vorhaben vorgemerkt, siehe §30) sowie Offline/PWA-Unterstützung (vom
+Nutzer als nächstes gewünschter Punkt aus der "größerer Aufwand"-Liste —
+noch nicht begonnen).
