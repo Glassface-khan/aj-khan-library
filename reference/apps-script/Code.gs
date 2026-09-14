@@ -22,7 +22,10 @@ function jsonOut(obj) {
 
 // Admin-Tokens werden jetzt in PropertiesService gespeichert (wie
 // ADMIN_PASSWORD auch), nicht mehr in CacheService — zuverlässiger.
-// Eigene 24h-Ablauflogik statt der eingebauten Cache-Ablaufzeit.
+// Eigene Ablauflogik statt der eingebauten Cache-Ablaufzeit.
+// Auf 7 Tage verlängert (14.09.2026) — die alten 24h führten laufend zu
+// überraschenden "unauthorized"-Fehlern beim Speichern im Admin-Panel.
+const ADMIN_TOKEN_LIFETIME_MS = 7 * 24 * 60 * 60 * 1000;
 function checkAdmin(e) {
   const token = e.parameter.adminToken || '';
   if (!token) return { ok: false, token: token, cached: null };
@@ -30,7 +33,7 @@ function checkAdmin(e) {
   const stored = props.getProperty('admintoken_' + token);
   if (!stored) return { ok: false, token: token, cached: null };
   const issuedAt = Number(stored);
-  const valid = (Date.now() - issuedAt) < 24 * 60 * 60 * 1000;
+  const valid = (Date.now() - issuedAt) < ADMIN_TOKEN_LIFETIME_MS;
   return { ok: valid, token: token, cached: stored };
 }
 
