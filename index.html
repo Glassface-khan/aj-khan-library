@@ -3,6 +3,21 @@
 <head>
   <meta charset="utf-8">
   <title>Ali Jawwad Khan — Novelist &amp; Poet</title>
+  <!-- PWA: installierbare App + Offline-Zugriff auf zuletzt geöffnete
+       EPUBs/Bücherliste (siehe service-worker.js). manifest.webmanifest
+       und die Icons liegen relativ zu index.html, damit es unabhängig
+       davon funktioniert, ob die Seite unter der Domain-Wurzel oder unter
+       einem Unterpfad (z.B. GitHub-Pages-Projektseite) ausgeliefert wird. -->
+  <link rel="manifest" href="manifest.webmanifest">
+  <meta name="theme-color" content="#16140F">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+  <script>
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', function() {
+        navigator.serviceWorker.register('service-worker.js').catch(function() {});
+      });
+    }
+  </script>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body { background: #faf9f5; display: flex; align-items: center; justify-content: center; min-height: 100vh; font-family: -apple-system, BlinkMacSystemFont, sans-serif; }
