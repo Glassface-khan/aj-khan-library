@@ -1262,3 +1262,69 @@ EPUB-Zugriffs-Checkliste im Admin-Panel, `mark`) vergleichen jetzt
 groß-/kleinschreibungsunabhängig (`.toLowerCase().startsWith('fertig')`
 bzw. `'in entwicklung'`) — „Fertig", „fertig" und „FERTIG" zählen jetzt
 alle gleich. Rein Frontend, kein Backend-Update nötig.
+
+## 30 · Nachtrag (14.09.2026, Teil 2) — Usability-Runde: explizite "fertig"-Checkbox, Fehlt-noch-Checkliste, robustere Dateinamen-Erkennung
+
+Nutzer-Feedback nach mehreren Runden Fehlersuche: Die Seite ist an
+mehreren Stellen unnötig empfindlich gegenüber kleinen Abweichungen
+(Groß-/Kleinschreibung, fehlende Rückmeldung), was das Handling
+umständlich macht. Statt weiter Einzelsymptome zu flicken, hier eine
+gebündelte Runde an der eigentlichen Fehlerklasse.
+
+**1. Explizite "Buch ist fertig zum Lesen"-Checkbox statt Status-Text-
+Parsing.** Der bisherige Ansatz (`status.startsWith('Fertig')`, in
+Abschnitt 29 schon case-insensitive gemacht) bleibt strukturell
+fehleranfällig, weil er ein *Freitextfeld* für eine *maschinelle*
+Entscheidung zweckentfremdet. Neues Buchfeld `isFinished` (Boolean) —
+echter Schalter, kann nie an Tippfehlern scheitern. Der Status-Text bleibt
+für die freie Beschreibung erhalten (z. B. "Fertig (Submission-Materialien
+erstellt)"), hat aber keinen Einfluss mehr auf Read/EPUB-Freischaltung.
+**Rückwärtskompatibel:** `bookIsFinished = (b.isFinished !== undefined) ?
+!!b.isFinished : <alter Status-Text-Fallback>` — bestehende Bücher ohne
+das neue Feld funktionieren unverändert weiter, bis sie einmal gespeichert
+werden (dann wird `isFinished` Teil ihrer Daten). Neue Checkbox im
+Buch-Bearbeiten-Formular direkt unter dem Status-Feld.
+
+**2. "Fehlt noch"-Checkliste pro Buch im Admin-Panel.** Direkt in der
+Buchzeile (nicht erst nach Klick auf Edit) erscheint jetzt eine kleine
+Warnzeile, falls: kein Cover hinterlegt, kein Manuskript-Link (`pdfUrl`/
+`manuscriptDocUrl`), das Buch als fertig markiert ist aber noch kein
+`epubUrl` vorliegt (Drive-Sync steht noch aus oder ist fehlgeschlagen),
+oder das Buch noch nicht als fertig markiert ist. Rein aus vorhandenen
+Buchdaten berechnet — **kein Backend-Update nötig**. Macht auf einen
+Blick sichtbar, was nach dem Anlegen eines Buchs noch aussteht, ohne dass
+man dafür Drive oder das Sync-Log durchsuchen muss.
+
+**3. Lösch-Fehler bei Zugängen jetzt sichtbar.** `removeAccessPerson` hatte
+dasselbe stille-Fehlschlag-Muster wie `persistBooks`/`persistPoems` vor
+Abschnitt 28 (leeres `.catch`, keine `data.ok`-Prüfung). Gleicher Fix:
+`window.alert` bei Fehlschlag statt stillem Nichtstun.
+
+**4. Backend (`Code.gs`): Datei-Präfix-Erkennung jetzt groß-/klein-
+schreibungsunabhängig.** `findFileByPrefix` (verwendet für `FINAL_`,
+`ENTWURF_`, `KLAPPENTEXT_`, `GENRE_` und `metadata.json`) verglich bisher
+exakt case-sensitiv — eine Datei `klappentext_Roman.docx` statt
+`KLAPPENTEXT_Roman.docx` wurde stillschweigend ignoriert, ohne jede
+Fehlermeldung (das Sync-Log zeigt ja nur, was gefunden wurde, nicht was
+wegen falscher Schreibweise übersehen wurde). Jetzt vergleicht die
+Funktion beide Seiten kleingeschrieben — `FINAL_`, `Final_`, `final_`
+werden alle gleich erkannt.
+
+**Bewusst nicht angegangen (auf Nutzerwunsch zurückgestellt):**
+Admin-Token-Laufzeit (aktuell 24 Std., verantwortlich für die
+"unauthorized"-Überraschungen aus Abschnitt 28) — Vorschlag stand im Raum
+(z. B. auf 7 Tage verlängern), aber noch nicht bestätigt/umgesetzt.
+
+**Größerer, separat zu planender Wunsch:** Ein geführter Buch-Anlege-
+Assistent ("New Book" → Titel → Drive-Struktur wird angelegt → gezielte
+Aufforderung, Manuskript/Klappentext/Cover/Alt-Cover *direkt aus dem
+Browser* hochzuladen, inkl. automatisch korrekter Dateibenennung) —
+deutlich größerer Umbau, weil er echten Datei-Upload vom Browser direkt
+nach Drive erfordert (bisher lädt der Admin alles manuell in Drive hoch,
+die Seite verlinkt nur; einzige bestehende Ausnahme ist der Cover-Upload
+als eingebettetes Data-URL-Bild, bewusst auf 45 000 Zeichen gedeckelt —
+für Manuskripte/Alt-Cover ungeeignet). Braucht einen neuen Backend-
+Endpunkt (Datei-Bytes empfangen, in den richtigen Drive-Unterordner mit
+korrektem Namensmuster ablegen) und eine mehrstufige Wizard-UI. Noch nicht
+begonnen — als nächstes größeres Vorhaben vorgemerkt, eigene
+Aufwandseinschätzung nötig, bevor losgelegt wird.
