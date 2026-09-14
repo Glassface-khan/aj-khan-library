@@ -1409,6 +1409,46 @@ Punkt 1 und 3 nur `index.html` (kein Redeploy nötig), Punkt 2 zusätzlich
 
 **Offen aus der ursprünglichen Liste:** der geführte Buch-Upload-
 Assistent mit direktem Datei-Upload (weiterhin als eigenes, größeres
-Vorhaben vorgemerkt, siehe §30) sowie Offline/PWA-Unterstützung (vom
-Nutzer als nächstes gewünschter Punkt aus der "größerer Aufwand"-Liste —
-noch nicht begonnen).
+Vorhaben vorgemerkt, siehe §30) — Offline/PWA (unten, §33) wurde bereits
+umgesetzt.
+
+## 33 · Nachtrag (14.09.2026, Teil 5) — Offline/PWA: installierbare App + Offline-Zugriff auf zuletzt geöffnete EPUBs
+
+Vom Nutzer aus der "größerer Aufwand"-Liste als gewünschter nächster Punkt
+ausgewählt.
+
+**1. Installierbare App.** Neue Dateien `manifest.webmanifest` sowie
+`icons/icon-192.png`, `icons/icon-512.png`, `icons/apple-touch-icon.png` —
+selbst generiertes AJK-Monogramm im bestehenden Marken-Farbschema (Bone/
+Gold/Ink, siehe CSS-Variablen `--bone`/`--gold`/`--ink`), da keine
+vorhandene Bilddatei als eigenständige PNG extrahierbar war (Bilder liegen
+nur als vom Bundler aufgelöste opake Asset-IDs vor, nicht als Dateien im
+Repo). Im echten `<head>` (nicht im Bundle-Blob) verlinkt: `<link
+rel="manifest">`, `theme-color`, `apple-touch-icon`. Browser bieten damit
+"Zum Startbildschirm hinzufügen" (iOS/Android) bzw. einen Install-Prompt
+(Desktop-Chrome/Edge) an.
+
+**2. Service Worker (`service-worker.js`), registriert ebenfalls im
+echten `<head>`.** Cached die App-Shell (index.html, Icons) sowie GEZIELT
+NUR lesende Backend-Antworten: `getBooks`, `getPoems`, `getSettings` (GET,
+`?action=...`) sowie `getEpubData`, `getBookmark` (POST — dafür ein
+synthetischer `Request` als Cache-Schlüssel aus Aktion + `epubUrl` +
+`bookTitle` + `code`, da die Cache API nur GET-Requests direkt als
+Schlüssel unterstützt und der eigentliche POST-Body sich ohnehin bei
+jedem Aufruf ändert, z. B. durch das Admin-Token). Navigations-Requests:
+Netzwerk zuerst, Fallback auf den zuletzt gecachten Stand bei Offline.
+
+**Bewusst NICHT gecacht: alle schreibenden Aktionen** (`saveBooks`,
+`savePoems`, `addAccess`, `updateAccess`, `removeAccess`, ...) — die
+laufen immer direkt übers Netz. Grund: würde der Service Worker hier aus
+dem Cache antworten, könnte offline der falsche Eindruck entstehen, eine
+Änderung sei gespeichert worden, obwohl sie es nicht ist — analog zur
+Fehlerbehandlungs-Philosophie aus §28/§31 (lieber sichtbar scheitern als
+still falsche Sicherheit vortäuschen).
+
+**Effekt:** ein einmal geöffnetes Buch bleibt offline lesbar (z. B. im
+Flugzeug oder bei schlechtem Empfang), ebenso die zuletzt geladene
+Bücher-/Gedichteliste samt Einstellungen.
+
+Reine Frontend-/Static-Asset-Änderung (`index.html`-Kopf, `manifest.
+webmanifest`, `service-worker.js`, `icons/`), kein Backend-Redeploy nötig.
