@@ -3,29 +3,23 @@
 <head>
   <meta charset="utf-8">
   <title>Ali Jawwad Khan — Novelist &amp; Poet</title>
-  <!-- ROLLBACK (14.09.2026): die Offline/PWA-Funktion (Service Worker,
-       manifest.webmanifest, Icons) wurde wieder entfernt, nachdem ein
-       Nutzer nach ihrer Einführung wiederholt "Error unpacking: JSON Parse
-       error: unterminated string" beim Laden der Seite sah, auf mehreren
-       Geräten. Der Fehler zeigte auf die Bilder-Manifest-Datei, die von
-       dieser Änderung gar nicht berührt wurde — die genaue Ursache ist
-       damit weiterhin nicht restlos geklärt, aber der Service Worker war
-       der einzige Teil, der grundlegend verändert hat, WIE die Seite
-       geladen/zwischengespeichert wird, daher als erster Verdächtiger
-       entfernt. Der Block unten meldet aktiv jeden bereits bei
-       Bestandsbesuchern registrierten Service Worker ab und räumt dessen
-       Caches auf, damit niemand an einer alten, potenziell fehlerhaften
-       zwischengespeicherten Kopie hängen bleibt. -->
+  <!-- PWA: installierbare App + Offline-Zugriff auf zuletzt geöffnete
+       EPUBs/Bücherliste (siehe service-worker.js). War kurzzeitig entfernt
+       (§34/§35), weil die Seite nach ihrer Einführung "JSON Parse error"
+       beim Laden zeigte — die echte Ursache (§36) war aber ein
+       un-escapete Skript-Schluss-Tag-Sequenz im App-Code selbst, mit dem
+       Service Worker nicht verwandt. Jetzt wieder aktiv. manifest.webmanifest und die
+       Icons liegen relativ zu index.html, damit es unabhängig davon
+       funktioniert, ob die Seite unter der Domain-Wurzel oder unter einem
+       Unterpfad ausgeliefert wird. -->
+  <link rel="manifest" href="manifest.webmanifest">
+  <meta name="theme-color" content="#16140F">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
   <script>
     if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.getRegistrations().then(function(regs) {
-        regs.forEach(function(r) { r.unregister(); });
-      }).catch(function() {});
-    }
-    if (window.caches && caches.keys) {
-      caches.keys().then(function(keys) {
-        keys.forEach(function(k) { caches.delete(k); });
-      }).catch(function() {});
+      window.addEventListener('load', function() {
+        navigator.serviceWorker.register('service-worker.js').catch(function() {});
+      });
     }
   </script>
   <style>
