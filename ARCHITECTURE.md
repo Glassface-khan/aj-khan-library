@@ -2046,3 +2046,83 @@ Falls das JSON in der `BooksData`-Zelle vorher noch geprüft werden
 soll (zur Bestätigung, dass `b.langs.EN` tatsächlich existierte), am
 besten VOR dem nächsten Sync-Lauf ansehen, da der Fix diesen Beweis
 sonst automatisch aufräumt.
+
+## 45 · Nachtrag (17.09.2026, Teil 9) — Drive-Ordner beim Buch-Löschen automatisch aufräumen, Buch-ID statt Titel-Diffing
+
+Anlass: Nutzer fragte nach §44 direkt weiter — wenn verwaiste
+`b.langs`-Einträge schon Probleme machen, muss es dann nicht auch eine
+Logik geben für den Fall, dass ein ganzes Buch im Admin-Panel gelöscht
+wird? Antwort: ja, bisher gab es dafür gar nichts — `action=saveBooks`
+überschreibt einfach das komplette `BooksData`-Array, der
+Drive-Ordner (`/<Buchtitel>/...`) des gelöschten Buchs blieb für immer
+als Karteileiche liegen. Nutzer wollte: automatisch in den
+Drive-Papierkorb verschieben (nicht nur loggen, nicht endgültig
+löschen).
+
+**Kernproblem beim naiven Ansatz:** Bücher hatten bisher KEINE
+stabile ID, nur den Titel. Ein reiner Titel-Diff ("Titel X war vorher
+da, ist jetzt weg → löschen") hätte eine reine Umbenennung (die genau
+in dieser Session bereits vorkam: "New Book" → "The Physician of
+Ashes") fälschlich als Löschung erkannt und den frisch umbenannten,
+weiterhin aktiven Buchordner in den Papierkorb verschoben — hätte also
+selbst den §44-Vorfall verschlimmert statt ihn zu verhindern.
+
+**Fix, `reference/apps-script/Code.gs`:**
+- Jedes Buch bekommt beim Speichern eine dauerhafte `id`
+  (`Utilities.getUuid()` serverseitig, falls noch keine vorhanden;
+  `index.html`/`addBook()` vergibt zusätzlich clientseitig sofort eine
+  ID bei Neuanlage, damit Umbenennungen auch INNERHALB derselben
+  Sitzung — vor jedem Reload — korrekt per ID statt per Titel erkannt
+  werden).
+- Neue Helper (nahe `logDriveSync`): `getOrCreateSyncLogSheet_()`
+  (Refactoring, jetzt auch von `syncDriveForAllBooks()` genutzt),
+  `findBookFolderByTitle_()`, `trashBookFolderByTitle_()`,
+  `renameBookFolderIfExists_()`.
+- `action==='saveBooks'` vergleicht jetzt vor dem Überschreiben die
+  IDs der alten (`getBooksArray()`) gegen die neuen Buchliste:
+  - ID war vorher da, ist jetzt weg → Buch wurde gelöscht → zugehöriger
+    Drive-Ordner (per altem Titel gefunden) wird in den Papierkorb
+    verschoben, geloggt in `DriveSyncLog`.
+  - ID existiert in beiden, aber Titel hat sich geändert → Buch wurde
+    umbenannt → Drive-Ordner wird mit umbenannt (`folder.setName(...)`),
+    NICHT gelöscht. Bei einer Titel-Kollision (es existiert bereits ein
+    Ordner mit dem neuen Titel) wird bewusst nicht automatisch
+    zusammengeführt, nur eine Warnung geloggt — ein automatisches Merge
+    könnte sonst Dateien überschreiben.
+  - Das komplette Drive-Aufräumen läuft in einem eigenen try/catch, das
+    nie das eigentliche Speichern der Buchdaten blockiert (kritischer
+    Pfad bleibt: Buchdaten landen immer in der Tabelle, Drive-Pflege ist
+    nur Zusatz).
+- `index.html`, `addBook()`: neues Buch bekommt beim Anlegen sofort
+  `id: 'b_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8)`
+  (einfache, kollisionssichere Client-ID, kein `Utilities.getUuid()`-
+  Äquivalent im Browser nötig für diesen Zweck). Alle anderen
+  Codepfade (Bearbeiten, Speichern, Sprach-Umschalter-Berechnung etc.)
+  spreaden Buch-Objekte generisch (`...b`), die `id` läuft also überall
+  automatisch mit durch, ohne dass weitere Stellen angepasst werden
+  mussten.
+- Bereits bestehende Bücher ohne `id` (alle aktuell in `BooksData`)
+  bekommen beim nächsten Speichern automatisch eine ID zugewiesen
+  (serverseitig) — bis dahin werden sie beim Diffing einfach
+  übersprungen (kein `id`-Feld vorhanden → kein falsches Löschen/
+  Umbenennen-Signal), rein additiv, kein Migrationsschritt nötig.
+
+**Wichtige Lektion für künftige Patches an `index.html`:** beim
+zweiten Anlauf dieses Patches wurde versehentlich die
+`</script`-Escape-Regel aus §36/§37 auf die GESAMTE Datei statt nur
+auf die eine betroffene Zeile des JSON-Blobs angewendet — das hätte
+die echten, unbundleten `<script>`-Tags im `<head>` (Service-Worker-
+Registrierung, jsdelivr-Includes) kaputt escaped und wäre selbst zu
+einem neuen Produktionsausfall geworden. Vor dem Schreiben per
+BeautifulSoup-Vergleich (Manifest unverändert, neuer Codeschnipsel im
+decodierten Template vorhanden, alter verschwunden) aufgefallen und
+korrigiert, BEVOR committet wurde. **Ergänzung zur Methodik:** die
+`</script`-Escape-Regel darf nur auf die tatsächlich betroffene Zeile
+des JSON-Blobs angewendet werden, niemals auf den gesamten
+Dateiinhalt — und nur, wenn der neu eingefügte Text überhaupt ein
+`</script`-Vorkommen enthält (bei reinen JS-Codeergänzungen ohne
+Skript-Tag-Referenzen, wie hier, ist der Schritt schlicht
+überflüssig).
+
+**Nächster Schritt:** `Code.gs` muss (zusammen mit dem Fix aus §44)
+noch vom Nutzer manuell deployt werden.
