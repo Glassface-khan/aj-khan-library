@@ -1173,6 +1173,63 @@ function handle(e) {
     }
   }
 
+  // Manuskript/Klappentext DIREKT vom Geraet hochladen (z.B. Handy/iCloud),
+  // als Alternative zum bisherigen Weg "Datei selbst in Drive hochladen,
+  // dann Link einfuegen". Legt die Datei als ECHTE Drive-Datei mit
+  // korrektem FINAL_/ENTWURF_/KLAPPENTEXT_-Praefix im richtigen
+  // Sprach-Unterordner ab -- an der bestehenden Ordnerstruktur und dem
+  // bestehenden Sync (syncDriveForAllBooks, EPUB-Erzeugung, Wortzahl,
+  // Klappentext-Uebernahme) aendert sich dadurch NICHTS, die Datei wird
+  // einfach genauso gefunden wie eine manuell hochgeladene. Triggert nach
+  // dem Ablegen direkt den Sync, damit Wortzahl/EPUB/Klappentext ohne
+  // Warten auf den naechsten Stunden-Trigger aktualisiert werden.
+  if (action === 'uploadBookFile') {
+    const admin = checkAdmin(e);
+    if (!admin.ok) return jsonOut({ ok: false, error: 'unauthorized', debugTokenReceived: admin.token, debugCacheValue: admin.cached });
+    try {
+      const bookTitle = (e.parameter.bookTitle || '').trim();
+      const langCode = (e.parameter.langCode || '').trim().toUpperCase();
+      const kind = (e.parameter.kind || '').trim().toUpperCase(); // FINAL | ENTWURF | KLAPPENTEXT
+      const fileName = e.parameter.fileName || 'upload';
+      const mimeType = e.parameter.mimeType || 'application/octet-stream';
+      const base64Data = e.parameter.fileData || '';
+      if (!bookTitle) return jsonOut({ ok: false, error: 'Kein Buchtitel angegeben.' });
+      if (!langCode) return jsonOut({ ok: false, error: 'Kein Sprachcode angegeben (z.B. DE, EN, BS).' });
+      if (['FINAL', 'ENTWURF', 'KLAPPENTEXT'].indexOf(kind) === -1) return jsonOut({ ok: false, error: 'Ungültiger Dateityp.' });
+      if (!base64Data) return jsonOut({ ok: false, error: 'Keine Datei erhalten.' });
+
+      const rootFolder = DriveApp.getFolderById(DRIVE_ROOT_FOLDER_ID);
+      const folders = ensureBookFolders(rootFolder, bookTitle);
+      const langFolder = getOrCreateSubfolder(folders.manuskriptFolder, langCode);
+
+      // Vorherige Datei mit gleichem Praefix ersetzen (in den Papierkorb),
+      // damit ein erneuter Upload nicht mehrere FINAL_-Dateien nebeneinander
+      // anlegt -- findFileByPrefix wuerde sonst zufaellig irgendeine davon
+      // als "die" Datei nehmen.
+      const prefix = kind + '_';
+      const existing = findFileByPrefix(langFolder, prefix);
+      if (existing) existing.setTrashed(true);
+
+      const dotIdx = fileName.lastIndexOf('.');
+      const ext = dotIdx >= 0 ? fileName.slice(dotIdx) : '';
+      const safeTitle = bookTitle.replace(/[\\\/:*?"<>|]/g, '_');
+      const newName = prefix + safeTitle + ext;
+      const bytes = Utilities.base64Decode(base64Data);
+      const blob = Utilities.newBlob(bytes, mimeType, newName);
+      langFolder.createFile(blob);
+
+      // Sofort synchronisieren, statt auf den naechsten Stunden-Trigger zu
+      // warten -- ein Fehler hier darf den erfolgreichen Upload selbst
+      // nicht als fehlgeschlagen melden, daher separat abgefangen.
+      let syncError = '';
+      try { syncDriveForAllBooks(); } catch (syncErr) { syncError = String(syncErr && syncErr.message || syncErr); }
+
+      return jsonOut({ ok: true, fileName: newName, syncError: syncError });
+    } catch (err) {
+      return jsonOut({ ok: false, error: String(err && err.message || err) });
+    }
+  }
+
   if (action === 'syncWordCount') {
     const admin = checkAdmin(e);
     if (!admin.ok) return jsonOut({ ok: false, error: 'unauthorized', debugTokenReceived: admin.token, debugCacheValue: admin.cached });
