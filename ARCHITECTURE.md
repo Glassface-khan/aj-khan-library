@@ -1957,3 +1957,92 @@ verdecken, obwohl `b.langs.DE` selbst längst korrekt ist.
    umgesetzt, da unklar, ob das der Nutzer-Erwartung entspricht —
    vorher mit dem Nutzer klären, was bei mehreren fertigen Sprachen
    "bevorzugt" bedeuten soll).
+
+## 44 · Nachtrag (17.09.2026, Teil 8) — GELÖST: eigentliche Ursache war ein verwaister `b.langs.EN`-Eintrag, nicht ein noch existierender EN-Ordner
+
+Der Nutzer hat die Hypothese aus §43 direkt widerlegt: **"Es gibt kein
+EN Ordner unter Manuskript nur DE."** Das schließt einen aktuell
+vorhandenen EN-Ordner als Ursache aus — zeigt aber gleichzeitig auf die
+tatsächliche Ursache, denn sie liegt nicht im Drive-Dateisystem,
+sondern im gespeicherten JSON-Feld `b.langs` selbst.
+
+**Root Cause gefunden:** `syncDriveForAllBooks()` hat `b.langs` bisher
+nur ERGÄNZT, nie bereinigt. Der Code baute `newLangs` immer als Kopie
+des BESTEHENDEN `b.langs` (`Object.assign({}, b.langs || {})`) und
+aktualisierte darin nur die Sprachcodes, die gerade als Ordner
+gefunden wurden (`completedCodes`) — ein Sprachcode, dessen
+Unterordner später komplett gelöscht wurde (oder nie zum aktuellen
+Buch gehörte), blieb für immer unverändert in `b.langs` stehen.
+
+Genau das ist hier passiert: beim allerersten, versehentlichen
+Upload-Versuch (als der Buchtitel noch "New Book" hieß, siehe §-
+Abschnitte zum Titel-Bug) wurde vermutlich ein `EN`-Sprachordner
+angelegt und synchronisiert, BEVOR der Titel korrigiert wurde — dieser
+Sync schrieb `b.langs.EN` mit (falschen/vertauschten) Werten in genau
+diese Buchzeile. Der EN-Ordner selbst wurde später gelöscht/nie
+korrekt befüllt (daher "kein EN-Ordner unter Manuskript" heute), aber
+der VERWAISTE `b.langs.EN`-Eintrag blieb im JSON der Buchzeile
+bestehen, weil kein Code-Pfad je verwaiste Sprachschlüssel entfernt
+hat.
+
+**Warum das die exakten Symptome erklärt:** Im Frontend (`index.html`)
+gilt:
+```js
+const langCodes = (b.langs && typeof b.langs === 'object') ? Object.keys(b.langs) : [];
+const activeLang = langCodes.length > 1 ? (s.activeBookLang[key] || langCodes[0]) : null;
+const langInfo = activeLang ? (b.langs[activeLang] || {}) : null;
+const effHook = (langInfo && langInfo.hook) || b.hook;
+```
+Da `b.langs` sowohl `EN` (stale) als auch `DE` (korrekt) enthielt, war
+`langCodes.length === 2` → es wurde automatisch ein
+Sprach-Umschalter angezeigt (obwohl nur DE tatsächlich existiert), und
+`activeLang` fiel mangels gespeicherter Nutzerwahl auf
+`langCodes[0]` zurück — je nach Einfüge-Reihenfolge der Objektschlüssel
+(JS erhält Insertion-Order) war das der ZUERST geschriebene Schlüssel,
+also sehr wahrscheinlich `EN` (weil er vor der DE-Korrektur zuerst in
+`b.langs` geschrieben wurde). `effHook`/`effWordCount` griffen dann
+direkt auf `langInfo` (= `b.langs.EN`, die alten falschen Werte) zu —
+komplett unabhängig davon, dass die Top-Level-Felder `b.hook`/
+`b.wordCount` (über `pickSyncSourceLanguage`) längst korrekt auf DE
+zeigten. Das erklärt auch die frühere Beobachtung "es ist im Grunde
+egal ob ich auf DE oder EN klicke, es bleibt die gleiche Sprache" —
+vermutlich zeigte der Tab in beiden Fällen denselben (falschen)
+aktiven Zustand, weil das Umschalten selbst nicht das eigentliche
+Problem war.
+
+**Fix (bereits umgesetzt, `reference/apps-script/Code.gs`,
+`syncDriveForAllBooks()`):** direkt nach dem Aktualisieren der
+fertigen Sprachen wird jetzt jeder Sprachcode aus `newLangs` entfernt,
+für den `scanBookLanguages()` aktuell KEINEN Ordner mehr findet (egal
+ob der Ordner nie existierte, gelöscht wurde, oder nur umbenannt
+wurde) — nicht nur "nicht fertig", sondern komplett kein Ordner mehr:
+
+```js
+Object.keys(newLangs).forEach(function(code) {
+  if (!langs[code]) {
+    delete newLangs[code];
+    changed = true;
+    logDriveSync(logSheet, b.title, 'Verwaiste Sprachfassung entfernt (' + code + '): kein Manuskript-Ordner mehr vorhanden.');
+  }
+});
+b.langs = newLangs;
+```
+(Die Zuweisung `b.langs = newLangs` läuft jetzt unconditional statt
+nur `if (completedCodes.length)` — das ist sicher, weil dieser ganze
+Block bereits durch `if (Object.keys(langs).length) { ... }` davor
+geschützt ist, also nur läuft, wenn überhaupt mindestens ein
+Manuskript-Unterordner existiert.)
+
+**Nächster Schritt:** Das aktualisierte `Code.gs` (enthält sowohl
+diesen Fix als auch das Diagnose-Logging aus §43) muss vom Nutzer noch
+manuell im Apps-Script-Editor deployt werden (Speichern reicht nicht —
+Deploy → Verwaltung der Bereitstellungen → Stift-Symbol → "Neue
+Version" → Bereitstellen). Danach einmal "Jetzt aus Drive
+synchronisieren" ausführen, dann sollte für "The Physician of Ashes"
+in `DriveSyncLog` eine Zeile "Verwaiste Sprachfassung entfernt (EN):
+..." erscheinen und die Buchseite korrekt nur noch DE zeigen (kein
+Sprach-Umschalter mehr, korrekte 98388 Wörter, korrekter Klappentext).
+Falls das JSON in der `BooksData`-Zelle vorher noch geprüft werden
+soll (zur Bestätigung, dass `b.langs.EN` tatsächlich existierte), am
+besten VOR dem nächsten Sync-Lauf ansehen, da der Fix diesen Beweis
+sonst automatisch aufräumt.

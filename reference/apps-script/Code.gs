@@ -758,7 +758,29 @@ function syncDriveForAllBooks() {
           logDriveSync(logSheet, b.title, 'Sprachfassung aktualisiert (' + code + '): ' + (entry.wordCount || '?') + ' Wörter');
         }
       });
-      if (completedCodes.length) b.langs = newLangs;
+
+      // WICHTIG (Ursache fuer den Wortzahl/Klappentext-Vertauschungs-Bug
+      // vom 17.09.2026, siehe ARCHITECTURE.md): b.langs sammelte bisher nur
+      // an -- ein Sprachcode, dessen Manuskript-Unterordner komplett
+      // geloescht/nie eigentlich gueltig war (z.B. ein EN-Ordner aus einem
+      // fruehen Fehl-Upload unter einem falschen Buchtitel), blieb fuer
+      // immer als verwaister Eintrag in b.langs stehen. Das Frontend
+      // berechnet langCodes = Object.keys(b.langs) und zeigt bei >1 Eintrag
+      // einen Sprach-Umschalter an, dessen Default-Tab (langCodes[0], nach
+      // Einfuegereihenfolge) dann auf diesen alten, falschen Eintrag zeigen
+      // konnte -- unabhaengig davon, welche Top-Level-Quellsprache
+      // pickSyncSourceLanguage() korrekt fuer b.hook/b.wordCount waehlt.
+      // Daher hier jeden Sprachcode aus newLangs entfernen, fuer den es
+      // aktuell ueberhaupt keinen Ordner mehr gibt (nicht nur "nicht
+      // fertig" -- ein Ordner mit laufender Uebersetzung bleibt erhalten).
+      Object.keys(newLangs).forEach(function(code) {
+        if (!langs[code]) {
+          delete newLangs[code];
+          changed = true;
+          logDriveSync(logSheet, b.title, 'Verwaiste Sprachfassung entfernt (' + code + '): kein Manuskript-Ordner mehr vorhanden.');
+        }
+      });
+      b.langs = newLangs;
 
       // Diagnose-Log: welche Sprache wurde als "bevorzugt" fuer die
       // Top-Level-Felder (b.hook/b.wordCount -- das ist, was tatsaechlich
