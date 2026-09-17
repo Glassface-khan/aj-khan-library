@@ -1794,3 +1794,21 @@ gefunden bzw. verifiziert.
 (`uploadBookFile`-Endpunkt) muss dem Nutzer wie gewohnt als Datei
 bereitgestellt und von ihm im Apps-Script-Editor eingefügt + neu
 deployt werden.
+
+## 40 · Nachtrag (17.09.2026, Teil 4) — metadata.json (Genre) ebenfalls direkt hochladbar
+
+Ausbau von §39: `uploadBookFile` bekommt einen dritten `kind`-Wert
+`METADATA`. Unterschied zu FINAL/ENTWURF/KLAPPENTEXT: `metadata.json`
+liegt laut bestehender Genre-Erkennung (siehe Kommentar ab Zeile ~843 in
+`Code.gs`) direkt im **Buch-Hauptordner** (`folders.bookFolder`), nicht
+in einem Sprach-Unterordner — braucht also KEINEN Sprachcode, und der
+Zieldateiname ist immer exakt `metadata.json` (kein
+Präfix+Titel-Muster). Frontend: neues Upload-Feld "metadata.json fürs
+Genre hochladen (kein Sprachcode nötig)" im selben Upload-Bereich wie
+Manuskript/Klappentext. `uploadBookFile_()` überspringt die
+Sprachcode-Pflichtprüfung für `kind === 'METADATA'`.
+
+Gleicher Ablauf wie bei Manuskript/Klappentext: vorhandene Datei wird
+zuerst in den Papierkorb verschoben (verhindert mehrere `metadata.json`
+nebeneinander), danach automatischer Sync-Trigger. Backend-Redeploy
+nötig — wird dem Nutzer als Datei bereitgestellt.
