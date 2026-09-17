@@ -1888,3 +1888,72 @@ box-sizing:border-box;` versehen — unabhängig davon, ob der aktuelle
 Inhalt lang genug ist, um das Problem sofort sichtbar zu machen (die
 Cover-Data-URL zeigt es erst, wenn ein Buch tatsächlich ein
 sprachspezifisches Cover per JSON gesetzt bekommt).
+
+## 43 · Nachtrag (17.09.2026, Teil 7) — UNGELÖST: "The Physician of Ashes" zeigt Manuskript-Prolog statt Klappentext + veraltete Wortzahl, trotz korrekter Drive-Dateien und korrektem Sync-Log
+
+**Status: offen, Fortsetzung morgen mit dem Nutzer geplant.** Live beim
+Testen des Upload-Features (§39-42) aufgetreten, noch NICHT
+abschließend gelöst — hier dokumentiert, damit eine künftige Session
+nicht bei null anfängt.
+
+**Beobachtung:** Nutzer lud für "The Physician of Ashes" (Sprache DE)
+Manuskript und Klappentext korrekt hoch (per Drive-Ordner-Screenshot
+bestätigt: genau je eine sauber benannte `FINAL_...docx` und
+`KLAPPENTEXT_...docx`, keine Duplikate). `DriveSyncLog` bestätigt
+korrekten Sync: "Sprachfassung aktualisiert (DE): 98388 Wörter". TROTZDEM
+zeigt die öffentliche Buchseite (auch nach komplettem Reload, sogar in
+einem frisch geöffneten Tab) weiterhin "251 Wörter" und als
+Klappentext/Zusammenfassung den MANUSKRIPT-Prolog ("Final Master
+Manuscript Prologue I have kept these papers...") statt des echten
+Klappentexts.
+
+**Bereits ausgeschlossen:**
+- Browser-Cache/stale Anzeige (frischer Tab zeigt denselben falschen
+  Zustand).
+- Falsch benannte/doppelte Dateien in Drive (Ordner-Screenshot zeigt
+  genau eine FINAL_- und eine KLAPPENTEXT_-Datei).
+- Der in §41 gefixte Wettlauf-Bug (der betraf nur den Titel, nicht
+  Hook/Wortzahl, und war zeitlich vor diesem Vorfall separat behoben).
+
+**Aktuell wahrscheinlichste Hypothese (noch nicht verifiziert):** Bei
+MEHREREN fertigen Sprachfassungen (`langs`) wird für die
+Top-Level-Felder `b.hook`/`b.wordCount` (das, was auf der Buchkarte
+OHNE aktiven Sprach-Umschalter angezeigt wird — siehe
+`effHook`/`effWordCount` im Frontend, `pickSyncSourceLanguage` im
+Backend) IMMER Englisch (`SYNC_PREFERRED_LANGUAGE = 'EN'`) bevorzugt,
+falls eine EN-Fassung als "fertig" erkannt wird — unabhängig davon, ob
+die DE-Fassung frischer/korrekter ist. Aus einem sehr frühen
+Zwischenstand dieser Session (siehe DriveSyncLog-Zeilen unter dem
+damaligen Titel "New Book", vor der Umbenennung) existiert
+möglicherweise bereits ein **EN**-Sprachordner mit einer alten,
+fehlerhaften Klappentext-Zuordnung (aus dem allerersten,
+versehentlich vertauschten Upload-Versuch) — falls dieser EN-Ordner
+noch existiert und als "fertig" erkannt wird, würde er die frisch
+korrigierten DE-Werte für die Top-Level-Felder dauerhaft überschreiben/
+verdecken, obwohl `b.langs.DE` selbst längst korrekt ist.
+
+**Für die Fortsetzung morgen:**
+1. Prüfen, ob unter "The Physician of Ashes → Manuskript" ein
+   **EN**-Unterordner existiert (der Nutzer hatte bisher nur den
+   DE-Unterordner gezeigt). Falls ja: Inhalt von dessen
+   `KLAPPENTEXT_`-Datei prüfen — vermutlich der Übeltäter.
+2. Diagnose-Logging wurde bereits verbessert (dieser Commit): ein
+   erfolgreicher Klappentext-Import wurde bisher GAR NICHT geloggt
+   (nur Fehler/Kürzungen) — jetzt wird bei jedem Sync-Lauf pro Sprache
+   geloggt, was gelesen wurde (Dateiname, Zeichenzahl, ob übernommen),
+   UND zusätzlich, welche Sprache als Top-Level-Quelle gewählt wurde
+   und was sich dabei geändert hat. Sobald der Nutzer das aktualisierte
+   `Code.gs` deployt hat und erneut synchronisiert (z.B. über "Jetzt aus
+   Drive synchronisieren"), sollte `DriveSyncLog` die tatsächliche
+   Ursache eindeutig zeigen.
+3. Alternative/zusätzliche Diagnose: rohen `BooksData`-Zelleninhalt
+   (Spalte B, JSON) für diese Buchzeile ansehen — zeigt `b.langs` mit
+   allen Sprachschlüsseln direkt, unabhängig vom Log.
+4. Falls Hypothese bestätigt: entweder den fälschlich vorhandenen
+   EN-Ordner (falls er nur Garbage aus dem frühen Fehlversuch enthält)
+   löschen/leeren, oder — als robusterer Fix — `pickSyncSourceLanguage`
+   so anpassen, dass sie nicht stur "EN zuerst" nimmt, sondern die
+   Sprache mit dem NEUESTEN Sync-Zeitstempel bevorzugt (noch nicht
+   umgesetzt, da unklar, ob das der Nutzer-Erwartung entspricht —
+   vorher mit dem Nutzer klären, was bei mehreren fertigen Sprachen
+   "bevorzugt" bedeuten soll).
