@@ -700,6 +700,11 @@ function syncDriveForAllBooks() {
         if (info.klappentextFile) {
           try {
             const blurb = docTextById(info.klappentextFile.getId());
+            // Diagnose-Log: laeuft IMMER, nicht nur bei Fehlern/Kuerzung --
+            // ohne das war bisher unsichtbar, ob z.B. eine leere/kaputte
+            // Klappentext-Datei ueberhaupt erkannt wurde (Ursachenfindung
+            // fuer den Fehlerbericht vom 17.09.2026, siehe ARCHITECTURE.md).
+            logDriveSync(logSheet, b.title, 'Klappentext-Datei (' + code + ') gelesen: "' + info.klappentextFile.getName() + '", ' + (blurb ? blurb.length : 0) + ' Zeichen, bisheriger entry.hook-Anfang: "' + (entry.hook || '').slice(0, 40) + '"');
             if (blurb && blurb.trim()) {
               let text = blurb.trim();
               const MAX_HOOK_LENGTH = 4000;
@@ -708,12 +713,21 @@ function syncDriveForAllBooks() {
                 text = text.slice(0, MAX_HOOK_LENGTH) + '…';
                 note = ' — ACHTUNG: gekürzt, vermutlich kein echter Klappentext, bitte Datei prüfen.';
               }
-              if (text !== entry.hook) { entry.hook = text; entryChanged = true; }
-              if (note) logDriveSync(logSheet, b.title, 'Klappentext (' + code + ')' + note);
+              if (text !== entry.hook) {
+                entry.hook = text;
+                entryChanged = true;
+                logDriveSync(logSheet, b.title, 'Klappentext (' + code + ') übernommen, neuer Anfang: "' + text.slice(0, 60) + '"' + note);
+              } else if (note) {
+                logDriveSync(logSheet, b.title, 'Klappentext (' + code + ')' + note);
+              }
+            } else {
+              logDriveSync(logSheet, b.title, 'Klappentext-Datei (' + code + ') liefert leeren Text (blurb leer oder nur Leerzeichen) — entry.hook bleibt unveraendert.');
             }
           } catch (err) {
             logDriveSync(logSheet, b.title, 'Klappentext-Fehler (' + code + '): ' + err.message);
           }
+        } else {
+          logDriveSync(logSheet, b.title, 'Kein Klappentext-Datei-Objekt (' + code + ') gefunden (info.klappentextFile ist leer) — entry.hook bleibt unveraendert.');
         }
 
         // EPUB neu bauen — nur wenn sich der Manuskripttext gerade geändert
@@ -746,16 +760,24 @@ function syncDriveForAllBooks() {
       });
       if (completedCodes.length) b.langs = newLangs;
 
+      // Diagnose-Log: welche Sprache wurde als "bevorzugt" fuer die
+      // Top-Level-Felder (b.hook/b.wordCount -- das ist, was tatsaechlich
+      // auf der oeffentlichen Buchkarte angezeigt wird, wenn KEIN
+      // Sprach-Umschalter aktiv ist, siehe effHook/effWordCount im
+      // Frontend) ausgewaehlt, und was stand vorher/steht nachher drin.
       const sourceLang = pickSyncSourceLanguage(langs);
+      logDriveSync(logSheet, b.title, 'Top-Level-Quellsprache: ' + (sourceLang || '(keine fertige Sprache)') + '; bisheriges b.hook: "' + (b.hook || '').slice(0, 40) + '"; bisheriges b.wordCount: ' + (b.wordCount || '?'));
       if (sourceLang && newLangs[sourceLang]) {
         const sourceEntry = newLangs[sourceLang];
         if (sourceEntry.wordCount && sourceEntry.wordCount !== b.wordCount) {
           b.wordCount = sourceEntry.wordCount;
           changed = true;
+          logDriveSync(logSheet, b.title, 'Top-Level b.wordCount aktualisiert auf: ' + b.wordCount);
         }
         if (sourceEntry.hook && sourceEntry.hook !== (b.hook || '')) {
           b.hook = sourceEntry.hook;
           changed = true;
+          logDriveSync(logSheet, b.title, 'Top-Level b.hook aktualisiert, neuer Anfang: "' + b.hook.slice(0, 60) + '"');
         }
         if (sourceEntry.epubUrl && sourceEntry.epubUrl !== (b.epubUrl || '')) {
           b.epubUrl = sourceEntry.epubUrl;
