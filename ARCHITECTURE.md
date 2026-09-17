@@ -1631,3 +1631,32 @@ aber echte Browser zuverlässig. Vor jedem Deploy einer Änderung an
 diesen beiden Bloecken zusaetzlich pruefen: `re.findall(r'</script',
 raw_line, re.IGNORECASE)` muss leer sein (bzw. alle Treffer muessen als
 `<\/script` escaped sein).
+
+## 37 · Nachtrag (17.09.2026) — WICHTIG: `json.dumps()`-Rückfall der §36-Absicherung + Fix "Zugang erstellen" reagiert nicht bei leerem Namensfeld
+
+**Rückfall entdeckt und sofort korrigiert:** Die Standard-Patch-Methodik
+dieser Datei (`decoded = json.loads(line)` → String-Ersetzung im
+Python-`str` → `line = json.dumps(decoded)` → zurückschreiben) macht die
+`<\/script`-Absicherung aus §36 bei JEDER Anwendung automatisch wieder
+rückgängig — `json.dumps()` gibt Forward-Slashes standardmäßig
+UN-escaped aus (`\/` → `/`), auch wenn sie vorher bewusst escaped waren.
+Das ist beim allerersten Edit nach §36 tatsächlich passiert und wurde
+noch vor dem Deploy per HTML-Parser-Test bemerkt und korrigiert — aber
+das haette leicht durchrutschen können.
+
+**Ab sofort verbindlich für JEDEN Patch an `index.html`, der
+`json.dumps()` auf den decodierten Template-/Manifest-Inhalt anwendet:**
+direkt danach, vor dem Zurückschreiben, erneut
+`re.sub(r'</script', r'<\\/script', line, flags=re.IGNORECASE)` auf die
+serialisierte Zeile anwenden (idempotent — betrifft nur noch nicht
+escapte Treffer, escapte `<\/script`-Stellen matcht das Regex-Muster
+`</script` ohnehin nicht erneut). Und vor jedem Deploy grundsätzlich den
+strengen Test aus §36 fahren (BeautifulSoup + `json.loads()` +
+Inhaltsvergleich), nicht nur einen Regex-/Zeilen-Check.
+
+**Kleinerer, unabhängiger Fix in diesem Nachtrag:** Der
+"+ Zugang erstellen"-Button (`addAccessPerson`) brach bisher komplett
+lautlos ab, wenn das Feld "Name der Person" leer war (`if (!name)
+return;` ohne jede Rückmeldung) — für den Nutzer sah das aus wie ein
+nicht reagierender Button. Zeigt jetzt `window.alert(...)` mit Hinweis,
+zuerst einen Namen einzutragen.
