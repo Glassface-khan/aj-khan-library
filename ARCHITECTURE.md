@@ -1660,3 +1660,60 @@ lautlos ab, wenn das Feld "Name der Person" leer war (`if (!name)
 return;` ohne jede Rückmeldung) — für den Nutzer sah das aus wie ein
 nicht reagierender Button. Zeigt jetzt `window.alert(...)` mit Hinweis,
 zuerst einen Namen einzutragen.
+
+## 38 · Nachtrag (17.09.2026, Teil 2) — Fix: fetchAccessList() scheiterte lautlos + Alt-Cover-Direkt-Upload vom Gerät (kein Drive nötig)
+
+**1. Fehlermeldung bei `fetchAccessList()`.** Gleiches Muster wie schon
+mehrfach zuvor (persistBooks/persistPoems/addAccessPerson): scheiterte
+bisher komplett lautlos (leeres `.catch`, kein `data.ok`-Check) — die
+Liste bestehender Zugänge blieb dann einfach leer, ohne jeden Hinweis,
+ob es wirklich keine gibt oder das Laden fehlgeschlagen ist. Neuer
+State `accessListError`, angezeigt als roter Kasten über der
+Zugangsliste. Damit beim Nutzer tatsächlich reproduziert: abgelaufenes
+Admin-Token ("unauthorized") — behoben durch Neu-Login. **Wichtiger
+Nebenbefund dabei:** die 7-Tage-Verlängerung des Admin-Tokens (§31)
+wirkt nur, wenn die zugehörige `Code.gs` auch tatsächlich im
+Apps-Script-Editor deployt wurde — unklar, ob das beim Nutzer geschehen
+ist; ggf. bei künftigen "unauthorized"-Meldungen zuerst danach fragen.
+
+**2. Alt-Cover-Direkt-Upload vom Gerät.** Nutzerwunsch: Bücher liegen
+auf iCloud, ein einfacherer Upload-Weg als "Datei manuell in Google
+Drive hochladen, dann Link einfügen" war gewünscht. Nach Rückfrage
+(AskUserQuestion) auf **Cover/Alt-Cover** eingegrenzt — Cover-Upload
+existierte bereits (`handleCoverFile`, seit einer früheren Session:
+Bild wird client-seitig auf 220px Breite verkleinert, als JPEG mit
+sinkender Qualität komprimiert bis unter ~45.000 Zeichen, und als
+Data-URL DIREKT im Buch-Datensatz gespeichert — kein Drive-Umweg, kein
+neuer Backend-Endpunkt nötig, da `saveBooks`/`getBooks` jedes
+Buch-Feld generisch als JSON durchreichen).
+
+Alt-Cover bekam jetzt nach demselben Prinzip einen Datei-Upload
+(`handleAltCoverFiles`, Mehrfachauswahl erlaubt, pro Bild bis 480px
+Breite und ~60.000 Zeichen komprimiert — etwas großzügiger als beim
+Haupt-Cover, da Galerie-Bilder ruhig etwas größer sein dürfen) plus
+`removeAltCoverInline` zum Entfernen einzelner hochgeladener Bilder.
+Neues Buch-Feld `altCoversInline` (Array von Data-URLs), getrennt vom
+bestehenden `altCovers` (das weiterhin automatisch per Drive-Sync aus
+dem "Bilder/Alt-Cover"-Ordner befüllt wird). Beide Quellen werden beim
+Anzeigen zu `effAltCovers` zusammengeführt (`(b.altCovers ||
+[]).concat(b.altCoversInline || [])`), sodass die Galerie Bilder aus
+beiden Wegen zeigt. Kein Backend-Redeploy nötig — reine
+Frontend-Änderung, wie beim bestehenden Cover-Upload.
+
+**Nächster logischer Schritt (noch nicht umgesetzt), falls gewünscht:**
+Manuskript-Direkt-Upload ist deutlich aufwändiger als Cover/Alt-Cover,
+weil Manuskripte zu groß für die Data-URL-in-Sheet-Zelle-Methode sind
+(Sheet-Zellen sind auf ca. 50.000 Zeichen gedeckelt) — dafür wäre
+tatsächlich ein neuer Backend-Endpunkt nötig, der Datei-Bytes annimmt
+und direkt als echte Datei in den passenden Drive-Unterordner
+(`Manuskript/<Sprachcode>/`) mit korrektem `FINAL_`/`ENTWURF_`-Namen
+ablegt.
+
+**Wichtige Lehre aus diesem Patch-Durchgang:** Mehrere aufeinander-
+folgende `json.loads()`/`json.dumps()`-Editier-Durchgänge im selben
+Bearbeitungs-Schritt heben die `</script>`-Absicherung aus §36 JEDES
+MAL wieder auf (siehe §37) — deshalb ab jetzt: alle Änderungen an
+Manifest/Template-Inhalt in EINEM einzigen Python-Skript sammeln und
+`re.sub(r'</script', r'<\\/script', ..., re.IGNORECASE)` erst ganz am
+Ende, unmittelbar vor dem Zurückschreiben, ein einziges Mal anwenden —
+nicht nach jedem einzelnen Zwischenschritt.
