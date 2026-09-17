@@ -1853,3 +1853,38 @@ Bearbeitung schwerer wiegt als ein zusätzlicher manueller Reload.
 dasselbe Wettlauf-Risiko gegenueber gleichzeitigen, noch unbestaetigten
 lokalen Bearbeitungen -- bei kuenftigen Erweiterungen mit Bedacht
 einsetzen, nicht routinemaessig nach jeder Mutation neu laden.
+
+## 42 · Nachtrag (17.09.2026, Teil 6) — Fix: Formularfelder liefen wieder aus dem Bild (min-width:0 fehlte bei 2 Feldern)
+
+Wiederholung des aus §27 bekannten Bug-Musters (dort schon einmal
+gefixt, hier bei zwei WEITEREN/neueren Feldern übersehen): Ein
+`<input>`/`<textarea>` als direktes Kind eines `display:grid`-Containers
+braucht explizit `min-width:0` — ohne das gilt CSS Grids Standardregel
+`min-width:auto`, wonach ein Grid-Item nie schmaler wird als sein
+längster NICHT umbrechbarer Inhalt (ein Wort/Token ohne Leerzeichen).
+Ein einzelnes sehr langes, leerzeichenloses Token (typischerweise die
+Cover-Bild-Data-URL, wenn sie als Teil des `langsRaw`-JSON-Textfelds
+für eine Sprachfassung mit eigenem Cover eingebettet ist) reicht, um
+das gesamte Formular über den Bildschirmrand hinauszudrücken.
+
+**Betroffen:** `langsRaw`-Textarea ("Mehrsprachige Fassungen") hatte
+zwar `width:100%`/`box-sizing:border-box`, aber kein `min-width:0` —
+zusätzlich `overflow-wrap:break-word; word-break:break-all` ergänzt,
+damit ein einzelnes langes Token nötigenfalls auch INNERHALB des Feldes
+umbricht, statt nur auf die Fensterbreite gedeckelt zu werden. Das
+`pdfUrl`-Eingabefeld ("Read link") hatte überhaupt keine
+Breiten-Deckelung (weder `width:100%` noch `min-width:0` noch
+`box-sizing:border-box`) — komplett ergänzt, analog zu allen anderen
+Feldern im selben Formular.
+
+Die neuen Upload-Felder aus §39/§40 (Sprachcode, Fertig/Entwurf-Buttons)
+sitzen in einem `display:flex; flex-wrap:wrap`-Container statt in
+`display:grid` und sind davon nicht betroffen (Flex-Items mit
+`flex-wrap` brechen stattdessen um, statt den Container zu sprengen).
+
+**Lehre für künftige Formularfelder in dieser App:** JEDES neue
+`<input>`/`<textarea>` als Grid-Kind IMMER mit `width:100%; min-width:0;
+box-sizing:border-box;` versehen — unabhängig davon, ob der aktuelle
+Inhalt lang genug ist, um das Problem sofort sichtbar zu machen (die
+Cover-Data-URL zeigt es erst, wenn ein Buch tatsächlich ein
+sprachspezifisches Cover per JSON gesetzt bekommt).
