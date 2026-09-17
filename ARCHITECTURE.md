@@ -1812,3 +1812,44 @@ Gleicher Ablauf wie bei Manuskript/Klappentext: vorhandene Datei wird
 zuerst in den Papierkorb verschoben (verhindert mehrere `metadata.json`
 nebeneinander), danach automatischer Sync-Trigger. Backend-Redeploy
 nötig — wird dem Nutzer als Datei bereitgestellt.
+
+## 41 · Nachtrag (17.09.2026, Teil 5) — Fix: Wettlauf-Bug ließ Titel-Änderungen nach Upload scheinbar "zurückspringen"
+
+Beim ersten Live-Test des neuen Upload-Features (§39/§40) durch den
+Nutzer live nachvollzogen und behoben:
+
+**Reproduziertes Problem:** Nutzer lud ein Manuskript für ein Buch hoch,
+dessen Titel-Feld noch den Platzhalter "New Book" trug (Upload-Feature
+verwendet den TITEL zur Zuordnung des Drive-Ordners — nicht die
+interne Buch-ID). Datei landete entsprechend korrekt im Ordner
+"New Book" (bestätigt im DriveSyncLog: 98.388 Wörter, 38 Kapitel EPUB).
+Nutzer korrigierte danach den Titel auf "The Physician of Ashes" und
+speicherte — das griff zunächst sichtbar (Titel korrekt auf der
+öffentlichen Seite). Beim erneuten Öffnen des Bearbeiten-Formulars kurz
+danach stand dort aber wieder "New Book".
+
+**Ursache:** `uploadBookFile_()` rief nach jedem erfolgreichen Upload
+automatisch `this.fetchBooks()` auf, um Wortzahl/EPUB im Admin-Panel
+sofort sichtbar zu machen. Das ist ein klassischer Wettlauf
+(race condition): läuft eine ZWEITE, unabhängige Anfrage (hier: der
+Titel-Speichern-Klick, `persistBooks()`) zeitlich knapp VOR oder
+während dieses automatischen Neuladens, kann `fetchBooks()` eine noch
+nicht ganz aktuelle Serverkopie zurückbekommen und damit den gerade erst
+gespeicherten Titel im Browser-Speicher wieder überschreiben — rein
+visuell im Browser, NICHT in der Google-Sheet-Datenquelle selbst (die
+serverseitige Speicherung war zu diesem Zeitpunkt bereits erfolgreich
+durchgelaufen, wie der spätere Blick auf die Live-Seite bestätigte).
+
+**Fix:** Das automatische `fetchBooks()` nach Upload-Erfolg entfernt.
+Wortzahl/EPUB werden weiterhin serverseitig sofort aktualisiert
+(unverändert), aber im Admin-Panel erst nach einem manuellen
+Seiten-Reload sichtbar — der Erfolgshinweis sagt das jetzt auch explizit
+dazu. Bewusst diese "unbequemere" Lösung statt eines ausgefeilteren
+Merge-Mechanismus, weil Datenverlust/-verwirrung bei gleichzeitiger
+Bearbeitung schwerer wiegt als ein zusätzlicher manueller Reload.
+
+**Lehre:** JEDE Aktion, die im Hintergrund automatisch den gesamten
+`books`-State neu vom Server laedt (nicht nur diese), traegt grundsaetzlich
+dasselbe Wettlauf-Risiko gegenueber gleichzeitigen, noch unbestaetigten
+lokalen Bearbeitungen -- bei kuenftigen Erweiterungen mit Bedacht
+einsetzen, nicht routinemaessig nach jeder Mutation neu laden.
