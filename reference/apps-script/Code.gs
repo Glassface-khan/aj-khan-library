@@ -1189,34 +1189,42 @@ function handle(e) {
     try {
       const bookTitle = (e.parameter.bookTitle || '').trim();
       const langCode = (e.parameter.langCode || '').trim().toUpperCase();
-      const kind = (e.parameter.kind || '').trim().toUpperCase(); // FINAL | ENTWURF | KLAPPENTEXT
+      const kind = (e.parameter.kind || '').trim().toUpperCase(); // FINAL | ENTWURF | KLAPPENTEXT | METADATA
       const fileName = e.parameter.fileName || 'upload';
       const mimeType = e.parameter.mimeType || 'application/octet-stream';
       const base64Data = e.parameter.fileData || '';
       if (!bookTitle) return jsonOut({ ok: false, error: 'Kein Buchtitel angegeben.' });
-      if (!langCode) return jsonOut({ ok: false, error: 'Kein Sprachcode angegeben (z.B. DE, EN, BS).' });
-      if (['FINAL', 'ENTWURF', 'KLAPPENTEXT'].indexOf(kind) === -1) return jsonOut({ ok: false, error: 'Ungültiger Dateityp.' });
+      if (['FINAL', 'ENTWURF', 'KLAPPENTEXT', 'METADATA'].indexOf(kind) === -1) return jsonOut({ ok: false, error: 'Ungültiger Dateityp.' });
+      // METADATA (metadata.json fuers Genre) liegt direkt im Buch-Hauptordner,
+      // braucht anders als Manuskript/Klappentext KEINEN Sprach-Unterordner.
+      if (kind !== 'METADATA' && !langCode) return jsonOut({ ok: false, error: 'Kein Sprachcode angegeben (z.B. DE, EN, BS).' });
       if (!base64Data) return jsonOut({ ok: false, error: 'Keine Datei erhalten.' });
 
       const rootFolder = DriveApp.getFolderById(DRIVE_ROOT_FOLDER_ID);
       const folders = ensureBookFolders(rootFolder, bookTitle);
-      const langFolder = getOrCreateSubfolder(folders.manuskriptFolder, langCode);
+      const targetFolder = (kind === 'METADATA') ? folders.bookFolder : getOrCreateSubfolder(folders.manuskriptFolder, langCode);
 
       // Vorherige Datei mit gleichem Praefix ersetzen (in den Papierkorb),
       // damit ein erneuter Upload nicht mehrere FINAL_-Dateien nebeneinander
       // anlegt -- findFileByPrefix wuerde sonst zufaellig irgendeine davon
-      // als "die" Datei nehmen.
-      const prefix = kind + '_';
-      const existing = findFileByPrefix(langFolder, prefix);
+      // als "die" Datei nehmen. metadata.json ist selbst schon der volle,
+      // feste Dateiname (kein Praefix+Titel-Muster wie bei den anderen).
+      const prefix = (kind === 'METADATA') ? 'metadata.json' : (kind + '_');
+      const existing = findFileByPrefix(targetFolder, prefix);
       if (existing) existing.setTrashed(true);
 
-      const dotIdx = fileName.lastIndexOf('.');
-      const ext = dotIdx >= 0 ? fileName.slice(dotIdx) : '';
-      const safeTitle = bookTitle.replace(/[\\\/:*?"<>|]/g, '_');
-      const newName = prefix + safeTitle + ext;
+      let newName;
+      if (kind === 'METADATA') {
+        newName = 'metadata.json';
+      } else {
+        const dotIdx = fileName.lastIndexOf('.');
+        const ext = dotIdx >= 0 ? fileName.slice(dotIdx) : '';
+        const safeTitle = bookTitle.replace(/[\\\/:*?"<>|]/g, '_');
+        newName = prefix + safeTitle + ext;
+      }
       const bytes = Utilities.base64Decode(base64Data);
       const blob = Utilities.newBlob(bytes, mimeType, newName);
-      langFolder.createFile(blob);
+      targetFolder.createFile(blob);
 
       // Sofort synchronisieren, statt auf den naechsten Stunden-Trigger zu
       // warten -- ein Fehler hier darf den erfolgreichen Upload selbst
