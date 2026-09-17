@@ -1717,3 +1717,80 @@ Manifest/Template-Inhalt in EINEM einzigen Python-Skript sammeln und
 `re.sub(r'</script', r'<\\/script', ..., re.IGNORECASE)` erst ganz am
 Ende, unmittelbar vor dem Zurückschreiben, ein einziges Mal anwenden —
 nicht nach jedem einzelnen Zwischenschritt.
+
+## 39 · Nachtrag (17.09.2026, Teil 3) — Manuskript/Klappentext direkt vom Gerät hochladen (echte Drive-Datei, neuer Backend-Endpunkt)
+
+Ausbau von §38 (Alt-Cover-Direkt-Upload) auf Manuskript und Klappentext,
+auf expliziten Nutzerwunsch: "beide Möglichkeiten sollen möglich sein,
+die aktuelle und die per Handy" — der bisherige Weg (Datei selbst in
+Drive hochladen, dann Link/Ordnerstruktur von Hand anlegen) bleibt
+unverändert bestehen, der neue Weg kommt als Alternative dazu.
+
+**Unterschied zu §38 (Cover/Alt-Cover):** Cover/Alt-Cover werden als
+Data-URL direkt im Buch-Datensatz gespeichert (kein Drive, kein neuer
+Endpunkt nötig) — für Manuskripte funktioniert das NICHT, weil a) Dateien
+zu groß für eine Sheet-Zelle wären (~50.000-Zeichen-Deckel) und b) der
+komplette Sinn ist, dass der BESTEHENDE Drive-Sync (Wortzahl-Zählung,
+EPUB-Erzeugung, Klappentext-Übernahme — alles in `syncDriveForAllBooks`)
+die Datei automatisch findet und verarbeitet, genau wie bei manuell in
+Drive hochgeladenen Dateien. Das erfordert eine ECHTE Drive-Datei am
+richtigen Ort mit korrektem Namen.
+
+**Neuer Backend-Endpunkt `uploadBookFile`** (`Code.gs`): nimmt
+Base64-codierte Datei-Bytes entgegen (`bookTitle`, `langCode`, `kind`
+∈ {FINAL, ENTWURF, KLAPPENTEXT}, `fileName`, `mimeType`, `fileData`),
+legt sie über die bestehenden Helfer `ensureBookFolders`/
+`getOrCreateSubfolder`/`findFileByPrefix` im richtigen
+`Manuskript/<Sprachcode>/`-Unterordner ab, mit dem erwarteten
+`FINAL_`/`ENTWURF_`/`KLAPPENTEXT_`-Namenspräfix (Dateiendung vom
+Original übernommen). Eine vorher vorhandene Datei mit demselben
+Präfix wird zuerst in den Papierkorb verschoben (sonst würde
+`findFileByPrefix` beim nächsten Sync zufällig irgendeine der
+mehreren gleich-präfigierten Dateien nehmen). Ruft danach direkt
+`syncDriveForAllBooks()` auf, damit Wortzahl/EPUB/Klappentext sofort
+aktualisiert werden, statt auf den nächsten Stunden-Trigger zu warten
+— ein Sync-Fehler wird separat im Ergebnis als `syncError` mitgegeben,
+lässt den erfolgreichen Upload selbst aber nicht als fehlgeschlagen
+erscheinen.
+
+**Datei-Typ-Unterstützung:** `docTextById` (bereits bestehend) liest
+sowohl Google Docs als auch `.docx`/`.doc` (per Kopie+Konvertierung)
+sowie reinen Text/Markdown — ein direkt vom iPhone hochgeladenes Word-
+Dokument funktioniert also ohne weitere Anpassung.
+
+**Frontend:** neuer Abschnitt im Buch-Bearbeiten-Formular, direkt unter
+dem bestehenden Manuskript-Link-Feld: Sprachcode-Eingabe, Fertig/Entwurf-
+Auswahl (zwei Buttons + Text-Label, siehe Hinweis unten zu `<select>`),
+und je ein Datei-Upload-Feld für Manuskript und Klappentext. Transiente
+Upload-UI-Werte (Sprachcode, Auswahl, Lade-Status, Erfolgsmeldung) liegen
+bewusst in einem SEPARATEN State-Objekt (`s.uploadState`, keyed nach
+Buch-Index) statt in `bookForms[i]` — letzteres wird beim Speichern 1:1
+in den Buchdatensatz übernommen und hätte die transienten Upload-Felder
+ungewollt mit persistiert.
+
+**Zwei Stolpersteine, live beim Bauen gefunden und korrigiert, bevor
+irgendetwas deployt wurde:**
+1. `<select>` wurde in dieser App bisher NIRGENDS verwendet — dieses
+   custom Templating-System (`sc-camel-*`) hat für Formularelemente
+   bislang nur mit `<input>`/`<button>`/Checkboxen gearbeitet, ein
+   kontrolliertes `<select value="{{ ... }}">` hätte unter Umständen
+   nicht zuverlässig funktioniert (kein React, keine Garantie für
+   diese spezielle Bindungsart). Durch zwei Buttons ersetzt — exakt
+   dasselbe Muster, das im Rest der App bereits erprobt ist.
+2. Ein inline-Ternary DIREKT im `style="..."`-Attribut
+   (`background:{{ book.x }} ? var(--gold) : none;`) — funktioniert in
+   diesem DSL nicht, weil `{{ }}` nur Werte einsetzt, keine
+   JS-Ausdrücke im umgebenden String auswertet. Die Lehre aus §30
+   nochmal bestätigt: solche Berechnungen IMMER vollständig in der
+   `bookRows`-JS-Berechnung vorwegnehmen (z.B. `mark: cond ? 'a' :
+   'b'`) und im Template nur noch `{{ book.mark }}` einsetzen, nie
+   Ternarys ins Template selbst schreiben.
+
+Beide vor dem Deploy per BeautifulSoup + `json.loads()` (Pflichttest
+aus §36/§37) sowie `node --check` auf den extrahierten App-Code
+gefunden bzw. verifiziert.
+
+**Kein Backend-Redeploy automatisch** — die `Code.gs`-Änderung
+(`uploadBookFile`-Endpunkt) muss dem Nutzer wie gewohnt als Datei
+bereitgestellt und von ihm im Apps-Script-Editor eingefügt + neu
+deployt werden.
