@@ -2126,3 +2126,73 @@ Skript-Tag-Referenzen, wie hier, ist der Schritt schlicht
 
 **Nächster Schritt:** `Code.gs` muss (zusammen mit dem Fix aus §44)
 noch vom Nutzer manuell deployt werden.
+
+## 46 · Nachtrag (18.09.2026) — Mobile Buch-Karussell + Sprung-Liste (analog Gedichte-TOC)
+
+Anlass: bei 30+ Büchern wird die öffentliche Buchseite auf dem Handy sehr
+lang. Nutzer wollte auf Mobilgeräten ein horizontales, swipebares
+Karussell statt der langen vertikalen Liste, plus (wie bei den
+Gedichten) eine klickbare Sprung-Liste, um direkt zu einem bestimmten
+Buch zu springen, ohne durchscrollen/-swipen zu müssen.
+
+**Umsetzung (`index.html`, alles CSS + bestehendes Bindungs-Muster,
+keine neue JS-Bibliothek):**
+- Neue Klasse `book-list-wrap` auf dem Grid-Container der Buchliste.
+  Per `@media (max-width:640px)` wird daraus auf dem Handy ein
+  horizontal scrollendes Flexbox-Karussell mit CSS
+  `scroll-snap-type:x mandatory` (native Swipe-Snap-Mechanik, keine
+  JS-Bibliothek nötig). Desktop bleibt unverändert beim bestehenden
+  CSS-Grid.
+- Jede Buchkarte (Einzelbuch UND Serien-Karte) bekommt die Klasse
+  `book-card` (Karussell-Breite: `flex:0 0 86vw; max-width:360px`
+  nur im Mobile-Media-Query) sowie eine eindeutige `id`
+  (`book-card-<encodeURIComponent(title)>`) als Sprungziel.
+- Neues `anchorId`-Feld pro Buch (berechnet aus dem Titel, siehe
+  `bookRows`-Aufbau) — für Bücher innerhalb einer Buchreihe wird die
+  `id` auf dem inneren Pro-Band-Element gesetzt (nicht auf der
+  äußeren Serien-Karte), damit jeder Titel individuell anspringbar
+  bleibt.
+- Neue Sprung-Liste-UI neben dem bestehenden Suchfeld: Button
+  "{{ ui.jumpTo }}" (Klick, kein `:hover` — exakt aus demselben Grund
+  wie beim bereits bestehenden Gedichte-TOC bewusst weggelassen, siehe
+  Kommentar dort: Hover blieb auf dem PC lästig hängen, wenn die Maus
+  nur zufällig in der Nähe war) öffnet ein Panel mit ALLEN sichtbaren
+  Buchtiteln (`bookTocEntries`, aus `visibleBooksSourceRaw` — bewusst
+  UNABHÄNGIG von der aktuellen Sucheingabe, damit die Sprung-Liste
+  immer vollständig bleibt). Klick auf einen Titel ruft
+  `jumpToBook(anchorId)` auf: schließt das Panel und scrollt per
+  `element.scrollIntoView({ behavior: 'smooth', block: 'center' })`
+  zur Karte — funktioniert in der Desktop-Grid-Ansicht genauso wie im
+  Mobile-Karussell (dort scrollt es horizontal in den sichtbaren
+  Bereich).
+- Neue CSS-Klassen `.book-toc-wrap`/`.book-toc-panel`/
+  `.book-toc-open` (hellem Buch-Bereich angepasste Variante der
+  bestehenden `.poem-toc-*`-Klassen aus dem dunklen Gedichte-Bereich),
+  plus ein zweiter `click`-außerhalb-schließt-Listener in
+  `componentDidMount` (analog zum bestehenden für `.poem-toc-wrap`).
+- Neuer State: `bookTocOpen` (boolean). Neue Methoden:
+  `toggleBookToc`, `jumpToBook(anchorId)`.
+
+**Methodik-Hinweis für künftige `index.html`-Patches:** bei diesem
+Patch wurde erstmals konsequent NICHT versucht, die
+JSON-escaped-Rohzeile direkt per String-Ersetzung zu bearbeiten
+(siehe die verworfenen Fehlversuche mit `\n`/`\u`-Python-String-
+Escapes in der Session vor diesem Patch) — stattdessen: Template-Inhalt
+per `BeautifulSoup(...).get_text()` + `json.loads()` EINMAL in reinen
+Klartext dekodieren (echte Zeilenumbrüche, echte Unicode-Zeichen, keine
+Escape-Fallen mehr), ALLE Änderungen darauf als normale, einfache
+String-Operationen anwenden, dann EINMAL am Ende per
+`json.dumps(text, ensure_ascii=True)` zurück-encodieren und erst ganz
+zum Schluss die `</script`-Escape-Regel (§36/§37) auf das neu erzeugte
+JSON-Literal anwenden (niemals auf die gesamte Datei). Dieser
+Decode-Edit-Reencode-Ansatz ist deutlich robuster als das Basteln von
+alten/neuen Rohzeilen-Substrings mit manueller `\n`/`\"`-Maskierung und
+sollte der Standardweg für alle künftigen, mehrzeiligen
+`index.html`-Patches sein.
+
+**Verifiziert:** Manifest unverändert, dekodierter Template-Inhalt
+exakt wie beabsichtigt (`tmpl_json_after == text`-Vergleich), Datei
+lädt in einer Headless-Browser-Probe (Playwright) ohne JS-Fehler bis
+zum Zugangscode-Screen (weiter kam der Test mangels Zugangsdaten in
+dieser Sandbox nicht — der eigentliche Karussell-/Sprunglisten-Teil
+liegt hinter dem Zugangscode und muss vom Nutzer live geprüft werden).
