@@ -332,6 +332,59 @@ function logDriveSync(sheet, bookTitle, message) {
   sheet.appendRow([new Date(), bookTitle, message]);
 }
 
+function getOrCreateSyncLogSheet_() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sheet = ss.getSheetByName('DriveSyncLog') || ss.insertSheet('DriveSyncLog');
+  if (sheet.getLastRow() === 0) sheet.appendRow(['Zeit', 'Buch', 'Ereignis']);
+  return sheet;
+}
+
+// Findet den Drive-Ordner eines Buchs exakt anhand seines Titels (so wird
+// er von ensureBookFolders() auch angelegt) -- null, falls (noch) keiner
+// existiert, z.B. weil fuer dieses Buch nie etwas hochgeladen wurde.
+function findBookFolderByTitle_(rootFolder, title) {
+  if (!title) return null;
+  const it = rootFolder.getFoldersByName(title);
+  return it.hasNext() ? it.next() : null;
+}
+
+// Wird beim Loeschen eines Buchs im Admin-Panel aufgerufen (siehe
+// action==='saveBooks'): verschiebt den zugehoerigen Drive-Ordner in den
+// Papierkorb, statt ihn fuer immer als Karteileiche liegen zu lassen (und
+// damit auch als Risiko, dass ein spaeter neu angelegtes Buch mit
+// zufaellig demselben Titel automatisch die alten Dateien "erbt", siehe
+// ARCHITECTURE.md). setTrashed statt endgueltigem Loeschen, damit ein
+// versehentliches Buch-Loeschen im Admin-Panel ueber den normalen
+// Drive-Papierkorb rueckgaengig gemacht werden kann.
+function trashBookFolderByTitle_(rootFolder, logSheet, title) {
+  const folder = findBookFolderByTitle_(rootFolder, title);
+  if (folder) {
+    folder.setTrashed(true);
+    logDriveSync(logSheet, title, 'Buch im Admin-Panel geloescht: zugehoeriger Drive-Ordner in den Papierkorb verschoben.');
+  }
+}
+
+// Wird beim Umbenennen eines Buchtitels im Admin-Panel aufgerufen: benennt
+// den bestehenden Drive-Ordner mit um, statt ihn als Karteileiche unter dem
+// alten Titel liegen zu lassen (das war die eigentliche Ursache fuer den
+// "New Book"-Karteileichen-Ordner, der zum Bug in ARCHITECTURE.md §44
+// gefuehrt hat). Bei einer Titel-Kollision (es existiert bereits ein
+// Ordner mit dem neuen Titel) wird bewusst NICHT automatisch umbenannt/
+// zusammengefuehrt, sondern nur geloggt -- ein automatisches Zusammenfuehren
+// zweier Ordner koennte sonst Dateien ueberschreiben.
+function renameBookFolderIfExists_(rootFolder, logSheet, oldTitle, newTitle) {
+  if (!oldTitle || !newTitle || oldTitle === newTitle) return;
+  const oldFolder = findBookFolderByTitle_(rootFolder, oldTitle);
+  if (!oldFolder) return;
+  const collision = findBookFolderByTitle_(rootFolder, newTitle);
+  if (collision) {
+    logDriveSync(logSheet, newTitle, 'Achtung: Buch wurde von "' + oldTitle + '" zu "' + newTitle + '" umbenannt, aber es existiert bereits ein gleichnamiger Drive-Ordner "' + newTitle + '" -- alter Ordner "' + oldTitle + '" wurde NICHT automatisch umbenannt/zusammengefuehrt, bitte manuell pruefen.');
+    return;
+  }
+  oldFolder.setName(newTitle);
+  logDriveSync(logSheet, newTitle, 'Drive-Ordner von "' + oldTitle + '" zu "' + newTitle + '" umbenannt (Buchtitel im Admin-Panel geaendert).');
+}
+
 // ───────────────────────── EPUB-Export ─────────────────────────
 //
 // Baut aus dem reinen Manuskripttext (bereits über docTextById gelesen) eine
@@ -616,9 +669,7 @@ function setPoemsArray(poems) {
 }
 
 function syncDriveForAllBooks() {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const logSheet = ss.getSheetByName('DriveSyncLog') || ss.insertSheet('DriveSyncLog');
-  if (logSheet.getLastRow() === 0) logSheet.appendRow(['Zeit', 'Buch', 'Ereignis']);
+  const logSheet = getOrCreateSyncLogSheet_();
 
   const books = getBooksArray();
   if (!books.length) return;
@@ -758,7 +809,29 @@ function syncDriveForAllBooks() {
           logDriveSync(logSheet, b.title, 'Sprachfassung aktualisiert (' + code + '): ' + (entry.wordCount || '?') + ' Wörter');
         }
       });
-      if (completedCodes.length) b.langs = newLangs;
+
+      // WICHTIG (Ursache fuer den Wortzahl/Klappentext-Vertauschungs-Bug
+      // vom 17.09.2026, siehe ARCHITECTURE.md): b.langs sammelte bisher nur
+      // an -- ein Sprachcode, dessen Manuskript-Unterordner komplett
+      // geloescht/nie eigentlich gueltig war (z.B. ein EN-Ordner aus einem
+      // fruehen Fehl-Upload unter einem falschen Buchtitel), blieb fuer
+      // immer als verwaister Eintrag in b.langs stehen. Das Frontend
+      // berechnet langCodes = Object.keys(b.langs) und zeigt bei >1 Eintrag
+      // einen Sprach-Umschalter an, dessen Default-Tab (langCodes[0], nach
+      // Einfuegereihenfolge) dann auf diesen alten, falschen Eintrag zeigen
+      // konnte -- unabhaengig davon, welche Top-Level-Quellsprache
+      // pickSyncSourceLanguage() korrekt fuer b.hook/b.wordCount waehlt.
+      // Daher hier jeden Sprachcode aus newLangs entfernen, fuer den es
+      // aktuell ueberhaupt keinen Ordner mehr gibt (nicht nur "nicht
+      // fertig" -- ein Ordner mit laufender Uebersetzung bleibt erhalten).
+      Object.keys(newLangs).forEach(function(code) {
+        if (!langs[code]) {
+          delete newLangs[code];
+          changed = true;
+          logDriveSync(logSheet, b.title, 'Verwaiste Sprachfassung entfernt (' + code + '): kein Manuskript-Ordner mehr vorhanden.');
+        }
+      });
+      b.langs = newLangs;
 
       // Diagnose-Log: welche Sprache wurde als "bevorzugt" fuer die
       // Top-Level-Felder (b.hook/b.wordCount -- das ist, was tatsaechlich
@@ -964,6 +1037,48 @@ function handle(e) {
       return jsonOut({ ok: false, error: 'Ungültiges Bücher-JSON: ' + err.message });
     }
     if (!Array.isArray(books)) return jsonOut({ ok: false, error: 'Bücher-Daten sind kein Array.' });
+
+    // Jedes Buch bekommt eine dauerhafte, vom Titel unabhaengige ID --
+    // noetig, um beim Speichern zwischen "Buch umbenannt" und "Buch
+    // geloescht" zu unterscheiden. Reines Titel-Diffing waere hier
+    // gefaehrlich: eine Umbenennung sieht sonst identisch aus wie
+    // Loeschen+Neuanlegen und wuerde faelschlich den Drive-Ordner des
+    // umbenannten (weiterhin existierenden) Buchs in den Papierkorb
+    // verschieben -- genau das, was mit "New Book" vorher passiert ist,
+    // nur eben ungewollt automatisiert.
+    books.forEach(function(b) { if (!b.id) b.id = Utilities.getUuid(); });
+
+    // Drive-Aufraeumen: gelöschte Buecher -> zugehoerigen Ordner in den
+    // Papierkorb verschieben; umbenannte Buecher -> Ordner mit umbenennen.
+    // Laeuft in einem eigenen try/catch, damit ein Drive-Problem (z.B.
+    // kurzzeitig nicht erreichbar) niemals das eigentliche Speichern der
+    // Buchdaten verhindert -- das Speichern in der Tabelle ist der
+    // kritische Pfad, die Drive-Ordnerpflege nur Komfort/Aufraeumen.
+    try {
+      const oldBooks = getBooksArray();
+      const oldById = {};
+      oldBooks.forEach(function(b) { if (b.id) oldById[b.id] = b; });
+      const newIds = {};
+      books.forEach(function(b) { newIds[b.id] = true; });
+
+      const rootFolder = DriveApp.getFolderById(DRIVE_ROOT_FOLDER_ID);
+      const logSheet = getOrCreateSyncLogSheet_();
+
+      Object.keys(oldById).forEach(function(id) {
+        if (!newIds[id] && oldById[id].title) {
+          trashBookFolderByTitle_(rootFolder, logSheet, oldById[id].title);
+        }
+      });
+      books.forEach(function(b) {
+        const old = oldById[b.id];
+        if (old && old.title && b.title && old.title !== b.title) {
+          renameBookFolderIfExists_(rootFolder, logSheet, old.title, b.title);
+        }
+      });
+    } catch (err) {
+      try { logDriveSync(getOrCreateSyncLogSheet_(), '(saveBooks)', 'Fehler beim Drive-Aufraeumen: ' + err.message); } catch (e2) {}
+    }
+
     setBooksArray(books);
     return jsonOut({ ok: true });
   }

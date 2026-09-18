@@ -1957,3 +1957,242 @@ verdecken, obwohl `b.langs.DE` selbst längst korrekt ist.
    umgesetzt, da unklar, ob das der Nutzer-Erwartung entspricht —
    vorher mit dem Nutzer klären, was bei mehreren fertigen Sprachen
    "bevorzugt" bedeuten soll).
+
+## 44 · Nachtrag (17.09.2026, Teil 8) — GELÖST: eigentliche Ursache war ein verwaister `b.langs.EN`-Eintrag, nicht ein noch existierender EN-Ordner
+
+Der Nutzer hat die Hypothese aus §43 direkt widerlegt: **"Es gibt kein
+EN Ordner unter Manuskript nur DE."** Das schließt einen aktuell
+vorhandenen EN-Ordner als Ursache aus — zeigt aber gleichzeitig auf die
+tatsächliche Ursache, denn sie liegt nicht im Drive-Dateisystem,
+sondern im gespeicherten JSON-Feld `b.langs` selbst.
+
+**Root Cause gefunden:** `syncDriveForAllBooks()` hat `b.langs` bisher
+nur ERGÄNZT, nie bereinigt. Der Code baute `newLangs` immer als Kopie
+des BESTEHENDEN `b.langs` (`Object.assign({}, b.langs || {})`) und
+aktualisierte darin nur die Sprachcodes, die gerade als Ordner
+gefunden wurden (`completedCodes`) — ein Sprachcode, dessen
+Unterordner später komplett gelöscht wurde (oder nie zum aktuellen
+Buch gehörte), blieb für immer unverändert in `b.langs` stehen.
+
+Genau das ist hier passiert: beim allerersten, versehentlichen
+Upload-Versuch (als der Buchtitel noch "New Book" hieß, siehe §-
+Abschnitte zum Titel-Bug) wurde vermutlich ein `EN`-Sprachordner
+angelegt und synchronisiert, BEVOR der Titel korrigiert wurde — dieser
+Sync schrieb `b.langs.EN` mit (falschen/vertauschten) Werten in genau
+diese Buchzeile. Der EN-Ordner selbst wurde später gelöscht/nie
+korrekt befüllt (daher "kein EN-Ordner unter Manuskript" heute), aber
+der VERWAISTE `b.langs.EN`-Eintrag blieb im JSON der Buchzeile
+bestehen, weil kein Code-Pfad je verwaiste Sprachschlüssel entfernt
+hat.
+
+**Warum das die exakten Symptome erklärt:** Im Frontend (`index.html`)
+gilt:
+```js
+const langCodes = (b.langs && typeof b.langs === 'object') ? Object.keys(b.langs) : [];
+const activeLang = langCodes.length > 1 ? (s.activeBookLang[key] || langCodes[0]) : null;
+const langInfo = activeLang ? (b.langs[activeLang] || {}) : null;
+const effHook = (langInfo && langInfo.hook) || b.hook;
+```
+Da `b.langs` sowohl `EN` (stale) als auch `DE` (korrekt) enthielt, war
+`langCodes.length === 2` → es wurde automatisch ein
+Sprach-Umschalter angezeigt (obwohl nur DE tatsächlich existiert), und
+`activeLang` fiel mangels gespeicherter Nutzerwahl auf
+`langCodes[0]` zurück — je nach Einfüge-Reihenfolge der Objektschlüssel
+(JS erhält Insertion-Order) war das der ZUERST geschriebene Schlüssel,
+also sehr wahrscheinlich `EN` (weil er vor der DE-Korrektur zuerst in
+`b.langs` geschrieben wurde). `effHook`/`effWordCount` griffen dann
+direkt auf `langInfo` (= `b.langs.EN`, die alten falschen Werte) zu —
+komplett unabhängig davon, dass die Top-Level-Felder `b.hook`/
+`b.wordCount` (über `pickSyncSourceLanguage`) längst korrekt auf DE
+zeigten. Das erklärt auch die frühere Beobachtung "es ist im Grunde
+egal ob ich auf DE oder EN klicke, es bleibt die gleiche Sprache" —
+vermutlich zeigte der Tab in beiden Fällen denselben (falschen)
+aktiven Zustand, weil das Umschalten selbst nicht das eigentliche
+Problem war.
+
+**Fix (bereits umgesetzt, `reference/apps-script/Code.gs`,
+`syncDriveForAllBooks()`):** direkt nach dem Aktualisieren der
+fertigen Sprachen wird jetzt jeder Sprachcode aus `newLangs` entfernt,
+für den `scanBookLanguages()` aktuell KEINEN Ordner mehr findet (egal
+ob der Ordner nie existierte, gelöscht wurde, oder nur umbenannt
+wurde) — nicht nur "nicht fertig", sondern komplett kein Ordner mehr:
+
+```js
+Object.keys(newLangs).forEach(function(code) {
+  if (!langs[code]) {
+    delete newLangs[code];
+    changed = true;
+    logDriveSync(logSheet, b.title, 'Verwaiste Sprachfassung entfernt (' + code + '): kein Manuskript-Ordner mehr vorhanden.');
+  }
+});
+b.langs = newLangs;
+```
+(Die Zuweisung `b.langs = newLangs` läuft jetzt unconditional statt
+nur `if (completedCodes.length)` — das ist sicher, weil dieser ganze
+Block bereits durch `if (Object.keys(langs).length) { ... }` davor
+geschützt ist, also nur läuft, wenn überhaupt mindestens ein
+Manuskript-Unterordner existiert.)
+
+**Nächster Schritt:** Das aktualisierte `Code.gs` (enthält sowohl
+diesen Fix als auch das Diagnose-Logging aus §43) muss vom Nutzer noch
+manuell im Apps-Script-Editor deployt werden (Speichern reicht nicht —
+Deploy → Verwaltung der Bereitstellungen → Stift-Symbol → "Neue
+Version" → Bereitstellen). Danach einmal "Jetzt aus Drive
+synchronisieren" ausführen, dann sollte für "The Physician of Ashes"
+in `DriveSyncLog` eine Zeile "Verwaiste Sprachfassung entfernt (EN):
+..." erscheinen und die Buchseite korrekt nur noch DE zeigen (kein
+Sprach-Umschalter mehr, korrekte 98388 Wörter, korrekter Klappentext).
+Falls das JSON in der `BooksData`-Zelle vorher noch geprüft werden
+soll (zur Bestätigung, dass `b.langs.EN` tatsächlich existierte), am
+besten VOR dem nächsten Sync-Lauf ansehen, da der Fix diesen Beweis
+sonst automatisch aufräumt.
+
+## 45 · Nachtrag (17.09.2026, Teil 9) — Drive-Ordner beim Buch-Löschen automatisch aufräumen, Buch-ID statt Titel-Diffing
+
+Anlass: Nutzer fragte nach §44 direkt weiter — wenn verwaiste
+`b.langs`-Einträge schon Probleme machen, muss es dann nicht auch eine
+Logik geben für den Fall, dass ein ganzes Buch im Admin-Panel gelöscht
+wird? Antwort: ja, bisher gab es dafür gar nichts — `action=saveBooks`
+überschreibt einfach das komplette `BooksData`-Array, der
+Drive-Ordner (`/<Buchtitel>/...`) des gelöschten Buchs blieb für immer
+als Karteileiche liegen. Nutzer wollte: automatisch in den
+Drive-Papierkorb verschieben (nicht nur loggen, nicht endgültig
+löschen).
+
+**Kernproblem beim naiven Ansatz:** Bücher hatten bisher KEINE
+stabile ID, nur den Titel. Ein reiner Titel-Diff ("Titel X war vorher
+da, ist jetzt weg → löschen") hätte eine reine Umbenennung (die genau
+in dieser Session bereits vorkam: "New Book" → "The Physician of
+Ashes") fälschlich als Löschung erkannt und den frisch umbenannten,
+weiterhin aktiven Buchordner in den Papierkorb verschoben — hätte also
+selbst den §44-Vorfall verschlimmert statt ihn zu verhindern.
+
+**Fix, `reference/apps-script/Code.gs`:**
+- Jedes Buch bekommt beim Speichern eine dauerhafte `id`
+  (`Utilities.getUuid()` serverseitig, falls noch keine vorhanden;
+  `index.html`/`addBook()` vergibt zusätzlich clientseitig sofort eine
+  ID bei Neuanlage, damit Umbenennungen auch INNERHALB derselben
+  Sitzung — vor jedem Reload — korrekt per ID statt per Titel erkannt
+  werden).
+- Neue Helper (nahe `logDriveSync`): `getOrCreateSyncLogSheet_()`
+  (Refactoring, jetzt auch von `syncDriveForAllBooks()` genutzt),
+  `findBookFolderByTitle_()`, `trashBookFolderByTitle_()`,
+  `renameBookFolderIfExists_()`.
+- `action==='saveBooks'` vergleicht jetzt vor dem Überschreiben die
+  IDs der alten (`getBooksArray()`) gegen die neuen Buchliste:
+  - ID war vorher da, ist jetzt weg → Buch wurde gelöscht → zugehöriger
+    Drive-Ordner (per altem Titel gefunden) wird in den Papierkorb
+    verschoben, geloggt in `DriveSyncLog`.
+  - ID existiert in beiden, aber Titel hat sich geändert → Buch wurde
+    umbenannt → Drive-Ordner wird mit umbenannt (`folder.setName(...)`),
+    NICHT gelöscht. Bei einer Titel-Kollision (es existiert bereits ein
+    Ordner mit dem neuen Titel) wird bewusst nicht automatisch
+    zusammengeführt, nur eine Warnung geloggt — ein automatisches Merge
+    könnte sonst Dateien überschreiben.
+  - Das komplette Drive-Aufräumen läuft in einem eigenen try/catch, das
+    nie das eigentliche Speichern der Buchdaten blockiert (kritischer
+    Pfad bleibt: Buchdaten landen immer in der Tabelle, Drive-Pflege ist
+    nur Zusatz).
+- `index.html`, `addBook()`: neues Buch bekommt beim Anlegen sofort
+  `id: 'b_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8)`
+  (einfache, kollisionssichere Client-ID, kein `Utilities.getUuid()`-
+  Äquivalent im Browser nötig für diesen Zweck). Alle anderen
+  Codepfade (Bearbeiten, Speichern, Sprach-Umschalter-Berechnung etc.)
+  spreaden Buch-Objekte generisch (`...b`), die `id` läuft also überall
+  automatisch mit durch, ohne dass weitere Stellen angepasst werden
+  mussten.
+- Bereits bestehende Bücher ohne `id` (alle aktuell in `BooksData`)
+  bekommen beim nächsten Speichern automatisch eine ID zugewiesen
+  (serverseitig) — bis dahin werden sie beim Diffing einfach
+  übersprungen (kein `id`-Feld vorhanden → kein falsches Löschen/
+  Umbenennen-Signal), rein additiv, kein Migrationsschritt nötig.
+
+**Wichtige Lektion für künftige Patches an `index.html`:** beim
+zweiten Anlauf dieses Patches wurde versehentlich die
+`</script`-Escape-Regel aus §36/§37 auf die GESAMTE Datei statt nur
+auf die eine betroffene Zeile des JSON-Blobs angewendet — das hätte
+die echten, unbundleten `<script>`-Tags im `<head>` (Service-Worker-
+Registrierung, jsdelivr-Includes) kaputt escaped und wäre selbst zu
+einem neuen Produktionsausfall geworden. Vor dem Schreiben per
+BeautifulSoup-Vergleich (Manifest unverändert, neuer Codeschnipsel im
+decodierten Template vorhanden, alter verschwunden) aufgefallen und
+korrigiert, BEVOR committet wurde. **Ergänzung zur Methodik:** die
+`</script`-Escape-Regel darf nur auf die tatsächlich betroffene Zeile
+des JSON-Blobs angewendet werden, niemals auf den gesamten
+Dateiinhalt — und nur, wenn der neu eingefügte Text überhaupt ein
+`</script`-Vorkommen enthält (bei reinen JS-Codeergänzungen ohne
+Skript-Tag-Referenzen, wie hier, ist der Schritt schlicht
+überflüssig).
+
+**Nächster Schritt:** `Code.gs` muss (zusammen mit dem Fix aus §44)
+noch vom Nutzer manuell deployt werden.
+
+## 46 · Nachtrag (18.09.2026) — Mobile Buch-Karussell + Sprung-Liste (analog Gedichte-TOC)
+
+Anlass: bei 30+ Büchern wird die öffentliche Buchseite auf dem Handy sehr
+lang. Nutzer wollte auf Mobilgeräten ein horizontales, swipebares
+Karussell statt der langen vertikalen Liste, plus (wie bei den
+Gedichten) eine klickbare Sprung-Liste, um direkt zu einem bestimmten
+Buch zu springen, ohne durchscrollen/-swipen zu müssen.
+
+**Umsetzung (`index.html`, alles CSS + bestehendes Bindungs-Muster,
+keine neue JS-Bibliothek):**
+- Neue Klasse `book-list-wrap` auf dem Grid-Container der Buchliste.
+  Per `@media (max-width:640px)` wird daraus auf dem Handy ein
+  horizontal scrollendes Flexbox-Karussell mit CSS
+  `scroll-snap-type:x mandatory` (native Swipe-Snap-Mechanik, keine
+  JS-Bibliothek nötig). Desktop bleibt unverändert beim bestehenden
+  CSS-Grid.
+- Jede Buchkarte (Einzelbuch UND Serien-Karte) bekommt die Klasse
+  `book-card` (Karussell-Breite: `flex:0 0 86vw; max-width:360px`
+  nur im Mobile-Media-Query) sowie eine eindeutige `id`
+  (`book-card-<encodeURIComponent(title)>`) als Sprungziel.
+- Neues `anchorId`-Feld pro Buch (berechnet aus dem Titel, siehe
+  `bookRows`-Aufbau) — für Bücher innerhalb einer Buchreihe wird die
+  `id` auf dem inneren Pro-Band-Element gesetzt (nicht auf der
+  äußeren Serien-Karte), damit jeder Titel individuell anspringbar
+  bleibt.
+- Neue Sprung-Liste-UI neben dem bestehenden Suchfeld: Button
+  "{{ ui.jumpTo }}" (Klick, kein `:hover` — exakt aus demselben Grund
+  wie beim bereits bestehenden Gedichte-TOC bewusst weggelassen, siehe
+  Kommentar dort: Hover blieb auf dem PC lästig hängen, wenn die Maus
+  nur zufällig in der Nähe war) öffnet ein Panel mit ALLEN sichtbaren
+  Buchtiteln (`bookTocEntries`, aus `visibleBooksSourceRaw` — bewusst
+  UNABHÄNGIG von der aktuellen Sucheingabe, damit die Sprung-Liste
+  immer vollständig bleibt). Klick auf einen Titel ruft
+  `jumpToBook(anchorId)` auf: schließt das Panel und scrollt per
+  `element.scrollIntoView({ behavior: 'smooth', block: 'center' })`
+  zur Karte — funktioniert in der Desktop-Grid-Ansicht genauso wie im
+  Mobile-Karussell (dort scrollt es horizontal in den sichtbaren
+  Bereich).
+- Neue CSS-Klassen `.book-toc-wrap`/`.book-toc-panel`/
+  `.book-toc-open` (hellem Buch-Bereich angepasste Variante der
+  bestehenden `.poem-toc-*`-Klassen aus dem dunklen Gedichte-Bereich),
+  plus ein zweiter `click`-außerhalb-schließt-Listener in
+  `componentDidMount` (analog zum bestehenden für `.poem-toc-wrap`).
+- Neuer State: `bookTocOpen` (boolean). Neue Methoden:
+  `toggleBookToc`, `jumpToBook(anchorId)`.
+
+**Methodik-Hinweis für künftige `index.html`-Patches:** bei diesem
+Patch wurde erstmals konsequent NICHT versucht, die
+JSON-escaped-Rohzeile direkt per String-Ersetzung zu bearbeiten
+(siehe die verworfenen Fehlversuche mit `\n`/`\u`-Python-String-
+Escapes in der Session vor diesem Patch) — stattdessen: Template-Inhalt
+per `BeautifulSoup(...).get_text()` + `json.loads()` EINMAL in reinen
+Klartext dekodieren (echte Zeilenumbrüche, echte Unicode-Zeichen, keine
+Escape-Fallen mehr), ALLE Änderungen darauf als normale, einfache
+String-Operationen anwenden, dann EINMAL am Ende per
+`json.dumps(text, ensure_ascii=True)` zurück-encodieren und erst ganz
+zum Schluss die `</script`-Escape-Regel (§36/§37) auf das neu erzeugte
+JSON-Literal anwenden (niemals auf die gesamte Datei). Dieser
+Decode-Edit-Reencode-Ansatz ist deutlich robuster als das Basteln von
+alten/neuen Rohzeilen-Substrings mit manueller `\n`/`\"`-Maskierung und
+sollte der Standardweg für alle künftigen, mehrzeiligen
+`index.html`-Patches sein.
+
+**Verifiziert:** Manifest unverändert, dekodierter Template-Inhalt
+exakt wie beabsichtigt (`tmpl_json_after == text`-Vergleich), Datei
+lädt in einer Headless-Browser-Probe (Playwright) ohne JS-Fehler bis
+zum Zugangscode-Screen (weiter kam der Test mangels Zugangsdaten in
+dieser Sandbox nicht — der eigentliche Karussell-/Sprunglisten-Teil
+liegt hinter dem Zugangscode und muss vom Nutzer live geprüft werden).
