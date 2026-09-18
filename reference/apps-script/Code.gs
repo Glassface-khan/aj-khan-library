@@ -195,6 +195,27 @@ function findFileByPrefix(folder, prefix) {
   return best;
 }
 
+// Findet die Genre-/Metadaten-Datei im Buch-Wurzelordner flexibel — nicht
+// mehr nur bei exaktem Dateinamen "metadata.json", sondern JEDE .json-Datei
+// dort (z. B. "Der Titel - metadata.json", "metadata_Romantitel.json",
+// "Die Ordnung.json" ...). Eindeutigkeit kommt vom Ordner (ein Buch pro
+// Ordner), nicht vom Dateinamen — der Nutzer darf also frei benennen,
+// solange irgendwo ".json" drin vorkommt. Bei mehreren .json-Dateien im
+// selben Ordner wird die zuletzt geänderte genommen (wie bei
+// findFileByPrefix). Ersetzt den bisherigen exakten
+// findFileByPrefix(folder, 'metadata.json')-Aufruf.
+function findJsonFile_(folder) {
+  const it = folder.getFiles();
+  let best = null;
+  while (it.hasNext()) {
+    const f = it.next();
+    if (/\.json$/i.test(f.getName())) {
+      if (!best || f.getLastUpdated() > best.getLastUpdated()) best = f;
+    }
+  }
+  return best;
+}
+
 function firstImageFile(folder) {
   const it = folder.getFiles();
   let best = null;
@@ -942,7 +963,7 @@ function syncDriveForAllBooks() {
     // Falls keine metadata.json vorliegt: Fallback auf eine einfache Datei
     // mit Präfix GENRE_, deren erste Zeile das Genre ist.
     try {
-      const metaFile = findFileByPrefix(folders.bookFolder, 'metadata.json');
+      const metaFile = findJsonFile_(folders.bookFolder);
       let kind = null;
       if (metaFile) {
         const metaText = docTextById(metaFile.getId());

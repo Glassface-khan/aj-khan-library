@@ -2196,3 +2196,64 @@ lädt in einer Headless-Browser-Probe (Playwright) ohne JS-Fehler bis
 zum Zugangscode-Screen (weiter kam der Test mangels Zugangsdaten in
 dieser Sandbox nicht — der eigentliche Karussell-/Sprunglisten-Teil
 liegt hinter dem Zugangscode und muss vom Nutzer live geprüft werden).
+
+## 47 · Nachtrag (18.09.2026, Teil 2) — Manueller Liste/Karussell-Umschalter + flexible metadata.json-Erkennung
+
+**Manueller Umschalter (index.html, Frontend):** Ergänzt das automatische
+Mobile-Karussell aus Abschnitt 46 (das rein per `@media (max-width:640px)`
+zwischen Grid und Karussell wechselt) um einen manuellen Umschalter, der
+unabhängig von der Bildschirmbreite gilt — Nutzer-Wunsch: „togglen
+zwischen Listenview und Karussell".
+
+- Neue Buttons „Liste"/„Karussell" direkt neben der Sprung-Liste
+  (`{{ ui.jumpTo }}`) über der Buchliste.
+- Neuer State `booksViewMode` (`''` = automatisch/responsive wie bisher,
+  `'list'`/`'carousel'` erzwingen die jeweilige Ansicht), localStorage-
+  persistiert (`ajk_books_view_mode`, gleiches Muster wie `uiLang`).
+  Erneutes Klicken des bereits aktiven Buttons setzt zurück auf
+  automatisch.
+- Neue CSS-Klassen `.book-list-wrap.force-carousel` /
+  `.book-list-wrap.force-list` (mit `.book-card`-Unterregeln), **außerhalb**
+  des bestehenden `@media`-Blocks definiert — höhere Selektor-Spezifität
+  (zwei Klassen statt einer) gewinnt in beide Richtungen gegen den
+  automatischen `@media`-Block, egal ob Handy oder Desktop gerade
+  angezeigt wird.
+- Die Such-/Sprungliste-Kopfzeile bekam vorsorglich `flex-wrap` dazu (jetzt
+  drei statt zwei Elemente nebeneinander — gleiche Vorsichtsmaßnahme wie
+  in Abschnitt 24/26/27, auch wenn hier durch `min-width:0` am Suchfeld
+  kein harter Overflow zu erwarten war).
+
+**Flexible metadata.json-Erkennung (`reference/apps-script/Code.gs`,
+Backend):** Nutzer-Wunsch: die Genre-Metadaten-Datei im Buch-Ordner muss
+nicht mehr exakt „metadata.json" heißen — z. B. „Der Titel -
+metadata.json" oder „metadata_Romantitel.json" soll auch erkannt werden,
+wenn der Buchtitel Teil des Dateinamens ist.
+
+- Neue Hilfsfunktion `findJsonFile_(folder)`: findet **jede** `.json`-Datei
+  im übergebenen Ordner (case-insensitive Endungs-Check per Regex), statt
+  wie bisher `findFileByPrefix(folder, 'metadata.json')` (exakter
+  Namens-Präfix). Eindeutigkeit kommt ohnehin vom Ordner (ein Buch pro
+  Drive-Ordner) — der Dateiname selbst darf jetzt beliebig sein, solange
+  er auf `.json` endet. Bei mehreren `.json`-Dateien im selben Ordner wird
+  wie gehabt die zuletzt geänderte genommen.
+- Der Genre-Erkennungs-Block in `syncDriveForAllBooks` ruft jetzt
+  `findJsonFile_(folders.bookFolder)` statt der alten
+  `findFileByPrefix`-Variante auf.
+- **Bewusst nicht angefasst:** der Direkt-Upload-vom-Gerät-Flow
+  (`action === 'uploadBookFile'`, Abschnitt 40) schreibt beim Hochladen
+  weiterhin fest als `metadata.json` (systemkontrollierte Benennung, kein
+  Nutzer-Dateiname im Spiel) — betrifft nur den Fall, dass der Autor
+  selbst eine Datei mit freiem Namen direkt in den Drive-Ordner legt.
+
+**Muss vom Autor manuell deployt werden** (wie immer bei Backend-
+Änderungen) — `reference/apps-script/Code.gs` erneut 1:1 in den
+Apps-Script-Editor kopieren, dann Deploy → „New version" → Deploy.
+
+**Getestet:** Frontend — Decode-Edit-Reencode-Methode aus Abschnitt 46
+angewandt (Klartext-Diff, `json.dumps()`-Round-Trip-Check exakt
+`text == decoded_back`, `</script`-Escape-Regel nur auf das neue Literal
+angewandt), JSON.parse via BeautifulSoup zur Kontrolle, `node --check`
+gegen den extrahierten JS-Code, Tag-Bilanz-Check (Delta exakt +1 `div`/+2
+`button`, passend zu den zwei neuen Toggle-Buttons plus Wrapper-Div).
+Backend — `node --check` gegen `Code.gs`. Kein Live-Browser-Test in
+dieser Session.
