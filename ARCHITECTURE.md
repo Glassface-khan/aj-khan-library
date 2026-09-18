@@ -2196,3 +2196,56 @@ lädt in einer Headless-Browser-Probe (Playwright) ohne JS-Fehler bis
 zum Zugangscode-Screen (weiter kam der Test mangels Zugangsdaten in
 dieser Sandbox nicht — der eigentliche Karussell-/Sprunglisten-Teil
 liegt hinter dem Zugangscode und muss vom Nutzer live geprüft werden).
+
+## 47 · Nachtrag (18.09.2026) — Listen/Karussell-Umschalter + metadata.json akzeptiert beliebige Dateinamen
+
+Nutzer-Feedback nach §46 (Karussell hat live funktioniert): zwei
+Wünsche.
+
+**1. Manueller Umschalter zwischen Karussell und Liste (`index.html`):**
+Manche Leser wollen lieber scrollen statt swipen. Neuer Button
+"{{ bookViewToggleLabel }}" (nur auf dem Handy sichtbar, per CSS
+`@media (max-width:640px)`), togglet `bookMobileListMode`
+(State, Default `false` = Karussell bleibt Standard). Wirkt über eine
+neue CSS-Klasse `.book-list-wrap.list-mode`, die die
+`scroll-snap`/Flex-Regeln aus §46 innerhalb desselben Media-Queries
+wieder auf eine normale gestapelte Liste zurücksetzt — Desktop
+unangetastet (Grid war dort nie betroffen).
+
+**Bug beim ersten Anlauf, noch vor dem Commit gefangen:** die neue
+`bookViewToggleLabel`-Berechnung (`ui.viewAsCarousel`/`ui.viewAsList`)
+wurde versehentlich VOR der Definition von `const ui = uiStrings[...]`
+eingefügt (gleicher `renderVals()`-Scope, aber falsche Reihenfolge) —
+das ergibt einen `ReferenceError: Cannot access 'ui' before
+initialization` (JS `const`/`let` TDZ), der die GESAMTE Seite zum
+Absturz gebracht hätte (React-Rendermethode wirft, nichts rendert
+mehr). Eine Playwright-Kopfstartprobe gegen die lokal gepatchte Datei
+(vor jedem `index.html`-Commit jetzt Standard-Praxis, siehe
+`body.innerText` auf Fehlermeldungen statt nur "kein JS-`pageerror`"
+prüfen) hat das direkt gezeigt: `body.innerText` war die Fehlermeldung
+selbst statt "Private page/ENTER". Fix: Berechnung an die richtige
+Stelle (direkt nach `const ui = ...`) verschoben, erneut geprüft —
+lädt jetzt wieder normal bis zum Zugangscode-Screen. **Lektion:**
+`pageerror`-Events allein reichen nicht als Test — manche Fehler
+schlagen erst beim tatsächlichen Rendern zu und zeigen sich nur im
+sichtbaren Seiteninhalt (`body.innerText`), nicht als Browser-Konsolen-
+Fehler.
+
+**2. metadata.json akzeptiert jetzt beliebige Dateinamen
+(`reference/apps-script/Code.gs`):** bisher musste die Genre-Datei im
+Buch-Wurzelordner exakt `metadata.json` heißen (`findFileByPrefix`
+mit festem Präfix). Nutzer nutzt einen separaten
+Buch-Vorbereitungs-Workflow, der die Datei ggf. mit dem Romantitel im
+Dateinamen benennt (z.B. "Der Titel des Romans.json"). Neue Funktion
+`findMetadataJsonFile_(folder)`: akzeptiert JEDE `.json`-Datei im
+Buchordner (Endung statt Präfix/exaktem Namen), unabhängig vom
+restlichen Dateinamen — bei mehreren `.json`-Dateien zählt die zuletzt
+geänderte. Der Ordner ist ohnehin schon pro Buch getrennt, eine feste
+Namenskonvention brachte hier nie einen echten Vorteil. Wird sowohl
+beim Sync-Lesen (`syncDriveForAllBooks`) als auch beim
+Ersetzen-vor-erneutem-Upload in `action==='uploadBookFile'` (Kind
+METADATA) verwendet.
+
+**Nächster Schritt:** `Code.gs` muss (zusammen mit den Fixes aus §44/§45)
+noch vom Nutzer manuell deployt werden. Das Frontend-Update (Toggle) ist
+wie gehabt automatisch live über GitHub Pages, sobald gemerged.

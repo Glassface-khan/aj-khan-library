@@ -181,7 +181,9 @@ function getOrCreateSubfolder(parent, name) {
 // Groß-/Kleinschreibungsunabhaengig (case-insensitive), damit z.B.
 // "klappentext_Roman" oder "Final_Roman" genauso erkannt werden wie
 // "KLAPPENTEXT_Roman"/"FINAL_Roman" — betrifft alle Aufrufer (FINAL_,
-// ENTWURF_, KLAPPENTEXT_, GENRE_, metadata.json).
+// ENTWURF_, KLAPPENTEXT_, GENRE_). Die metadata.json-Genre-Datei nutzt
+// NICHT diese Funktion, sondern findMetadataJsonFile_ (jede .json-Datei
+// im Buchordner zaehlt, unabhaengig vom genauen Dateinamen).
 function findFileByPrefix(folder, prefix) {
   const it = folder.getFiles();
   let best = null;
@@ -189,6 +191,27 @@ function findFileByPrefix(folder, prefix) {
   while (it.hasNext()) {
     const f = it.next();
     if (f.getName().toLowerCase().indexOf(prefixLower) === 0) {
+      if (!best || f.getLastUpdated() > best.getLastUpdated()) best = f;
+    }
+  }
+  return best;
+}
+
+// Findet die Genre-metadata.json im Buch-Wurzelordner -- bewusst NICHT per
+// exaktem Dateinamen-Praefix (wie findFileByPrefix), sondern per Endung:
+// jede .json-Datei dort zaehlt, unabhaengig davon, wie sie genau heisst
+// (z.B. "metadata.json", aber auch "Der Titel des Romans.json" oder
+// "metadata_Der Titel des Romans.json" aus dem separaten Buch-
+// Vorbereitungs-Workflow). Der Ordner ist ohnehin schon pro Buch getrennt,
+// eine feste Namenskonvention bringt hier also keinen echten Vorteil, nur
+// unnoetige Fehlerquellen beim manuellen Ablegen. Bei mehreren .json-
+// Dateien wird die zuletzt geaenderte genommen.
+function findMetadataJsonFile_(folder) {
+  const it = folder.getFiles();
+  let best = null;
+  while (it.hasNext()) {
+    const f = it.next();
+    if (f.getName().toLowerCase().endsWith('.json')) {
       if (!best || f.getLastUpdated() > best.getLastUpdated()) best = f;
     }
   }
@@ -942,7 +965,7 @@ function syncDriveForAllBooks() {
     // Falls keine metadata.json vorliegt: Fallback auf eine einfache Datei
     // mit Präfix GENRE_, deren erste Zeile das Genre ist.
     try {
-      const metaFile = findFileByPrefix(folders.bookFolder, 'metadata.json');
+      const metaFile = findMetadataJsonFile_(folders.bookFolder);
       let kind = null;
       if (metaFile) {
         const metaText = docTextById(metaFile.getId());
@@ -1341,13 +1364,13 @@ function handle(e) {
       const folders = ensureBookFolders(rootFolder, bookTitle);
       const targetFolder = (kind === 'METADATA') ? folders.bookFolder : getOrCreateSubfolder(folders.manuskriptFolder, langCode);
 
-      // Vorherige Datei mit gleichem Praefix ersetzen (in den Papierkorb),
-      // damit ein erneuter Upload nicht mehrere FINAL_-Dateien nebeneinander
-      // anlegt -- findFileByPrefix wuerde sonst zufaellig irgendeine davon
-      // als "die" Datei nehmen. metadata.json ist selbst schon der volle,
-      // feste Dateiname (kein Praefix+Titel-Muster wie bei den anderen).
-      const prefix = (kind === 'METADATA') ? 'metadata.json' : (kind + '_');
-      const existing = findFileByPrefix(targetFolder, prefix);
+      // Vorherige Datei ersetzen (in den Papierkorb), damit ein erneuter
+      // Upload nicht mehrere Dateien nebeneinander anlegt. Bei METADATA
+      // zaehlt dafuer jede vorhandene .json-Datei im Ordner (siehe
+      // findMetadataJsonFile_ -- unabhaengig vom genauen Dateinamen), bei
+      // den anderen Arten weiterhin der feste Praefix (FINAL_ etc.).
+      const prefix = kind + '_';
+      const existing = (kind === 'METADATA') ? findMetadataJsonFile_(targetFolder) : findFileByPrefix(targetFolder, prefix);
       if (existing) existing.setTrashed(true);
 
       let newName;
