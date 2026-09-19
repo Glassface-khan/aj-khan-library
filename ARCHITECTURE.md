@@ -2323,3 +2323,89 @@ String-Ersetzung eingefügt (kein freihändiges Retippen). Kein Playwright
 in dieser Sandbox verfügbar (Paket nicht installiert) — Live-Test des
 tatsächlichen Fortschrittsbalkens beim Hochladen einer echten Datei vom
 Handy steht noch aus.
+
+## 50 · Nachtrag (19.09.2026, Teil 3) — KI-generierter Klappentext beim EPUB-/Manuskript-Upload
+
+Nutzer-Wunsch: Wenn eine EPUB (oder ein Manuskript) hochgeladen wird und
+noch kein Klappentext existiert, soll automatisch ein Klappentext-Entwurf
+erzeugt werden — "Weltklasse", spannungserzeugend, nach Bestseller-
+Best-Practices, gemäß dem eigenen Stilstandard des Autors. Als Referenz
+zwei hochgeladene Dokumente ausgewertet: `AJ_Khan_Novel_Master_Standard
+_v5_0.docx` (Schreibstandard) und `AJ_Khan_Literary_Constitution_v3_3
+_fixed.docx` (enthält keine Klappentext-/Backcover-Vorgaben — betrifft
+Canon-/Konsistenzregeln der Romane selbst, nicht Marketing-Text; daher
+nicht in den Prompt eingeflossen). Der Master Standard enthält keine
+fertige Klappentext-Formel, nur die generelle Tonalitäts-Leitlinie
+"Propulsion ohne Thrillerisierung" (nicht jedes Buch braucht Countdown/
+Leiche/Chase — Neugier, Intimität, Scham, Pflicht, Beziehung, Entdeckung
+oder Konsequenz ziehen genauso stark wie Gefahr) plus die Forderung, dass
+Titel/Opening/Cover/Blurb/Comp-Titel demselben Leser dasselbe
+Leseerlebnis versprechen müssen. Ergänzt um branchenübliche Backcover-
+Konventionen kommerzieller Bestseller (destilliert, keine Zitate aus
+fremden Büchern): starker Einstiegshaken, Hauptfigur + auslösendes
+Ereignis, eskalierender Konflikt/Einsatz, offenes Ende ohne Twist-Verrat,
+aktive statt zusammenfassende Sprache, keine Klischees, ~120–180 Wörter.
+
+**Nur `reference/apps-script/Code.gs`, kein Frontend-Änderung nötig** —
+der Trigger ist bereits vorhanden: `uploadBookFile` (EPUB/FINAL/ENTWURF)
+ruft direkt nach dem Ablegen der Datei `syncDriveForAllBooks()` auf
+(siehe §48). Neue Logik dort, pro fertiger Sprache:
+
+- **Neue Funktion `generateBlurbWithAI_(manuscriptText, bookTitle, genre,
+  langCode)`** — ruft `https://api.anthropic.com/v1/messages` per
+  `UrlFetchApp` auf, mit dem oben destillierten Stil-Prompt (sprachbewusst:
+  DE/EN/BS), max. 700 Tokens Antwort, Modell konfigurierbar über die neue
+  Script Property `ANTHROPIC_MODEL` (Default `claude-sonnet-5`).
+  **Ohne die neue Script Property `ANTHROPIC_API_KEY` bleibt die Funktion
+  ein reines No-op** (kein Fehler, kein API-Aufruf, kein Kostenrisiko ohne
+  bewusstes Opt-in) — exakt das gleiche Gating-Muster wie die schon
+  vorgemerkte, noch nicht gebaute KI-Genre-Erkennung (Abschnitt 12).
+- **Wo es greift:** in `syncDriveForAllBooks()`, im bestehenden
+  Klappentext-Block pro Sprache — nur im `else`-Zweig, wenn **keine**
+  `KLAPPENTEXT_`-Datei gefunden wurde. Nimmt `blurbSourceText` (Volltext
+  aus `FINAL_`-Dokument oder, falls kein Dokument vorliegt, aus der
+  direkt hochgeladenen `EPUB_`-Datei über das bestehende
+  `epubTextExtract_`) und schickt ihn komplett (bis 400 000 Zeichen
+  Deckel, reiner Ausreißer-Schutz, kein bewusstes Kürzen auf "nur den
+  Anfang" — Claudes Kontextfenster trägt ganze Romane) an die API.
+- **Neues Feld `entry.hookSource`** (`'file'` oder `'ai'`) pro
+  Sprachfassung in `b.langs[code]`: markiert, woher der aktuelle
+  Klappentext kommt. Eine manuell hochgeladene `KLAPPENTEXT_`-Datei setzt
+  `hookSource='file'` und hat **für immer Vorrang** — der KI-Vorschlag
+  wird nie über einen vom Autor selbst geschriebenen/hochgeladenen
+  Klappentext geschrieben, auch nicht bei künftigen Syncs. Alte Einträge
+  ohne dieses Feld (vor §50) heilen sich beim nächsten Sync automatisch:
+  liegt eine `KLAPPENTEXT_`-Datei vor, wird `hookSource` nachträglich auf
+  `'file'` gesetzt.
+- **Neues Feld `entry.hookSourceHash`** (MD5 von `blurbSourceText`):
+  verhindert, dass bei jedem stündlichen Sync erneut ein API-Aufruf
+  passiert, solange sich das Manuskript/die EPUB nicht geändert hat.
+  Ändert sich der Text (neue Fassung hochgeladen) und es liegt weiterhin
+  keine `KLAPPENTEXT_`-Datei vor, wird automatisch neu generiert.
+- **Kein Override eines bereits gesetzten manuellen Textes über den
+  Admin-Formular-Weg möglich, ohne eine Datei hochzuladen** — das war
+  aber schon vor §50 so: das `hook`-Formularfeld im Admin-Panel wird bei
+  jedem Sync von `sourceEntry.hook` überschrieben, sobald dieses einen
+  Wert hat (bestehendes Verhalten, nicht neu). Will der Autor einen
+  KI-Vorschlag verwerfen/ersetzen, muss er wie gehabt eine eigene
+  `KLAPPENTEXT_`-Datei hochladen — kein neuer Endpunkt nötig.
+
+**Nötiger manueller Schritt für den Nutzer (zwingend, sonst inaktiv):**
+1. Einen Anthropic-API-Key beschaffen (console.anthropic.com).
+2. Im Apps-Script-Editor unter **Projekteinstellungen → Script Properties**
+   eine neue Property `ANTHROPIC_API_KEY` mit dem Key als Wert anlegen
+   (niemals im Code selbst — wie beim bestehenden `ADMIN_PASSWORD`-Muster,
+   Abschnitt 7). Optional zusätzlich `ANTHROPIC_MODEL`, falls ein anderes
+   Modell als der Default gewünscht ist.
+3. `Code.gs` erneut per "New version" deployen (siehe Abschnitt 7 — enthält
+   jetzt §48/§49/§50 zusammen).
+
+**Verifiziert:** `node --check` auf die vollständige `Code.gs`-Datei grün.
+**Nicht getestet in dieser Session** (kein API-Key verfügbar, kein
+Netzwerkzugriff auf `api.anthropic.com` aus dieser Sandbox möglich): der
+tatsächliche API-Roundtrip, Tonalität/Qualität der generierten Klappentexte
+gegen ein echtes Manuskript, und ob Antwortlänge/-format bei allen
+Genres stabil den Vorgaben (120–180 Wörter, kein Markdown) folgt. Sollte
+vom Nutzer nach dem Deploy an einem echten Buch ohne Klappentext geprüft
+werden — bei Bedarf lässt sich der Stil-Prompt in `generateBlurbWithAI_`
+direkt nachschärfen, ohne an der Trigger-/Vorrang-Logik etwas zu ändern.

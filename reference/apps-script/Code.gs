@@ -173,6 +173,100 @@ function epubTextExtract_(fileId) {
   return parts.length ? parts.join('\n\n') : null;
 }
 
+// ───────────────────────── KI-Klappentext (optional, §50) ─────────────────
+//
+// Erzeugt automatisch einen Klappentext-Vorschlag aus dem Manuskript-
+// bzw. EPUB-Text, wenn (a) noch kein manueller Klappentext (KLAPPENTEXT_-
+// Datei) fuer diese Sprache hinterlegt ist und (b) ein Anthropic-API-Key
+// als Script Property gesetzt ist ("ANTHROPIC_API_KEY" ueber Apps-Script-
+// Projekteinstellungen -> Script Properties, NIE im Code selbst).
+// Ohne Key bleibt dieser Codepfad bewusst inaktiv (kein Fehler, siehe
+// syncDriveForAllBooks-Aufrufer) -- Kosten pro Aufruf entstehen nur, wenn
+// der Autor den Key explizit hinterlegt. Sobald irgendwann eine echte
+// KLAPPENTEXT_-Datei hochgeladen wird, hat die dauerhaft Vorrang (siehe
+// hookSource-Feld im Aufrufer) -- der KI-Text ist ein Entwurf, kein
+// endgueltiger Ersatz fuer die eigene Stimme des Autors.
+//
+// Stilvorgaben, destilliert aus zwei Quellen:
+// 1) A. J. Khans "Novel Master Standard v5.0": "Propulsion ohne
+//    Thrillerisierung" (nicht jedes Buch braucht Countdown/Leiche/Chase --
+//    Neugier, Intimitaet, Scham, Pflicht, Beziehung, Entdeckung oder
+//    Konsequenz ziehen genauso stark wie Gefahr, WENN es zum Genre passt)
+//    und die Forderung, dass Titel/Opening/Cover/Blurb/Comp-Titel
+//    demselben Leser dasselbe Erlebnis versprechen muessen (kein falsches
+//    Genre-Signal).
+// 2) Branchenuebliche Backcover-/Query-Letter-Konventionen kommerzieller
+//    Bestseller (Haken-Satz, Hauptfigur + ausloesendes Ereignis,
+//    eskalierender Konflikt/Einsatz, offenes Ende ohne Twist-Verrat,
+//    aktive statt zusammenfassende Sprache, keine Klischees).
+function generateBlurbWithAI_(manuscriptText, bookTitle, genre, langCode) {
+  const props = PropertiesService.getScriptProperties();
+  const apiKey = props.getProperty('ANTHROPIC_API_KEY');
+  if (!apiKey || !manuscriptText || !manuscriptText.trim()) return null;
+
+  const model = props.getProperty('ANTHROPIC_MODEL') || 'claude-sonnet-5';
+  // Claudes Kontextfenster traegt ganze Romane -- der Deckel schuetzt nur
+  // vor Ausreissern (z.B. versehentlich mehrfach verkettetem Text), ist
+  // keine bewusste Kuerzung auf "nur den Anfang".
+  const MAX_CHARS = 400000;
+  const text = manuscriptText.length > MAX_CHARS ? manuscriptText.slice(0, MAX_CHARS) : manuscriptText;
+
+  const langNames = { DE: 'Deutsch', EN: 'English', BS: 'bosanski/hrvatski/srpski' };
+  const langName = langNames[(langCode || '').toUpperCase()] || langCode || 'Deutsch';
+
+  const systemPrompt = [
+    'Du schreibst professionelle Backcover-Klappentexte fuer Romane, auf dem Niveau internationaler Bestseller-Verlage.',
+    '',
+    'Stilvorgabe (A. J. Khan Novel Master Standard v5.0):',
+    '- "Propulsion ohne Thrillerisierung": nicht jedes Buch braucht Countdown, Leiche, Verfolgungsjagd oder Cliffhanger -- Neugier, Intimitaet, Scham, Pflicht, Beziehung, Entdeckung oder Konsequenz koennen genauso stark ziehen wie Gefahr. Der Ton muss zum tatsaechlichen Genre des Manuskripts passen, niemals generisch "thrillerisiert" wirken, wenn das Buch das nicht ist.',
+    '- Titel, Opening, Cover, Klappentext und Comp-Titel muessen demselben Leser dasselbe Leseerlebnis versprechen -- kein falsches Genre-Signal, keine Ueberhoehung.',
+    '',
+    'Handwerkliche Pflicht-Elemente eines Weltklasse-Klappentexts (Bestseller-Praxis):',
+    '1. Ein starker Einstiegssatz/Haken, der sofort eine Frage oder Spannung im Kopf des Lesers erzeugt.',
+    '2. Hauptfigur klar benennen, plus das ausloesende Ereignis, das ihr Leben aus der Balance bringt.',
+    '3. Den zentralen Konflikt und was auf dem Spiel steht -- eskalierend erzaehlt, nicht als Aufzaehlung.',
+    '4. Endet auf einer offenen, ungeloesten Frage oder einem Moment maximaler Spannung -- verraet NIEMALS das Ende, die Aufloesung oder die grosse Wendung des Romans.',
+    '5. Aktive, praesente Sprache -- kein "In diesem Roman geht es um...", keine Inhaltsangabe im Schulaufsatz-Stil.',
+    '6. Keine abgenutzten Klischees ("In einer Welt, in der...", "Was sie nicht ahnte...", "Nichts ist mehr wie es scheint").',
+    '7. Laenge: ca. 120-180 Woerter in 3-5 kurzen Absaetzen, kein Bulletpoint-Format, kein Fettdruck/Markdown.',
+    '',
+    'Sprache des fertigen Textes: ' + langName + '.',
+    '',
+    'Gib AUSSCHLIESSLICH den fertigen Klappentext zurueck -- keine Ueberschrift, keine Anfuehrungszeichen drumherum, keine Erklaerung, kein Markdown, keine Meta-Kommentare davor oder danach.'
+  ].join('\n');
+
+  const userPrompt = 'Buchtitel: ' + bookTitle + (genre ? ('\nGenre: ' + genre) : '') +
+    '\n\nManuskripttext (vollstaendig oder grosser Auszug):\n\n' + text;
+
+  const payload = {
+    model: model,
+    max_tokens: 700,
+    system: systemPrompt,
+    messages: [{ role: 'user', content: userPrompt }]
+  };
+
+  const response = UrlFetchApp.fetch('https://api.anthropic.com/v1/messages', {
+    method: 'post',
+    contentType: 'application/json',
+    headers: {
+      'x-api-key': apiKey,
+      'anthropic-version': '2023-06-01'
+    },
+    payload: JSON.stringify(payload),
+    muteHttpExceptions: true
+  });
+
+  const status = response.getResponseCode();
+  if (status !== 200) {
+    throw new Error('Anthropic-API-Fehler ' + status + ': ' + response.getContentText().slice(0, 300));
+  }
+  const data = JSON.parse(response.getContentText());
+  const blurb = data && data.content && data.content[0] && data.content[0].text ? data.content[0].text.trim() : '';
+  if (!blurb) return null;
+  // Falls das Modell trotz Anweisung Anfuehrungszeichen drumherum setzt.
+  return blurb.replace(/^["“„]+|["“”]+$/g, '').trim();
+}
+
 // ───────────────────────── Drive-Automatisierung ─────────────────────────
 //
 // Ordnerstruktur pro Buch (Ordnername = exakt der Buchtitel), unter der
@@ -793,11 +887,20 @@ function syncDriveForAllBooks() {
         const entry = Object.assign({}, newLangs[code] || {});
         let entryChanged = false;
         let manuscriptText = '';
+        // Separat von manuscriptText: nur fuer den KI-Klappentext gedacht.
+        // manuscriptText steuert weiter unten den EPUB-Eigenbau
+        // (buildEpub_) und darf im epubReadyFile-Fall NICHT gesetzt werden
+        // (sonst wuerde eine bereits fertige, hochgeladene EPUB durch eine
+        // selbstgebaute aus dem grob tag-gestripten Extraktionstext
+        // ueberschrieben). blurbSourceText traegt in beiden Faellen den
+        // bestmoeglichen Volltext fuer generateBlurbWithAI_.
+        let blurbSourceText = '';
         if (info.finalFile) {
           try {
             const text = docTextById(info.finalFile.getId());
             if (text) {
               manuscriptText = text;
+              blurbSourceText = text;
               const words = text.trim().split(/\s+/).filter(Boolean).length;
               if (words && words !== entry.wordCount) { entry.wordCount = words; entryChanged = true; }
             }
@@ -811,6 +914,7 @@ function syncDriveForAllBooks() {
           try {
             const text = epubTextExtract_(info.epubReadyFile.getId());
             if (text) {
+              blurbSourceText = text;
               const words = text.trim().split(/\s+/).filter(Boolean).length;
               if (words && words !== entry.wordCount) { entry.wordCount = words; entryChanged = true; }
             }
@@ -834,6 +938,12 @@ function syncDriveForAllBooks() {
                 text = text.slice(0, MAX_HOOK_LENGTH) + '…';
                 note = ' — ACHTUNG: gekürzt, vermutlich kein echter Klappentext, bitte Datei prüfen.';
               }
+              // hookSource='file' markiert: ein manueller Klappentext hat
+              // Vorrang und darf vom KI-Vorschlag unten nie mehr
+              // ueberschrieben werden. Auch bei unveraendertem Text
+              // gesetzt, damit sich alte Eintraege ohne dieses Feld
+              // (vor §50) beim naechsten Sync selbst heilen.
+              if (entry.hookSource !== 'file') { entry.hookSource = 'file'; entryChanged = true; }
               if (text !== entry.hook) {
                 entry.hook = text;
                 entryChanged = true;
@@ -849,6 +959,30 @@ function syncDriveForAllBooks() {
           }
         } else {
           logDriveSync(logSheet, b.title, 'Kein Klappentext-Datei-Objekt (' + code + ') gefunden (info.klappentextFile ist leer) — entry.hook bleibt unveraendert.');
+          // Kein manueller Klappentext hinterlegt: KI-Vorschlag generieren,
+          // aber nur wenn (a) noch kein manueller Text vorher gesetzt war
+          // (hookSource !== 'file') und (b) der zuletzt per KI erzeugte
+          // Text nicht schon zur aktuellen Manuskriptfassung passt (Hash-
+          // Vergleich, verhindert unnoetige API-Aufrufe bei jedem
+          // stuendlichen Sync). Ohne ANTHROPIC_API_KEY (Script Property)
+          // bleibt generateBlurbWithAI_ ein reines No-op, siehe dort.
+          if (blurbSourceText && entry.hookSource !== 'file') {
+            try {
+              const srcHash = Utilities.base64Encode(Utilities.computeDigest(Utilities.DigestAlgorithm.MD5, blurbSourceText));
+              if (entry.hookSourceHash !== srcHash || !entry.hook) {
+                const aiBlurb = generateBlurbWithAI_(blurbSourceText, b.title, b.kind, code);
+                if (aiBlurb) {
+                  entry.hook = aiBlurb;
+                  entry.hookSource = 'ai';
+                  entry.hookSourceHash = srcHash;
+                  entryChanged = true;
+                  logDriveSync(logSheet, b.title, 'Klappentext (' + code + ') per KI generiert, neuer Anfang: "' + aiBlurb.slice(0, 60) + '"');
+                }
+              }
+            } catch (err) {
+              logDriveSync(logSheet, b.title, 'KI-Klappentext-Fehler (' + code + '): ' + err.message);
+            }
+          }
         }
 
         // EPUB neu bauen — nur wenn sich der Manuskripttext gerade geändert
