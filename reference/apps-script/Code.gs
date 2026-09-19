@@ -177,15 +177,18 @@ function epubTextExtract_(fileId) {
 //
 // Erzeugt automatisch einen Klappentext-Vorschlag aus dem Manuskript-
 // bzw. EPUB-Text, wenn (a) noch kein manueller Klappentext (KLAPPENTEXT_-
-// Datei) fuer diese Sprache hinterlegt ist und (b) ein Anthropic-API-Key
-// als Script Property gesetzt ist ("ANTHROPIC_API_KEY" ueber Apps-Script-
-// Projekteinstellungen -> Script Properties, NIE im Code selbst).
-// Ohne Key bleibt dieser Codepfad bewusst inaktiv (kein Fehler, siehe
-// syncDriveForAllBooks-Aufrufer) -- Kosten pro Aufruf entstehen nur, wenn
-// der Autor den Key explizit hinterlegt. Sobald irgendwann eine echte
-// KLAPPENTEXT_-Datei hochgeladen wird, hat die dauerhaft Vorrang (siehe
-// hookSource-Feld im Aufrufer) -- der KI-Text ist ein Entwurf, kein
-// endgueltiger Ersatz fuer die eigene Stimme des Autors.
+// Datei) fuer diese Sprache hinterlegt ist und (b) ein Gemini-API-Key als
+// Script Property gesetzt ist ("GEMINI_API_KEY" ueber Apps-Script-
+// Projekteinstellungen -> Script Properties, NIE im Code selbst). Google
+// Gemini statt Anthropic gewaehlt, weil es einen echten Gratis-Tarif ohne
+// Kreditkarte gibt (aistudio.google.com/apikey) -- passt ausserdem zur
+// ohnehin komplett auf Google-Infrastruktur laufenden Automatisierung
+// hier (Drive/Sheets/Apps Script). Ohne Key bleibt dieser Codepfad
+// bewusst inaktiv (kein Fehler, siehe syncDriveForAllBooks-Aufrufer).
+// Sobald irgendwann eine echte KLAPPENTEXT_-Datei hochgeladen wird, hat
+// die dauerhaft Vorrang (siehe hookSource-Feld im Aufrufer) -- der
+// KI-Text ist ein Entwurf, kein endgueltiger Ersatz fuer die eigene
+// Stimme des Autors.
 //
 // Stilvorgaben, destilliert aus zwei Quellen:
 // 1) A. J. Khans "Novel Master Standard v5.0": "Propulsion ohne
@@ -201,13 +204,13 @@ function epubTextExtract_(fileId) {
 //    aktive statt zusammenfassende Sprache, keine Klischees).
 function generateBlurbWithAI_(manuscriptText, bookTitle, genre, langCode) {
   const props = PropertiesService.getScriptProperties();
-  const apiKey = props.getProperty('ANTHROPIC_API_KEY');
+  const apiKey = props.getProperty('GEMINI_API_KEY');
   if (!apiKey || !manuscriptText || !manuscriptText.trim()) return null;
 
-  const model = props.getProperty('ANTHROPIC_MODEL') || 'claude-sonnet-5';
-  // Claudes Kontextfenster traegt ganze Romane -- der Deckel schuetzt nur
-  // vor Ausreissern (z.B. versehentlich mehrfach verkettetem Text), ist
-  // keine bewusste Kuerzung auf "nur den Anfang".
+  const model = props.getProperty('GEMINI_MODEL') || 'gemini-2.5-flash';
+  // Gemini 2.5 Flash traegt ganze Romane im Kontextfenster -- der Deckel
+  // schuetzt nur vor Ausreissern (z.B. versehentlich mehrfach
+  // verkettetem Text), ist keine bewusste Kuerzung auf "nur den Anfang".
   const MAX_CHARS = 400000;
   const text = manuscriptText.length > MAX_CHARS ? manuscriptText.slice(0, MAX_CHARS) : manuscriptText;
 
@@ -238,30 +241,32 @@ function generateBlurbWithAI_(manuscriptText, bookTitle, genre, langCode) {
   const userPrompt = 'Buchtitel: ' + bookTitle + (genre ? ('\nGenre: ' + genre) : '') +
     '\n\nManuskripttext (vollstaendig oder grosser Auszug):\n\n' + text;
 
+  // Gemini kennt keine eigene "system"-Rolle im Message-Array wie
+  // Anthropic -- stattdessen der separate Top-Level-Block
+  // "systemInstruction", inhaltlich aequivalent.
   const payload = {
-    model: model,
-    max_tokens: 700,
-    system: systemPrompt,
-    messages: [{ role: 'user', content: userPrompt }]
+    systemInstruction: { parts: [{ text: systemPrompt }] },
+    contents: [{ role: 'user', parts: [{ text: userPrompt }] }],
+    generationConfig: { maxOutputTokens: 700 }
   };
 
-  const response = UrlFetchApp.fetch('https://api.anthropic.com/v1/messages', {
+  const url = 'https://generativelanguage.googleapis.com/v1beta/models/' + encodeURIComponent(model) +
+    ':generateContent?key=' + encodeURIComponent(apiKey);
+  const response = UrlFetchApp.fetch(url, {
     method: 'post',
     contentType: 'application/json',
-    headers: {
-      'x-api-key': apiKey,
-      'anthropic-version': '2023-06-01'
-    },
     payload: JSON.stringify(payload),
     muteHttpExceptions: true
   });
 
   const status = response.getResponseCode();
   if (status !== 200) {
-    throw new Error('Anthropic-API-Fehler ' + status + ': ' + response.getContentText().slice(0, 300));
+    throw new Error('Gemini-API-Fehler ' + status + ': ' + response.getContentText().slice(0, 300));
   }
   const data = JSON.parse(response.getContentText());
-  const blurb = data && data.content && data.content[0] && data.content[0].text ? data.content[0].text.trim() : '';
+  const candidate = data && data.candidates && data.candidates[0];
+  const parts = candidate && candidate.content && candidate.content.parts;
+  const blurb = (parts && parts.length ? parts.map(function(p) { return p.text || ''; }).join('') : '').trim();
   if (!blurb) return null;
   // Falls das Modell trotz Anweisung Anfuehrungszeichen drumherum setzt.
   return blurb.replace(/^["“„]+|["“”]+$/g, '').trim();
@@ -964,7 +969,7 @@ function syncDriveForAllBooks() {
           // (hookSource !== 'file') und (b) der zuletzt per KI erzeugte
           // Text nicht schon zur aktuellen Manuskriptfassung passt (Hash-
           // Vergleich, verhindert unnoetige API-Aufrufe bei jedem
-          // stuendlichen Sync). Ohne ANTHROPIC_API_KEY (Script Property)
+          // stuendlichen Sync). Ohne GEMINI_API_KEY (Script Property)
           // bleibt generateBlurbWithAI_ ein reines No-op, siehe dort.
           if (blurbSourceText && entry.hookSource !== 'file') {
             try {

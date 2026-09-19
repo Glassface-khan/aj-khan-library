@@ -2352,14 +2352,25 @@ ruft direkt nach dem Ablegen der Datei `syncDriveForAllBooks()` auf
 (siehe §48). Neue Logik dort, pro fertiger Sprache:
 
 - **Neue Funktion `generateBlurbWithAI_(manuscriptText, bookTitle, genre,
-  langCode)`** — ruft `https://api.anthropic.com/v1/messages` per
-  `UrlFetchApp` auf, mit dem oben destillierten Stil-Prompt (sprachbewusst:
-  DE/EN/BS), max. 700 Tokens Antwort, Modell konfigurierbar über die neue
-  Script Property `ANTHROPIC_MODEL` (Default `claude-sonnet-5`).
-  **Ohne die neue Script Property `ANTHROPIC_API_KEY` bleibt die Funktion
-  ein reines No-op** (kein Fehler, kein API-Aufruf, kein Kostenrisiko ohne
-  bewusstes Opt-in) — exakt das gleiche Gating-Muster wie die schon
-  vorgemerkte, noch nicht gebaute KI-Genre-Erkennung (Abschnitt 12).
+  langCode)`** — ruft die **Google-Gemini-API** (`https://
+  generativelanguage.googleapis.com/v1beta/models/<Modell>:
+  generateContent`) per `UrlFetchApp` auf, mit dem oben destillierten
+  Stil-Prompt (sprachbewusst: DE/EN/BS) als `systemInstruction`, max. 700
+  Output-Tokens, Modell konfigurierbar über die neue Script Property
+  `GEMINI_MODEL` (Default `gemini-2.5-flash`).
+  **Ohne die neue Script Property `GEMINI_API_KEY` bleibt die Funktion
+  ein reines No-op** (kein Fehler, kein API-Aufruf).
+  **Bewusst Gemini statt Anthropic gewählt** (Nutzer-Nachfrage: "geht es
+  nicht ohne API-Key, wie Claude Code, oder mit einer Gratis-KI wie
+  Gemini/DeepSeek/Qwen?"): ein Server-Aufruf braucht immer irgendeinen
+  Schlüssel — Claude Code selbst authentifiziert sich im Hintergrund
+  genauso, nur unsichtbar über das eigene Abo. Google AI Studio
+  (`aistudio.google.com/apikey`) vergibt aber einen **echten
+  Gratis-API-Key ohne Kreditkarte** mit großzügigem Tageslimit, passend
+  zur ohnehin komplett auf Google-Infrastruktur laufenden Automatisierung
+  hier (Drive/Sheets/Apps Script). DeepSeek/Qwen wurden verworfen: beide
+  API-Key-pflichtig, aber ohne dauerhaften Gratis-Tarif wie Gemini (nur
+  Test-Guthaben).
 - **Wo es greift:** in `syncDriveForAllBooks()`, im bestehenden
   Klappentext-Block pro Sprache — nur im `else`-Zweig, wenn **keine**
   `KLAPPENTEXT_`-Datei gefunden wurde. Nimmt `blurbSourceText` (Volltext
@@ -2367,7 +2378,7 @@ ruft direkt nach dem Ablegen der Datei `syncDriveForAllBooks()` auf
   direkt hochgeladenen `EPUB_`-Datei über das bestehende
   `epubTextExtract_`) und schickt ihn komplett (bis 400 000 Zeichen
   Deckel, reiner Ausreißer-Schutz, kein bewusstes Kürzen auf "nur den
-  Anfang" — Claudes Kontextfenster trägt ganze Romane) an die API.
+  Anfang" — Geminis Kontextfenster trägt ganze Romane) an die API.
 - **Neues Feld `entry.hookSource`** (`'file'` oder `'ai'`) pro
   Sprachfassung in `b.langs[code]`: markiert, woher der aktuelle
   Klappentext kommt. Eine manuell hochgeladene `KLAPPENTEXT_`-Datei setzt
@@ -2391,21 +2402,28 @@ ruft direkt nach dem Ablegen der Datei `syncDriveForAllBooks()` auf
   `KLAPPENTEXT_`-Datei hochladen — kein neuer Endpunkt nötig.
 
 **Nötiger manueller Schritt für den Nutzer (zwingend, sonst inaktiv):**
-1. Einen Anthropic-API-Key beschaffen (console.anthropic.com).
+1. Kostenlosen Gemini-API-Key beschaffen: `aistudio.google.com/apikey`
+   (mit dem gleichen Google-Konto, das auch Drive/Apps Script nutzt) —
+   kein Kreditkarten-Zwang für den Gratis-Tarif.
 2. Im Apps-Script-Editor unter **Projekteinstellungen → Script Properties**
-   eine neue Property `ANTHROPIC_API_KEY` mit dem Key als Wert anlegen
+   eine neue Property `GEMINI_API_KEY` mit dem Key als Wert anlegen
    (niemals im Code selbst — wie beim bestehenden `ADMIN_PASSWORD`-Muster,
-   Abschnitt 7). Optional zusätzlich `ANTHROPIC_MODEL`, falls ein anderes
-   Modell als der Default gewünscht ist.
+   Abschnitt 7). Optional zusätzlich `GEMINI_MODEL`, falls ein anderes
+   Modell als der Default (`gemini-2.5-flash`) gewünscht ist.
 3. `Code.gs` erneut per "New version" deployen (siehe Abschnitt 7 — enthält
    jetzt §48/§49/§50 zusammen).
 
 **Verifiziert:** `node --check` auf die vollständige `Code.gs`-Datei grün.
 **Nicht getestet in dieser Session** (kein API-Key verfügbar, kein
-Netzwerkzugriff auf `api.anthropic.com` aus dieser Sandbox möglich): der
-tatsächliche API-Roundtrip, Tonalität/Qualität der generierten Klappentexte
-gegen ein echtes Manuskript, und ob Antwortlänge/-format bei allen
-Genres stabil den Vorgaben (120–180 Wörter, kein Markdown) folgt. Sollte
-vom Nutzer nach dem Deploy an einem echten Buch ohne Klappentext geprüft
-werden — bei Bedarf lässt sich der Stil-Prompt in `generateBlurbWithAI_`
-direkt nachschärfen, ohne an der Trigger-/Vorrang-Logik etwas zu ändern.
+Netzwerkzugriff auf `generativelanguage.googleapis.com` aus dieser
+Sandbox möglich): der tatsächliche API-Roundtrip, Tonalität/Qualität der
+generierten Klappentexte gegen ein echtes Manuskript, und ob
+Antwortlänge/-format bei allen Genres stabil den Vorgaben (120–180
+Wörter, kein Markdown) folgt. Sollte vom Nutzer nach dem Deploy an einem
+echten Buch ohne Klappentext geprüft werden — bei Bedarf lässt sich der
+Stil-Prompt in `generateBlurbWithAI_` direkt nachschärfen, ohne an der
+Trigger-/Vorrang-Logik etwas zu ändern. Gemini-Tageslimit des Gratis-
+Tarifs kann sich ändern — bei `429`/Quota-Fehlern wirft die Funktion
+einen Fehler, der geloggt wird (`logDriveSync`), der Upload selbst
+schlägt dadurch nicht fehl (siehe bestehendes `try/catch`-Muster im
+Aufrufer).
