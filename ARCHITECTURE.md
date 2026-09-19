@@ -2289,3 +2289,37 @@ weiterhin fehlerfrei bis zum Zugangscode-Screen.
 
 **Nächster Schritt:** `Code.gs` erneut deployen (enthält jetzt auch
 diesen Fix zusammen mit §44/§45/§47).
+
+## 49 · Nachtrag (19.09.2026, Teil 2) — Fortschrittsanzeige beim Datei-Upload (`index.html`)
+
+Nutzer-Wunsch: gerade EPUB-/Manuskript-Uploads vom Handy (oft auf
+Mobilfunknetz, Dateien mehrere MB groß) zeigten bisher nur einen
+statischen "wird hochgeladen…"-Text ohne jedes Feedback, wie weit der
+Upload tatsächlich ist.
+
+**Nur `index.html`, kein Backend-Änderung nötig** — `uploadBookFile_()`
+lief bisher über `fetch()`, das keinen Zugriff auf den Upload-Fortschritt
+bietet (nur auf den fertigen Response). Umgestellt auf `XMLHttpRequest`
+mit `xhr.upload.onprogress`: bei jedem Fortschritts-Event wird, falls
+`lengthComputable`, ein neues `progress`-Feld im bestehenden
+`uploadState[i]`-Objekt auf den gerundeten Prozentsatz gesetzt (gleiches
+`setUploadField`-Muster wie die bestehenden Busy-Flags). Response-Handling
+(`data.ok`/`data.error`/Netzwerkfehler) blieb inhaltlich unverändert, nur
+von `.then((r) => r.json())` auf `xhr.onload`/`JSON.parse` umgestellt, da
+XHR kein eingebautes Promise-Interface hat. `progress` wird vor jedem
+Upload auf `0` gesetzt und nach Abschluss (Erfolg, Fehler-Response oder
+Netzwerkfehler) wieder auf `0` zurückgesetzt.
+
+Betrifft **alle vier** Upload-Felder gleichermaßen (sie teilen sich
+`uploadBookFile_`): Manuskript, Klappentext, `metadata.json`, fertige
+EPUB-Datei (§48). Die vier bestehenden `sc-if`-Spinner-Texte im
+Admin-Panel zeigen jetzt zusätzlich `{{ book.upload.progress }}%` an,
+z. B. "EPUB wird hochgeladen… 42%".
+
+**Verifiziert:** JSON-Parse der `__bundler/template`-Zeile grün,
+`node --check` auf die extrahierte Component-Klasse grün, alle vier
+Template-Stellen sowie die neue `XMLHttpRequest`-Umstellung per gezielter
+String-Ersetzung eingefügt (kein freihändiges Retippen). Kein Playwright
+in dieser Sandbox verfügbar (Paket nicht installiert) — Live-Test des
+tatsächlichen Fortschrittsbalkens beim Hochladen einer echten Datei vom
+Handy steht noch aus.
