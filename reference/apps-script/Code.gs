@@ -146,6 +146,33 @@ function countWordsInDriveFile(fileId) {
   return text.trim().split(/\s+/).filter(Boolean).length;
 }
 
+// Grobe Text-Extraktion aus einer bereits fertigen, direkt hochgeladenen
+// EPUB-Datei (nur fuer die Wortzahl-Anzeige gedacht, nicht fuer die
+// eigentliche EPUB-Erstellung -- die entfaellt hier ja gerade, siehe
+// ARCHITECTURE.md "EPUB anstelle eines Manuskript-Dokuments"). Eine EPUB
+// ist einfach ein ZIP, Utilities.unzip() entpackt sie direkt ohne externe
+// Bibliothek; aus jeder XHTML/HTML-Datei darin werden die Tags entfernt.
+// Reihenfolge/Vollstaendigkeit ist hier nicht kritisch, es geht nur um
+// eine ungefaehre Wortzahl fuer die Buchkarte, nicht um exakten Lesetext.
+function epubTextExtract_(fileId) {
+  const file = DriveApp.getFileById(fileId);
+  let entries;
+  try {
+    entries = Utilities.unzip(file.getBlob());
+  } catch (err) {
+    return null;
+  }
+  const parts = [];
+  entries.forEach(function(entry) {
+    const name = entry.getName().toLowerCase();
+    if (name.endsWith('.xhtml') || name.endsWith('.html') || name.endsWith('.htm')) {
+      const raw = entry.getDataAsString('UTF-8');
+      parts.push(raw.replace(/<[^>]*>/g, ' ').replace(/&[a-z0-9#]+;/gi, ' '));
+    }
+  });
+  return parts.length ? parts.join('\n\n') : null;
+}
+
 // ───────────────────────── Drive-Automatisierung ─────────────────────────
 //
 // Ordnerstruktur pro Buch (Ordnername = exakt der Buchtitel), unter der
@@ -327,9 +354,14 @@ function scanBookLanguages(manuskriptFolder) {
     const finalFile = findFileByPrefix(langFolder, 'FINAL_');
     const entwurfFile = findFileByPrefix(langFolder, 'ENTWURF_');
     const klappentextFile = findFileByPrefix(langFolder, 'KLAPPENTEXT_');
+    // EPUB_-Datei: eine bereits fertige, direkt hochgeladene EPUB anstelle
+    // eines Manuskript-Dokuments (siehe ARCHITECTURE.md) -- macht die
+    // Sprache ebenfalls "fertig", auch ohne FINAL_-Datei.
+    const epubReadyFile = findFileByPrefix(langFolder, 'EPUB_');
     langs[code] = {
-      status: finalFile ? 'fertig' : (entwurfFile ? 'in-arbeit' : 'offen'),
+      status: (finalFile || epubReadyFile) ? 'fertig' : (entwurfFile ? 'in-arbeit' : 'offen'),
       finalFile: finalFile,
+      epubReadyFile: epubReadyFile,
       klappentextFile: klappentextFile,
       folder: langFolder
     };
@@ -761,15 +793,30 @@ function syncDriveForAllBooks() {
         const entry = Object.assign({}, newLangs[code] || {});
         let entryChanged = false;
         let manuscriptText = '';
-        try {
-          const text = docTextById(info.finalFile.getId());
-          if (text) {
-            manuscriptText = text;
-            const words = text.trim().split(/\s+/).filter(Boolean).length;
-            if (words && words !== entry.wordCount) { entry.wordCount = words; entryChanged = true; }
+        if (info.finalFile) {
+          try {
+            const text = docTextById(info.finalFile.getId());
+            if (text) {
+              manuscriptText = text;
+              const words = text.trim().split(/\s+/).filter(Boolean).length;
+              if (words && words !== entry.wordCount) { entry.wordCount = words; entryChanged = true; }
+            }
+          } catch (err) {
+            logDriveSync(logSheet, b.title, 'Wortzahl-Fehler (' + code + '): ' + err.message);
           }
-        } catch (err) {
-          logDriveSync(logSheet, b.title, 'Wortzahl-Fehler (' + code + '): ' + err.message);
+        } else if (info.epubReadyFile) {
+          // Kein Manuskript-Dokument vorhanden, aber eine fertige,
+          // direkt hochgeladene EPUB -- Wortzahl grob aus deren
+          // Textinhalt schaetzen, statt komplett leer zu bleiben.
+          try {
+            const text = epubTextExtract_(info.epubReadyFile.getId());
+            if (text) {
+              const words = text.trim().split(/\s+/).filter(Boolean).length;
+              if (words && words !== entry.wordCount) { entry.wordCount = words; entryChanged = true; }
+            }
+          } catch (err) {
+            logDriveSync(logSheet, b.title, 'Wortzahl-Fehler aus EPUB (' + code + '): ' + err.message);
+          }
         }
         if (info.klappentextFile) {
           try {
@@ -823,6 +870,19 @@ function syncDriveForAllBooks() {
             }
           } catch (err) {
             logDriveSync(logSheet, b.title, 'EPUB-Fehler (' + code + '): ' + err.message);
+          }
+        } else if (!info.finalFile && info.epubReadyFile) {
+          // Kein Manuskript-Dokument -- die direkt hochgeladene, fertige
+          // EPUB wird unveraendert uebernommen statt selbst eine zu bauen.
+          try {
+            const epubUrl = epubDownloadUrlFor_(info.epubReadyFile);
+            if (epubUrl !== entry.epubUrl) {
+              entry.epubUrl = epubUrl;
+              entryChanged = true;
+              logDriveSync(logSheet, b.title, 'Fertige EPUB-Datei uebernommen (' + code + '): ' + info.epubReadyFile.getName());
+            }
+          } catch (err) {
+            logDriveSync(logSheet, b.title, 'EPUB-Uebernahme-Fehler (' + code + '): ' + err.message);
           }
         }
 
@@ -1349,12 +1409,16 @@ function handle(e) {
     try {
       const bookTitle = (e.parameter.bookTitle || '').trim();
       const langCode = (e.parameter.langCode || '').trim().toUpperCase();
-      const kind = (e.parameter.kind || '').trim().toUpperCase(); // FINAL | ENTWURF | KLAPPENTEXT | METADATA
+      const kind = (e.parameter.kind || '').trim().toUpperCase(); // FINAL | ENTWURF | KLAPPENTEXT | METADATA | EPUB
       const fileName = e.parameter.fileName || 'upload';
       const mimeType = e.parameter.mimeType || 'application/octet-stream';
       const base64Data = e.parameter.fileData || '';
       if (!bookTitle) return jsonOut({ ok: false, error: 'Kein Buchtitel angegeben.' });
-      if (['FINAL', 'ENTWURF', 'KLAPPENTEXT', 'METADATA'].indexOf(kind) === -1) return jsonOut({ ok: false, error: 'Ungültiger Dateityp.' });
+      // EPUB: bereits fertige EPUB-Datei anstelle eines Manuskript-Dokuments
+      // (siehe scanBookLanguages/syncDriveForAllBooks + ARCHITECTURE.md) --
+      // landet wie FINAL_/ENTWURF_ im Sprach-Unterordner, braucht also einen
+      // Sprachcode, macht die Sprache aber auch OHNE FINAL_-Datei "fertig".
+      if (['FINAL', 'ENTWURF', 'KLAPPENTEXT', 'METADATA', 'EPUB'].indexOf(kind) === -1) return jsonOut({ ok: false, error: 'Ungültiger Dateityp.' });
       // METADATA (metadata.json fuers Genre) liegt direkt im Buch-Hauptordner,
       // braucht anders als Manuskript/Klappentext KEINEN Sprach-Unterordner.
       if (kind !== 'METADATA' && !langCode) return jsonOut({ ok: false, error: 'Kein Sprachcode angegeben (z.B. DE, EN, BS).' });

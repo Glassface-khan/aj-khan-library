@@ -2249,3 +2249,43 @@ METADATA) verwendet.
 **Nächster Schritt:** `Code.gs` muss (zusammen mit den Fixes aus §44/§45)
 noch vom Nutzer manuell deployt werden. Das Frontend-Update (Toggle) ist
 wie gehabt automatisch live über GitHub Pages, sobald gemerged.
+
+## 48 · Nachtrag (19.09.2026) — Fertige EPUB-Datei akzeptieren (anstelle eines Manuskript-Dokuments)
+
+Nutzer-Wunsch: manche Bücher liegen schon als fertige EPUB vor (aus
+einem anderen Workflow) — das System sollte diese direkt akzeptieren
+können, statt zwingend ein Word/Google-Doc-Manuskript zu verlangen,
+aus dem es selbst eine EPUB baut.
+
+**Umsetzung (`reference/apps-script/Code.gs`):**
+- Neuer Upload-Kind `EPUB` (neben FINAL/ENTWURF/KLAPPENTEXT/METADATA)
+  in `action==='uploadBookFile'` — landet wie FINAL_/ENTWURF_ im
+  Sprach-Unterordner (`EPUB_<Titel>.epub`), braucht also weiterhin
+  einen Sprachcode.
+- `scanBookLanguages()`: neues Feld `epubReadyFile`
+  (`findFileByPrefix(langFolder, 'EPUB_')`). Status wird jetzt auch
+  ohne `FINAL_`-Datei "fertig", wenn eine `EPUB_`-Datei existiert.
+- `syncDriveForAllBooks()`: wenn kein `FINAL_`-Dokument vorliegt, aber
+  eine `EPUB_`-Datei, wird (a) die Wortzahl per neuer Funktion
+  `epubTextExtract_(fileId)` grob aus dem EPUB-Textinhalt geschätzt
+  (EPUB ist einfach ein ZIP, `Utilities.unzip()` entpackt es direkt,
+  Tags aus allen `.xhtml`/`.html`-Dateien werden entfernt — kein
+  Anspruch auf exakte Wortzahl, nur fürs Anzeige-Badge) und (b) die
+  hochgeladene EPUB unverändert als `entry.epubUrl` übernommen
+  (`epubDownloadUrlFor_`), statt selbst eine per `buildEpub_` zu
+  bauen. Liegt zusätzlich ein `FINAL_`-Dokument vor, hat das weiterhin
+  Vorrang (Doc-basierter Bau bleibt wie bisher) — die EPUB-Datei ist
+  eine Alternative, kein Override.
+
+**`index.html`:** neues Datei-Upload-Feld "Fertige EPUB-Datei (statt
+Manuskript-Dokument, falls schon vorhanden)" neben dem bestehenden
+Klappentext-Upload, ruft `uploadBookFile_(i, 'EPUB', file,
+'epubReadyBusy')` auf — gleiches Muster wie die bestehenden
+Upload-Felder, kein neuer Code-Pfad nötig.
+
+**Verifiziert:** Manifest unverändert, Template-Diff exakt wie
+beabsichtigt, `node --check` auf `Code.gs` grün, Playwright-Probe lädt
+weiterhin fehlerfrei bis zum Zugangscode-Screen.
+
+**Nächster Schritt:** `Code.gs` erneut deployen (enthält jetzt auch
+diesen Fix zusammen mit §44/§45/§47).
