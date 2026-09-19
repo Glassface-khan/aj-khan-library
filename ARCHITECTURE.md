@@ -2427,3 +2427,48 @@ Tarifs kann sich ändern — bei `429`/Quota-Fehlern wirft die Funktion
 einen Fehler, der geloggt wird (`logDriveSync`), der Upload selbst
 schlägt dadurch nicht fehl (siehe bestehendes `try/catch`-Muster im
 Aufrufer).
+
+## 51 · Nachtrag (19.09.2026, Teil 4) — Script-Properties-UI durch nie geleerte Admin-Tokens read-only geworden
+
+Beim Versuch, `GEMINI_API_KEY` einzutragen: Nutzer-Screenshot zeigte
+über 50 Script Properties, fast alle `admintoken_<uuid>`. Ursache
+gefunden: jeder Admin-Login (`action==='checkPassword'`) erzeugt einen
+neuen `admintoken_`-Eintrag (Abschnitt 7, 7 Tage Lebensdauer), aber
+nichts hat abgelaufene Einträge je wieder gelöscht — reines Wachstum bei
+jedem Login. Ab 50 Properties zeigt die Apps-Script-Oberfläche unter
+Projekteinstellungen nur noch die ersten 50 an und schaltet komplett auf
+**Lesemodus** — neue Properties lassen sich dann über die UI gar nicht
+mehr anlegen, nur noch programmatisch. Das hat den eigentlichen
+Vorhaben (Gemini-Key eintragen) live blockiert.
+
+**Fix (`reference/apps-script/Code.gs`):** neue Funktion
+`cleanupExpiredAdminTokens_()` — iteriert alle Script Properties, löscht
+jeden `admintoken_`-Eintrag, dessen gespeicherter Zeitstempel älter als
+`ADMIN_TOKEN_LIFETIME_MS` ist. Aufgerufen bei jedem erfolgreichen
+Admin-Login, direkt vor der Ausgabe eines neuen Tokens — räumt sich damit
+von selbst laufend auf, ohne separaten Cron/Trigger.
+
+**Sofortiger manueller Schritt für den bereits bestehenden Rückstand**
+(die UI selbst ist ja gerade gesperrt): im Apps-Script-Editor unter dem
+Code-Tab (`<>`-Symbol) eine neue, temporäre Funktion einfügen, sie oben
+im Dropdown neben "Debuggen" auswählen und über "Ausführen" **einmal**
+laufen lassen — danach kann die Funktion wieder gelöscht werden:
+
+```javascript
+function _einmaligerAufraeumSchritt() {
+  cleanupExpiredAdminTokens_();
+  PropertiesService.getScriptProperties().setProperty('GEMINI_API_KEY', 'DEIN_NEUER_KEY_HIER');
+}
+```
+
+Danach ist die Properties-Liste wieder unter 50 Einträgen und in der UI
+normal bearbeitbar (z. B. um den Wert später zu ändern), und
+`GEMINI_API_KEY` ist gesetzt. Nach dem Ausführen den Platzhaltertext im
+Code wieder durch Leerzeichen/Kommentar ersetzen oder die ganze Funktion
+löschen, damit der Key nicht dauerhaft im Editor-Verlauf sichtbar
+herumliegt (die Script-Property selbst bleibt davon unberührt).
+
+**Verifiziert:** `node --check` grün. **Nicht getestet:** der reale
+Effekt auf die Apps-Script-Properties-UI (kein Zugriff auf das echte
+Apps-Script-Projekt aus dieser Sandbox) — sollte sich nach dem nächsten
+Admin-Login von selbst zeigen (Anzahl `admintoken_`-Einträge sinkt).

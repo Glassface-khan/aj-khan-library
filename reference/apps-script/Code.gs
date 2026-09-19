@@ -37,6 +37,27 @@ function checkAdmin(e) {
   return { ok: valid, token: token, cached: stored };
 }
 
+// Raeumt abgelaufene admintoken_-Eintraege auf. Ohne das sammelt sich pro
+// Admin-Login ein neuer Eintrag an, der nie geloescht wird -- am
+// 19.09.2026 live aufgefallen: ab 50 Script Properties zeigt die
+// Apps-Script-Oberflaeche unter Projekteinstellungen nur noch die ersten
+// 50 an und schaltet komplett auf Lesemodus (neue Properties lassen sich
+// dann nur noch per Code setzen, nicht mehr ueber die UI). Wird bei jedem
+// erfolgreichen Admin-Login mit aufgerufen (siehe action==='checkPassword'
+// unten), damit die Liste sich von selbst kurz haelt, statt unbegrenzt zu
+// wachsen.
+function cleanupExpiredAdminTokens_() {
+  const props = PropertiesService.getScriptProperties();
+  const all = props.getProperties();
+  Object.keys(all).forEach(function(key) {
+    if (key.indexOf('admintoken_') !== 0) return;
+    const issuedAt = Number(all[key]);
+    if (!issuedAt || (Date.now() - issuedAt) >= ADMIN_TOKEN_LIFETIME_MS) {
+      props.deleteProperty(key);
+    }
+  });
+}
+
 // E-Mail-Benachrichtigung an den Autor beim ERSTEN Login eines Zugangscodes
 // (Wiedererkennung via PropertiesService, damit es nicht bei jedem erneuten
 // Besuch spammt). Empfänger ist automatisch das eigene Google-Konto, in dem
@@ -1352,6 +1373,7 @@ function handle(e) {
     const ok = !!expected && e.parameter.password === expected;
     const result = { ok: ok };
     if (ok) {
+      cleanupExpiredAdminTokens_();
       const token = Utilities.getUuid();
       props.setProperty('admintoken_' + token, String(Date.now()));
       result.adminToken = token;
