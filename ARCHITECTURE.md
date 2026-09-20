@@ -2536,3 +2536,65 @@ Word-Export, Pandoc, Vellum …) zuverlässig zutrifft, und ob `dc:title`
 dort immer ohne zusätzliche Namespace-Präfixe/Attribute vorkommt, die die
 Regex verfehlen könnte. Sollte der Nutzer nach dem Deploy an einer echten
 EPUB-Datei ohne Buchtitel prüfen.
+
+## 53 · Nachtrag (19.09.2026, Teil 6) — Cover aus EPUB übernehmen + neue Bücher standardmäßig „fertig"
+
+Nutzer-Nachfrage nach §52: Warum braucht es noch ein separates Cover,
+wenn die EPUB doch eins eingebettet hat? Und: Der Status neuer Bücher
+soll direkt auf „fertig" stehen, weil der ganze Workflow (Titel,
+Wortzahl, Klappentext) jetzt ohnehin automatisch beim Upload passiert.
+
+**1. Cover-Extraktion aus der EPUB (`reference/apps-script/Code.gs`):**
+- Neue Funktion `epubCoverBlobFromFile_(file)` — findet das Cover-Bild
+  über das EPUB3-Manifest-Attribut `properties="cover-image"`, mit
+  Fallback auf das ältere EPUB2-Muster `<meta name="cover"
+  content="ID"/>` + zugehöriges `<item id="ID" href="...">`. Attribute
+  einzeln per kleiner Regex ausgelesen (nicht ein großes kombiniertes
+  Muster), weil die Reihenfolge von `id`/`href`/`properties` zwischen
+  Erzeuger-Tools (Calibre, Pandoc, Vellum, Word-Export) variiert. Der
+  `href` wird relativ zum Ordner der `.opf`-Datei aufgelöst (EPUBs legen
+  Bilder meist relativ dazu ab, z. B. `images/cover.jpg` von `OEBPS/`
+  aus gesehen).
+- **Wo es greift:** in `syncDriveForAllBooks()`, direkt nach dem
+  Wortzahl-Block für eine hochgeladene `EPUB_`-Datei — **nur wenn noch
+  kein Cover** im `Bilder/Cover`-Ordner liegt (`!coverFile`). Ein dort
+  manuell abgelegtes Bild hat weiterhin immer Vorrang und wird nie
+  ersetzt — die EPUB-Extraktion ist reiner Fallback für den Fall, dass
+  noch gar kein Cover existiert. Gefundenes Bild wird als eigene Datei
+  (`cover_from_epub.<ext>`) in den bestehenden `Bilder/Cover`-Ordner
+  gelegt — läuft danach über exakt dieselbe Weiterverarbeitung
+  (`firstImageFile`/`publicViewUrlFor`) wie jedes andere Cover, kein
+  Sonderfall im Rest des Codes nötig.
+- Kein Cover in der EPUB gefunden (z. B. weil das Manuskript ganz ohne
+  Coverbild exportiert wurde) → bleibt wie bisher: kein Cover, bis der
+  Autor eins über den bestehenden Weg (URL/Datei-Upload) einträgt.
+
+**2. Neue Bücher standardmäßig „fertig" (`index.html`, `addBook`):**
+`status` von `'In Entwicklung'` auf `'Fertig'`, **und** — das ist der
+eigentlich wirksame Schalter — `isFinished` von `false` auf `true`.
+Grund für beides: `bookIsFinished` im Frontend prüft `isFinished`
+**zuerst** (`b.isFinished !== undefined ? !!b.isFinished : status
+startsWith('fertig')`) — da `addBook` `isFinished` immer explizit setzt
+(nie `undefined`), hätte eine reine Status-Text-Änderung ohne die
+`isFinished`-Änderung **nichts** bewirkt, das EPUB/Read-Gate hängt
+tatsächlich an `isFinished`, nicht am Freitext.
+
+**Bewusste Kompromisse / Nebenwirkungen, mit denen der Nutzer einverstanden
+war:** Ein neu angelegtes Buch gilt jetzt **sofort** als „fertig" und
+erscheint so auf der öffentlichen Seite, auch bevor überhaupt ein
+Manuskript/EPUB hochgeladen wurde — passend zum Nutzer-Workflow (Buch
+anlegen, direkt EPUB hochladen), aber ein Buch, das absichtlich länger
+als Entwurf unsichtbar bleiben soll, muss jetzt aktiv auf einen anderen
+Status/`isFinished:false` zurückgestellt werden, statt es wie bisher
+default so vorzufinden.
+
+**Verifiziert:** JSON-Parse der `__bundler/template`-Zeile grün,
+`node --check` auf `Code.gs` und die extrahierte Component-Klasse grün.
+**Nicht getestet:** der tatsächliche Cover-Extraktions-Roundtrip gegen
+eine echte EPUB-Datei (kein Apps-Script-Zugriff aus dieser Sandbox) —
+insbesondere Pfad-Auflösung bei tief verschachtelten OEBPS-Strukturen
+und ob alle gängigen Erzeuger-Tools durchgängig `properties="cover-
+image"` setzen (ältere Calibre-Versionen z. B. nutzen teils nur das
+EPUB2-`<meta>`-Muster, das als Fallback abgedeckt ist). Sollte der
+Nutzer nach dem Deploy an einer echten EPUB ohne vorhandenes Cover
+prüfen.

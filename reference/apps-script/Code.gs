@@ -235,6 +235,60 @@ function epubTitleFromBytes_(bytes) {
   return title || null;
 }
 
+// Extrahiert das im EPUB eingebettete Cover-Bild direkt aus einer bereits
+// als Drive-Datei vorliegenden EPUB (§53) -- ueber das im Manifest als
+// properties="cover-image" markierte Item (EPUB3) bzw. als Fallback das
+// aeltere <meta name="cover" content="ID"/>-Muster (EPUB2). Attribute
+// einzeln per kleiner Regex statt eines grossen kombinierten Musters
+// ausgelesen, weil die Reihenfolge von id/href/properties in <item .../>
+// zwischen Erzeuger-Tools (Calibre, Pandoc, Vellum, Word-Export ...)
+// variiert. Gibt null zurueck, wenn kein Cover gefunden wird -- der
+// Aufrufer in syncDriveForAllBooks behandelt das als "kein Cover
+// verfuegbar", genau wie bisher ohne EPUB-Cover-Extraktion.
+function epubCoverBlobFromFile_(file) {
+  let entries;
+  try {
+    entries = Utilities.unzip(file.getBlob());
+  } catch (err) {
+    return null;
+  }
+  const opfEntry = entries.filter(function(e) { return e.getName().toLowerCase().endsWith('.opf'); })[0];
+  if (!opfEntry) return null;
+  const opfPath = opfEntry.getName();
+  const opfDir = opfPath.indexOf('/') >= 0 ? opfPath.slice(0, opfPath.lastIndexOf('/') + 1) : '';
+  const xml = opfEntry.getDataAsString('UTF-8');
+
+  const items = [];
+  const itemRe = /<item\b([^>]*)\/?>/gi;
+  let m;
+  while ((m = itemRe.exec(xml))) {
+    const attrs = m[1];
+    const id = (attrs.match(/\bid="([^"]*)"/i) || [])[1] || '';
+    const href = (attrs.match(/\bhref="([^"]*)"/i) || [])[1] || '';
+    const properties = (attrs.match(/\bproperties="([^"]*)"/i) || [])[1] || '';
+    if (id || href) items.push({ id: id, href: href, properties: properties });
+  }
+
+  let coverHref = null;
+  const byProperties = items.filter(function(it) { return /\bcover-image\b/i.test(it.properties); })[0];
+  if (byProperties) {
+    coverHref = byProperties.href;
+  } else {
+    const metaMatch = xml.match(/<meta\s+name="cover"\s+content="([^"]+)"/i);
+    if (metaMatch) {
+      const byId = items.filter(function(it) { return it.id === metaMatch[1]; })[0];
+      if (byId) coverHref = byId.href;
+    }
+  }
+  if (!coverHref) return null;
+
+  const targetPath = (opfDir + coverHref).replace(/^\.\//, '');
+  const targetEntry = entries.filter(function(e) {
+    return e.getName() === targetPath || e.getName() === decodeURIComponent(targetPath);
+  })[0];
+  return targetEntry ? targetEntry.getBlob() : null;
+}
+
 // ───────────────────────── KI-Klappentext (optional, §50) ─────────────────
 //
 // Erzeugt automatisch einen Klappentext-Vorschlag aus dem Manuskript-
@@ -987,6 +1041,26 @@ function syncDriveForAllBooks() {
             }
           } catch (err) {
             logDriveSync(logSheet, b.title, 'Wortzahl-Fehler aus EPUB (' + code + '): ' + err.message);
+          }
+          // Cover aus der EPUB uebernehmen (§53), aber NUR wenn noch kein
+          // eigenes Cover im Bilder/Cover-Ordner liegt -- ein dort manuell
+          // abgelegtes Bild hat immer Vorrang und wird nie ersetzt. coverFile
+          // ist eine Variable aus dem umgebenden Scope (oben im forEach ueber
+          // alle Buecher deklariert) -- wird sie hier gesetzt, greift der
+          // bestehende Cover-URL-Block weiter unten im selben Buchdurchlauf
+          // automatisch mit, ohne eigenen Code dafuer.
+          if (!coverFile) {
+            try {
+              const coverBlob = epubCoverBlobFromFile_(info.epubReadyFile);
+              if (coverBlob) {
+                const ct = coverBlob.getContentType() || 'image/jpeg';
+                const ext = ct.indexOf('png') >= 0 ? 'png' : (ct.indexOf('webp') >= 0 ? 'webp' : (ct.indexOf('gif') >= 0 ? 'gif' : 'jpg'));
+                coverFile = folders.coverFolder.createFile(coverBlob.copyBlob().setName('cover_from_epub.' + ext));
+                logDriveSync(logSheet, b.title, 'Cover aus EPUB uebernommen (' + code + ').');
+              }
+            } catch (err) {
+              logDriveSync(logSheet, b.title, 'Cover-aus-EPUB-Fehler (' + code + '): ' + err.message);
+            }
           }
         }
         if (info.klappentextFile) {
