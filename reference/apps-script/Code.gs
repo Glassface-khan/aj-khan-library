@@ -194,6 +194,47 @@ function epubTextExtract_(fileId) {
   return parts.length ? parts.join('\n\n') : null;
 }
 
+// Wandelt die paar in EPUB-Metadaten ueblichen XML-Entities zurueck in
+// normalen Text (z.B. "&amp;" -> "&") -- absichtlich keine vollstaendige
+// XML-Entity-Tabelle, nur die Handvoll, die in Buchtiteln realistisch
+// vorkommt.
+function decodeXmlEntities_(s) {
+  return String(s || '')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&apos;/g, "'")
+    .replace(/&#(\d+);/g, function(_, code) { return String.fromCharCode(Number(code)); });
+}
+
+// Liest den Buchtitel (dc:title) direkt aus den EPUB-eigenen Metadaten
+// (der .opf-Datei, z.B. "content.opf" oder "package.opf" -- Name variiert
+// je nach Erzeuger-Tool, daher per Endung statt festem Namen gesucht,
+// gleiches Prinzip wie findMetadataJsonFile_). Arbeitet direkt auf den
+// rohen Datei-Bytes, OHNE dass die Datei vorher in Drive gespeichert sein
+// muss -- Utilities.unzip() akzeptiert jeden Blob. Wird von der neuen
+// Aktion 'detectEpubTitle' genutzt (§52, siehe ARCHITECTURE.md): bevor
+// eine EPUB ohne bereits eingetragenen Buchtitel endgueltig hochgeladen
+// wird, ermittelt der Client so den Titel direkt aus der Datei, statt ihn
+// von Hand eintippen zu muessen.
+function epubTitleFromBytes_(bytes) {
+  const blob = Utilities.newBlob(bytes, 'application/epub+zip', 'temp.epub');
+  let entries;
+  try {
+    entries = Utilities.unzip(blob);
+  } catch (err) {
+    return null;
+  }
+  const opfEntry = entries.filter(function(e) { return e.getName().toLowerCase().endsWith('.opf'); })[0];
+  if (!opfEntry) return null;
+  const xml = opfEntry.getDataAsString('UTF-8');
+  const m = xml.match(/<dc:title[^>]*>([\s\S]*?)<\/dc:title>/i);
+  if (!m) return null;
+  const title = decodeXmlEntities_(m[1]).trim();
+  return title || null;
+}
+
 // ───────────────────────── KI-Klappentext (optional, §50) ─────────────────
 //
 // Erzeugt automatisch einen Klappentext-Vorschlag aus dem Manuskript-
@@ -1551,6 +1592,24 @@ function handle(e) {
       return jsonOut({ ok: true, dataBase64: Utilities.base64Encode(bytes) });
     } catch (err) {
       return jsonOut({ ok: false, error: err.message });
+    }
+  }
+
+  // Ermittelt den Buchtitel direkt aus einer EPUB-Datei, BEVOR sie
+  // endgueltig hochgeladen wird (§52) -- schreibt nichts nach Drive, rein
+  // lesende Vorab-Aktion. Admin-geschuetzt wie uploadBookFile, weil sie
+  // denselben adminToken-Kontext braucht und kein oeffentlicher Endpunkt
+  // sein muss.
+  if (action === 'detectEpubTitle') {
+    const admin = checkAdmin(e);
+    if (!admin.ok) return jsonOut({ ok: false, error: 'unauthorized', debugTokenReceived: admin.token, debugCacheValue: admin.cached });
+    try {
+      const base64Data = e.parameter.fileData || '';
+      if (!base64Data) return jsonOut({ ok: false, error: 'Keine Datei erhalten.' });
+      const title = epubTitleFromBytes_(Utilities.base64Decode(base64Data));
+      return jsonOut({ ok: true, title: title || '' });
+    } catch (err) {
+      return jsonOut({ ok: false, error: String(err && err.message || err) });
     }
   }
 

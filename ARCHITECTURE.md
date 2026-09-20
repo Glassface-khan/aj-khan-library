@@ -2472,3 +2472,67 @@ herumliegt (die Script-Property selbst bleibt davon unberührt).
 Effekt auf die Apps-Script-Properties-UI (kein Zugriff auf das echte
 Apps-Script-Projekt aus dieser Sandbox) — sollte sich nach dem nächsten
 Admin-Login von selbst zeigen (Anzahl `admintoken_`-Einträge sinkt).
+
+**Live durchgeführt (19.09.2026):** Nutzer hat `_setupGemini()` (Variante
+mit `cleanupExpiredAdminTokens_()` + `setProperty('GEMINI_API_KEY', ...)`)
+im Apps-Script-Editor ausgeführt — Execution log zeigte "Execution
+completed" ohne Fehler. `GEMINI_API_KEY` ist damit gesetzt, alte
+`admintoken_`-Einträge aufgeräumt. Temporäre Funktion anschließend wieder
+entfernt, `Code.gs` neu deployt.
+
+## 52 · Nachtrag (19.09.2026, Teil 5) — Buchtitel automatisch aus EPUB-Metadaten übernehmen
+
+Nutzer-Wunsch: Beim Hochladen einer fertigen EPUB-Datei (§48) soll der
+Buchtitel nicht mehr von Hand eingetragen werden müssen, solange er noch
+leer oder noch der Default `"New Book"` ist (siehe `addBook` in
+`index.html` — ein neu angelegtes Buch bekommt sofort diesen Platzhalter-
+titel statt eines leeren Strings, daher die Prüfung auf beide Fälle).
+
+**Backend (`reference/apps-script/Code.gs`):**
+- Neue Funktion `epubTitleFromBytes_(bytes)` — entpackt die EPUB-Bytes
+  direkt per `Utilities.unzip()` (kein vorheriges Speichern in Drive
+  nötig, anders als bei `epubTextExtract_`, das eine Drive-Datei-ID
+  braucht), findet die `.opf`-Datei (Endung statt festem Namen, gleiches
+  Prinzip wie `findMetadataJsonFile_`) und liest `<dc:title>` per Regex
+  aus. Neuer kleiner Helfer `decodeXmlEntities_` für die Handvoll in
+  Buchtiteln realistisch vorkommender XML-Entities (`&amp;`, `&#39;` etc.).
+- Neue Aktion `detectEpubTitle` (admin-geschützt wie `uploadBookFile`) —
+  nimmt `fileData` (Base64, wie bei `uploadBookFile`) entgegen, schreibt
+  **nichts** nach Drive (reine Vorab-Leseaktion), gibt `{ ok: true, title:
+  '...' }` zurück (leerer String, falls keine `dc:title` gefunden wurde).
+
+**Frontend (`index.html`):**
+- Neue Methode `detectAndUploadEpub_(i, file)` — liest die Datei wie
+  gehabt per `readFileAsBase64_`, ruft `detectEpubTitle` auf; bei
+  gefundenem Titel: aktualisiert sowohl `state.books[i].title` als auch
+  das offene Bearbeitungsformular (`bookForms[i].title`, damit das
+  Titel-Feld sofort den neuen Wert zeigt, falls der Admin gerade im
+  Bearbeiten-Modus ist), ruft `persistBooks()` auf (Titel landet sofort
+  im Sheet, nicht erst nach manuellem "Speichern") und startet danach
+  automatisch den eigentlichen Upload (`uploadBookFile_(i, 'EPUB', ...)`)
+  — der greift jetzt, weil `b.title` nicht mehr leer/Default ist. Wird
+  kein Titel gefunden: Hinweis-Dialog wie bisher ("bitte zuerst den
+  Buchtitel eintragen"), kein Upload.
+- `pickEpubReadyFile` prüft jetzt vor dem Upload den aktuellen (bereits
+  gespeicherten) Buchtitel: leer oder `"New Book"` → `detectAndUploadEpub_`
+  statt direkt `uploadBookFile_`. Hat das Buch bereits einen echten,
+  vom Autor selbst vergebenen Titel, ändert sich am bisherigen Verhalten
+  **nichts** — die Datei-Metadaten werden dann gar nicht erst abgefragt,
+  ein bewusst gewählter Titel wird nie überschrieben.
+
+**Bewusst nicht gebaut:** ein Upload-Weg, der ganz ohne vorher angelegten
+Buch-Eintrag auskommt (erste Option aus der Rückfrage an den Nutzer) —
+der Nutzer wollte stattdessen die zweite, kleinere Variante (Auto-Fill
+im leeren Titel-Feld eines bestehenden Eintrags).
+
+**Verifiziert:** JSON-Parse der `__bundler/template`-Zeile grün,
+`node --check` auf `Code.gs` und auf die extrahierte Component-Klasse
+grün, `b` (Buchobjekt) im Scope von `pickEpubReadyFile` bestätigt (andere
+Zeilen im selben View-Model-Block referenzieren bereits `b.series` etc.).
+**Nicht getestet:** der tatsächliche Roundtrip gegen eine echte EPUB-Datei
+(kein Apps-Script-Zugriff aus dieser Sandbox) — insbesondere, ob das
+Dateiformat-Präfix `.opf` bei allen gängigen EPUB-Erzeugern (Calibre,
+Word-Export, Pandoc, Vellum …) zuverlässig zutrifft, und ob `dc:title`
+dort immer ohne zusätzliche Namespace-Präfixe/Attribute vorkommt, die die
+Regex verfehlen könnte. Sollte der Nutzer nach dem Deploy an einer echten
+EPUB-Datei ohne Buchtitel prüfen.
