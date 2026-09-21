@@ -574,6 +574,77 @@
     if (!isEligible() && state.open) close();
   }
 
+  // ---------------------------------------------------------------------------
+  // Inline-EPUB-Reader compatibility
+  //
+  // Premium EPUBs can contain their own dark-mode CSS. Apple Books handles
+  // those packages correctly, but iOS Safari + epub.js may evaluate the EPUB's
+  // prefers-color-scheme inside its generated iframe independently from the
+  // author site's light reading surface. The result is effectively dark text
+  // on a dark background even though the EPUB itself is valid.
+  //
+  // Do not touch the EPUB file. Instead, normalize only the embedded reader
+  // iframe to a neutral paper surface. This keeps the original EPUB intact for
+  // Apple Books/Kindle and affects only the website preview.
+  function installEpubReaderCompatibility() {
+    const STYLE_ID = 'ajk-epub-readable-theme';
+
+    function patchFrame(frame) {
+      try {
+        const doc = frame && frame.contentDocument;
+        if (!doc || !doc.documentElement || !doc.head) return;
+
+        doc.documentElement.style.setProperty('background', '#fbf7ef', 'important');
+        doc.documentElement.style.setProperty('color', '#27221e', 'important');
+        doc.documentElement.style.setProperty('color-scheme', 'light', 'important');
+        if (doc.body) {
+          doc.body.style.setProperty('background', '#fbf7ef', 'important');
+          doc.body.style.setProperty('color', '#27221e', 'important');
+          doc.body.style.setProperty('color-scheme', 'light', 'important');
+        }
+
+        let style = doc.getElementById(STYLE_ID);
+        if (!style) {
+          style = doc.createElement('style');
+          style.id = STYLE_ID;
+          style.textContent = [
+            'html,body{background:#fbf7ef!important;color:#27221e!important;color-scheme:light!important;}',
+            'p,div,span,section,article,main,header,footer,li,blockquote,pre,code,h1,h2,h3,h4,h5,h6,em,strong,small,sub,sup,a{color:#27221e!important;}',
+            'a{background-color:transparent!important;}',
+            'img,svg,video{color:initial!important;}'
+          ].join('');
+          doc.head.appendChild(style);
+        }
+      } catch (_) {
+        // Some foreign-origin frames may be unreadable; epub.js book frames
+        // created from our in-memory EPUB are same-origin in supported browsers.
+      }
+    }
+
+    function scan() {
+      const viewport = document.getElementById('epub-reader-viewport');
+      if (!viewport) return;
+      viewport.querySelectorAll('iframe').forEach((frame) => {
+        patchFrame(frame);
+        if (frame.dataset.ajkReadableBound === '1') return;
+        frame.dataset.ajkReadableBound = '1';
+        frame.addEventListener('load', () => {
+          patchFrame(frame);
+          setTimeout(() => patchFrame(frame), 80);
+        });
+      });
+    }
+
+    const observer = new MutationObserver(() => window.requestAnimationFrame(scan));
+    observer.observe(document.documentElement, { childList: true, subtree: true });
+    scan();
+    // epub.js may recycle iframe contents without replacing the iframe node.
+    // A light periodic re-check catches those navigations without touching data.
+    setInterval(scan, 1200);
+  }
+
+  installEpubReaderCompatibility();
+
   window.addEventListener('pagehide', () => saveProgress(false, true));
   window.addEventListener('beforeunload', () => saveProgress(false, true));
   window.addEventListener('storage', syncVisibility);
