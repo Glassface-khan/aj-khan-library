@@ -854,20 +854,14 @@ function saveEpubToFolder_(folder, blob) {
 }
 
 function epubDownloadUrlFor_(file) {
-  // EPUBs/Manuskripte duerfen NICHT aktiv oeffentlich freigegeben werden.
-  // Reader und geschuetzter Download laufen ueber action=getEpubData; die
-  // URL hier dient primaer als stabile Datei-ID fuer den Backend-Endpunkt.
+  // WICHTIG: Sharing hier NICHT veraendern. Der Versuch, eine EPUB waehrend
+  // des Syncs auf PRIVATE zu setzen, hat am 21.09.2026 den EPUB-Import
+  // blockiert (Access denied: DriveApp), weil Berechtigungen vom
+  // Elternordner/Shared Drive geerbt sein koennen.
   //
-  // Best effort: eine direkte Anyone-Freigabe wird entfernt, falls moeglich.
-  // Wenn die Freigabe von einem oeffentlichen Elternordner geerbt wird, kann
-  // Drive sie am Kind nicht reduzieren. Dieser Fehler darf den Sync NICHT
-  // blockieren (Bug vom 21.09.2026).
-  try {
-    file.setSharing(DriveApp.Access.PRIVATE, DriveApp.Permission.NONE);
-  } catch (err) {
-    // Absichtlich kein throw: epubUrl muss trotzdem gespeichert werden,
-    // sonst erscheint im Frontend faelschlich "Noch kein Lesezugriff".
-  }
+  // Der Sync darf niemals an einer Sharing-Mutation scheitern. Die bestehende
+  // URL bleibt aus Kompatibilitaetsgruenden erhalten. Eine echte Haertung
+  // erfolgt separat ueber private Storage-/Proxy-Architektur.
   return 'https://drive.google.com/uc?export=download&id=' + file.getId();
 }
 
