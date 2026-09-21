@@ -2598,3 +2598,73 @@ image"` setzen (ältere Calibre-Versionen z. B. nutzen teils nur das
 EPUB2-`<meta>`-Muster, das als Fallback abgedeckt ist). Sollte der
 Nutzer nach dem Deploy an einer echten EPUB ohne vorhandenes Cover
 prüfen.
+
+
+## 24 · Audio-Bibliothek / Hörfortschritt (21.09.2026)
+
+Die Audio-Funktion verwendet **keine zweite Benutzerverwaltung**. Source of
+Truth bleiben die bestehenden individuellen Zugangscodes im Google-Sheet
+`Access`.
+
+### Architektur
+
+- **Bestehendes Access-Sheet / Google Apps Script:** Identität und Rechte.
+- **Supabase-Projekt:** `aj-khan-audio` (Projekt-Ref
+  `ipoqyjrojljmbqslmxxf`, Region `eu-central-1`).
+- **Privater Storage-Bucket:** `audiobooks`.
+- **Datenbanktabellen:** `audio_books`, `audio_chapters`,
+  `listening_progress`.
+- **Edge Function:** `audio-library`. Sie prüft den bestehenden
+  Zugangscode bzw. Admin-Token immer gegen das Apps-Script-Backend, bevor
+  Katalog, signierte Audio-URL oder Fortschritt verarbeitet werden.
+- **Frontend:** `audio-library.js`, geladen von `index.html`. Enthält
+  Audio-Bibliothek, Kapitelwahl, ±15 Sekunden, Geschwindigkeit,
+  automatisches Speichern und geräteübergreifendes „Weiterhören“.
+- **Admin:** Im Audio-Panel kann pro bestehendem Zugang und Roman
+  `AudioAccess` gesetzt werden.
+
+### Access-Sheet-Erweiterung
+
+`reference/apps-script/AudioAccess.gs` erweitert das bestehende
+`Access`-Sheet additiv:
+
+- Spalte H: `AudioAccess` — JSON-Objekt, z. B.
+  `{"THE NICHE OF LIGHT":true}`.
+- Spalte I: `ListenerId` — stabile UUID pro bestehendem Zugang.
+
+Der eigentliche Zugangscode wird **nicht** in Supabase gespeichert.
+`listening_progress.listener_id` enthält nur die stabile `ListenerId`.
+
+### Apps-Script-Integration
+
+Der Referenz-Snapshot `reference/apps-script/Code.gs` ruft am Anfang von
+`handle(e)` zusätzlich `handleAudioAccessAction(e)` auf. Das Live-Apps-
+Script im Google-Konto bleibt jedoch Source of Truth und muss deshalb nach
+dieser Repo-Änderung noch aktualisiert und als **New version** deployed
+werden. Zusätzlich muss `AudioAccess.gs` als Script-Datei im selben Apps-
+Script-Projekt vorhanden sein.
+
+Neue Aktionen:
+
+- `checkAudioAccess` — prüft bestehenden Zugangscode/Admin und liefert
+  `listenerId` + Audio-Rechte.
+- `getAudioAccessList` — Admin-only.
+- `setAudioAccess` — Admin-only.
+
+### Frontend-Loader
+
+Weil `index.html` ein sehr großer kompilierter Ein-Datei-Build ist, liegt
+die Audio-UI separat in `audio-library.js`. Der Loader wird direkt vor dem
+äußeren `</body>` eingebunden. Der Workflow
+`.github/workflows/inject-audio-library.yml` kann diese eine Einbindung
+bei einem späteren Neu-Export von `index.html` erneut sicher setzen.
+`service-worker.js` nutzt Cache v3 und enthält
+`audio-library.js` ebenfalls in der PWA-Shell.
+
+### Noch nötig, bevor echtes Audio abgespielt werden kann
+
+1. Live-`Code.gs` + `AudioAccess.gs` in Apps Script aktualisieren und
+   **New version** deployen.
+2. Mindestens ein Hörbuch und seine Kapitel-Audiodateien in Supabase
+   hinterlegen/hochladen.
+3. Das Hörbuch erst danach in `audio_books.is_active=true` schalten.
