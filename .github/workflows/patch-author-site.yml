@@ -1,0 +1,35 @@
+name: Patch author site metadata display
+
+on:
+  push:
+    paths:
+      - 'tools/patch_author_site.js'
+      - '.github/workflows/patch-author-site.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Patch bundled index
+        run: node tools/patch_author_site.js
+      - name: Commit result
+        run: |
+          if git diff --quiet -- index.html; then
+            echo "No changes needed."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add index.html
+          git commit -m "Show structured book metadata and protect EPUB downloads"
+          git push
