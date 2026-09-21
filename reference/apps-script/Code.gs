@@ -1362,6 +1362,13 @@ function handle(e) {
   if (bookmarkResponse) return bookmarkResponse;
   // --- Ende Lese-Bookmark-Sync-Ergänzung ---
 
+  // --- Audio-Zugriff: bestehende Access-Nutzer bleiben Source of Truth ---
+  // Implementierung siehe AudioAccess.gs. Das Modul erweitert das Access-Sheet
+  // additiv um AudioAccess + stabile ListenerId; kein zweites Login-System.
+  const audioResponse = handleAudioAccessAction(e);
+  if (audioResponse) return audioResponse;
+  // --- Ende Audio-Zugriff-Ergänzung ---
+
   const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Ratings') || SpreadsheetApp.getActiveSpreadsheet().insertSheet('Ratings');
   const action = (e.parameter.action || '').trim();
 
