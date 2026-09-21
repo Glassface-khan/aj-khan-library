@@ -21,9 +21,9 @@
 // kurz hintereinander, während GitHub Pages noch am Propagieren war).
 // Versionssprung erzwingt, dass jeder Browser seinen alten Cache verwirft
 // und die Seite beim nächsten Laden komplett frisch vom Netz holt.
-const SHELL_CACHE = 'ajk-shell-v2';
-const DATA_CACHE = 'ajk-data-v2';
-const SHELL_FILES = ['./', './index.html', './manifest.webmanifest', './icons/icon-192.png', './icons/icon-512.png'];
+const SHELL_CACHE = 'ajk-shell-v3';
+const DATA_CACHE = 'ajk-data-v3';
+const SHELL_FILES = ['./', './index.html', './audio-library.js', './manifest.webmanifest', './icons/icon-192.png', './icons/icon-512.png'];
 
 // Aktionen, deren Antwort für Offline-Nutzung zwischengespeichert werden
 // darf. Alles andere (insbesondere alle schreibenden Aktionen) läuft immer
@@ -61,6 +61,21 @@ function synthKey(action, params) {
   return new Request('https://ajk-offline-cache.local/' + action + '?' + qs);
 }
 
+
+async function injectAudioLibrary_(response) {
+  if (!response || !response.ok) return response;
+  const type = response.headers.get('content-type') || '';
+  if (type.indexOf('text/html') === -1) return response;
+  const text = await response.text();
+  if (text.indexOf('audio-library.js') !== -1) {
+    return new Response(text, { status: response.status, statusText: response.statusText, headers: response.headers });
+  }
+  const injected = text.replace('</body>', '  <script src="./audio-library.js" defer></script>\\n</body>');
+  const headers = new Headers(response.headers);
+  headers.delete('content-length');
+  return new Response(injected, { status: response.status, statusText: response.statusText, headers });
+}
+
 self.addEventListener('fetch', (event) => {
   const req = event.request;
   let url;
@@ -75,9 +90,10 @@ self.addEventListener('fetch', (event) => {
       // nie eine unvollständige/veraltete Antwort in den Service-Worker-
       // Cache übernehmen (siehe Versionskommentar oben, v1 -> v2).
       fetch(req, { cache: 'no-store' })
-        .then((res) => {
-          if (res && res.ok) caches.open(SHELL_CACHE).then((c) => c.put('./index.html', res.clone()));
-          return res;
+        .then(async (res) => {
+          const withAudio = await injectAudioLibrary_(res);
+          if (withAudio && withAudio.ok) caches.open(SHELL_CACHE).then((c) => c.put('./index.html', withAudio.clone()));
+          return withAudio;
         })
         .catch(() => caches.match('./index.html'))
     );
