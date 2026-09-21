@@ -25,13 +25,8 @@
 // v3 -> v4 (21.09.2026): audio-library.js traegt jetzt zusaetzlich den kleinen
 // iOS-Safari-Kompatibilitaetslayer fuer den Inline-EPUB-Reader. Der Sprung auf
 // v4 verhindert, dass iPhones die zuvor gecachte JS-Datei weiterverwenden.
-// v4 -> v5 (21.09.2026): Premium-EPUBs koennen break-before/page-break-before
-// auf eigenstaendigen Spine-Seiten setzen. iOS Safari verschob dadurch im
-// continuous epub.js-Reader nach dem CSS-Reflow den sichtbaren Inhalt aus dem
-// Viewport. Der Reader neutralisiert nur diese Seitenumbruch-Regeln; v5 zwingt
-// iPhones, die korrigierte audio-library.js frisch zu laden.
-const SHELL_CACHE = 'ajk-shell-v5';
-const DATA_CACHE = 'ajk-data-v5';
+const SHELL_CACHE = 'ajk-shell-v4';
+const DATA_CACHE = 'ajk-data-v4';
 const SHELL_FILES = ['./', './index.html', './audio-library.js', './manifest.webmanifest', './icons/icon-192.png', './icons/icon-512.png'];
 
 // Aktionen, deren Antwort für Offline-Nutzung zwischengespeichert werden
