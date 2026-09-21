@@ -4,7 +4,7 @@ This directory is the canonical, version-controlled source for the Google Apps S
 
 ## Canonical files
 
-- `Code.gs` — main web-app API, Drive sync, books/poems/access, EPUB handling
+- `Code.gs` — main web-app API, Drive sync, books/poems/access, EPUB handling **and the AudioAccess module**
 - `BookmarkSync.gs` — cross-device EPUB reading position sync
 - `RevisionModule.gs` — manuscript style-revision module
 
@@ -13,11 +13,12 @@ The older `reference/apps-script/` directory is historical/reference material on
 ## Deployment rule
 
 1. Make and review backend changes here first.
-2. Copy the changed `.gs` file(s) into the Google Apps Script project.
-3. Save.
-4. Deploy **New version** of the web app. Updating code without a new deployment version does not update the public endpoint.
-5. Run `syncDriveForAllBooks()` (or the admin “sync now” action) when book metadata/files changed.
-6. Verify `DriveSyncLog` and one real book in the live site.
+2. For the current audio upgrade, replace the live `Code.gs` with this complete `apps-script/Code.gs`; the AudioAccess functions are already inlined, so no extra `.gs` file is required.
+3. For other changes, copy the changed `.gs` file(s) into the Google Apps Script project.
+4. Save.
+5. Deploy **New version** of the web app. Updating code without a new deployment version does not update the public endpoint.
+6. Run `syncDriveForAllBooks()` (or the admin “sync now” action) when book metadata/files changed.
+7. Verify `DriveSyncLog` and one real book in the live site.
 
 GitHub is the source of truth; Apps Script is the deployment target.
 
