@@ -1,6 +1,6 @@
 # Architektur der Autorenseite (aj-khan-library)
 
-*Rekonstruiert aus dem tatsächlichen `index.html` im Repo, nicht aus der im Handoff erwähnten ZIP (die im neuen Chat nicht mit hochgeladen wurde). Stand: 20. August 2026.*
+*Rekonstruiert aus dem tatsächlichen Repository und fortlaufend aktualisiert. Stand: 21. September 2026.*
 
 Dieses Dokument klärt die vier offenen Fragen aus dem Handoff-Dokument
 („Was die ZIP beim Öffnen klären soll") und hält die Architekturentscheidung
@@ -15,12 +15,12 @@ in den chronologischen Nachträgen unten (Abschnitte 1–19).**
 
 **Architektur:** `index.html` ist ein kompilierter Claude-Design-Canvas-
 Export (Bundler-Format, siehe Abschnitt 1) — **dieses Repo ist seit
-20.08.2026 die Source of Truth**, nicht mehr Claude Design. Backend ist ein
-Google-Apps-Script-Web-App (`Code.gs`) — **liegt NICHT in diesem Repo**,
-lebt nur im Apps-Script-Editor im Google-Konto des Autors. Jede Backend-
-Änderung muss der Autor manuell einfügen (kompletten Dateiinhalt ersetzen,
-nicht einzelne Schnipsel) und deployen (**„New version"-Falle**, siehe
-Abschnitt 7 — sonst merkt die Live-URL den neuen Code nicht).
+20.08.2026 die Source of Truth**, nicht mehr Claude Design. Seit 21.09.2026
+gilt das auch für das Backend: die kanonische Apps-Script-Version liegt unter
+`apps-script/` (`Code.gs`, `BookmarkSync.gs`, `RevisionModule.gs`).
+Der Google-Apps-Script-Editor ist nur noch das **Deployment-Ziel**. Backend-
+Änderungen werden zuerst im Repo versioniert, anschließend in den Editor
+übernommen und als **New version** deployt (siehe Abschnitt 7).
 
 **Was aktuell alles funktioniert (öffentliche Seite):**
 - Bücher- und Gedichte-Anzeige, Bewertungen/Kommentare.
@@ -45,9 +45,9 @@ Abschnitt 7 — sonst merkt die Live-URL den neuen Code nicht).
   `GENRE_`-Datei, Alt-Cover-Bilder, Background-/Video-Links.
 
 **Offene TODOs (nicht gebaut, teils bewusst zurückgestellt):**
-- Weitere `metadata.json`-Felder automatisch übernehmen (Wortzahl,
-  Logline, Kapitelstruktur) — Konfliktfrage mit `FINAL_`/`KLAPPENTEXT_`
-  ungeklärt (Abschnitt 12).
+- `metadata.json`-Import erweitert: Genre, Wortzahl, Kapitelzahl,
+  optionale Print-Seitenzahl und Klappentext-/Logline-Fallback werden
+  automatisch übernommen (21.09.2026).
 - KI-Genre-Erkennung als Erstvorschlag (Abschnitt 12).
 - Bio- und Autorenfoto-Bearbeitung im Admin-Panel (Abschnitt 8).
 - Google-Drive-Ordnerstruktur + volle Auto-Sync-Automatisierung — größtes
@@ -141,9 +141,9 @@ Handoff war naheliegend, trifft aber nicht ganz zu:
 
 - **Google Apps Script Web App** als einziges Backend:
   `https://script.google.com/macros/s/AKfycbwcbRDaWkM1wf3MV_dj4RPw9jQl2Fgc4YfGcmFrGU1S243yvh8WGW7mbyXLbSeVJKI/exec`
-  Bekannte Endpunkte (aus dem Client-Code rekonstruiert, das Apps-Script
-  selbst liegt **nicht** in diesem Repo und war für diese Session nicht
-  einsehbar):
+  Die kanonische Backend-Implementierung liegt seit 21.09.2026 unter
+  `apps-script/Code.gs`; die folgenden Endpunkte sind damit direkt
+  versioniert und überprüfbar:
   - `GET ?action=getBooks` → `{ books: "<JSON-String>" }`
   - `GET ?action=list` → Bewertungen/Kommentare (Array oder `{rows:[...]}`)
   - `POST action=saveBooks&books=<JSON>` → schreibt den kompletten
