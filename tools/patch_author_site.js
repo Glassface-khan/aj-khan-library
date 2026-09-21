@@ -11,6 +11,17 @@ function once(oldText, newText, label) {
   s = s.slice(0, first) + newText + s.slice(first + oldText.length);
 }
 
+// Repair the malformed cover regex emitted by the previous patcher version.
+// index.html stores the component source inside a JSON string. The broken
+// version contains FOUR backslashes at this layer; the correct encoded form
+// contains TWO, which JSON.parse turns into the single backslashes needed by
+// the JavaScript regex literal.
+const badEncodedCoverRegex = String.raw`/(^|\\\\/)cover\\\\.xhtml(?:$|[?#])/`;
+const goodEncodedCoverRegex = String.raw`/(^|\\/)cover\\.xhtml(?:$|[?#])/`;
+if (s.includes(badEncodedCoverRegex)) {
+  s = s.split(badEncodedCoverRegex).join(goodEncodedCoverRegex);
+}
+
 // Existing metadata/download patches. Keep them idempotent because this
 // workflow may be re-run when later website patches are added.
 if (!s.includes('const effChapterCount =')) {
@@ -70,7 +81,7 @@ if (!s.includes("themes.register('ajk-reader'")) {
 if (!s.includes('Alte Bookmarks aus frueheren Reader-Fehlern')) {
   once(
     String.raw`      const bookmarkKey = 'ajk_epub_bookmark_' + (this.currentEpubUrl || '');\n      let savedCfi = serverCfi || null;\n      if (!savedCfi) { try { savedCfi = localStorage.getItem(bookmarkKey); } catch (e) {} }\n      this.epubRendition.on('relocated', (location) => {\n`,
-    String.raw`      const bookmarkKey = 'ajk_epub_bookmark_' + (this.currentEpubUrl || '');\n      let savedCfi = serverCfi || null;\n      if (!savedCfi) { try { savedCfi = localStorage.getItem(bookmarkKey); } catch (e) {} }\n      // Alte Bookmarks aus frueheren Reader-Fehlern koennen auf einer nicht-\n      // linearen Cover-Seite landen. Genau dann blitzt erst die Titelseite auf\n      // und danach bleibt auf iOS nur die schwarze Cover-Flaeche stehen. Solche\n      // CFIs nicht wiederherstellen; der naechste relocated-Event schreibt\n      // automatisch eine neue gueltige Position.\n      if (savedCfi) {\n        try {\n          const savedSection = book.spine && book.spine.get ? book.spine.get(savedCfi) : null;\n          const savedHref = String(savedSection && savedSection.href || '').toLowerCase();\n          const isCover = /(^|\\\\/)cover\\\\.xhtml(?:$|[?#])/.test(savedHref);\n          if (!savedSection || savedSection.linear === 'no' || isCover) {\n            savedCfi = null;\n            try { localStorage.removeItem(bookmarkKey); } catch (e) {}\n          }\n        } catch (e) {\n          savedCfi = null;\n          try { localStorage.removeItem(bookmarkKey); } catch (e2) {}\n        }\n      }\n      this.epubRendition.on('relocated', (location) => {\n`,
+    String.raw`      const bookmarkKey = 'ajk_epub_bookmark_' + (this.currentEpubUrl || '');\n      let savedCfi = serverCfi || null;\n      if (!savedCfi) { try { savedCfi = localStorage.getItem(bookmarkKey); } catch (e) {} }\n      // Alte Bookmarks aus frueheren Reader-Fehlern koennen auf einer nicht-\n      // linearen Cover-Seite landen. Genau dann blitzt erst die Titelseite auf\n      // und danach bleibt auf iOS nur die schwarze Cover-Flaeche stehen. Solche\n      // CFIs nicht wiederherstellen; der naechste relocated-Event schreibt\n      // automatisch eine neue gueltige Position.\n      if (savedCfi) {\n        try {\n          const savedSection = book.spine && book.spine.get ? book.spine.get(savedCfi) : null;\n          const savedHref = String(savedSection && savedSection.href || '').toLowerCase();\n          const isCover = /(^|\\/)cover\\.xhtml(?:$|[?#])/.test(savedHref);\n          if (!savedSection || savedSection.linear === 'no' || isCover) {\n            savedCfi = null;\n            try { localStorage.removeItem(bookmarkKey); } catch (e) {}\n          }\n        } catch (e) {\n          savedCfi = null;\n          try { localStorage.removeItem(bookmarkKey); } catch (e2) {}\n        }\n      }\n      this.epubRendition.on('relocated', (location) => {\n`,
     'reader bookmark validation'
   );
 }
@@ -78,7 +89,7 @@ if (!s.includes('Alte Bookmarks aus frueheren Reader-Fehlern')) {
 if (!s.includes('const firstReadable = spineItems.find')) {
   once(
     String.raw`      this.epubRendition.display(savedCfi || undefined).catch(() => this.epubRendition.display());\n`,
-    String.raw`      let initialTarget = savedCfi || undefined;\n      if (!initialTarget) {\n        try {\n          const spineItems = (book.spine && (book.spine.spineItems || book.spine.items)) || [];\n          const firstReadable = spineItems.find(function(item) {\n            if (!item || item.linear === 'no') return false;\n            return !/(^|\\\\/)cover\\\\.xhtml(?:$|[?#])/.test(String(item.href || '').toLowerCase());\n          });\n          if (firstReadable && firstReadable.href) initialTarget = firstReadable.href;\n        } catch (e) {}\n      }\n      this.epubRendition.display(initialTarget).catch(() => this.epubRendition.display());\n`,
+    String.raw`      let initialTarget = savedCfi || undefined;\n      if (!initialTarget) {\n        try {\n          const spineItems = (book.spine && (book.spine.spineItems || book.spine.items)) || [];\n          const firstReadable = spineItems.find(function(item) {\n            if (!item || item.linear === 'no') return false;\n            return !/(^|\\/)cover\\.xhtml(?:$|[?#])/.test(String(item.href || '').toLowerCase());\n          });\n          if (firstReadable && firstReadable.href) initialTarget = firstReadable.href;\n        } catch (e) {}\n      }\n      this.epubRendition.display(initialTarget).catch(() => this.epubRendition.display());\n`,
     'reader first readable section'
   );
 }
@@ -93,6 +104,10 @@ for (const marker of [
   'const firstReadable = spineItems.find'
 ]) {
   if (!s.includes(marker)) throw new Error('Post-patch marker missing: ' + marker);
+}
+
+if (s.includes(badEncodedCoverRegex)) {
+  throw new Error('Malformed cover regex still present after patch');
 }
 
 const templateMatch = s.match(/<script type="__bundler\/template">([\s\S]*?)<\/script>/);
