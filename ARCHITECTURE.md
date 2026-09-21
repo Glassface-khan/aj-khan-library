@@ -2669,3 +2669,29 @@ bei einem späteren Neu-Export von `index.html` erneut sicher setzen.
 2. Mindestens ein Hörbuch und seine Kapitel-Audiodateien in Supabase
    hinterlegen/hochladen.
 3. Das Hörbuch erst danach in `audio_books.is_active=true` schalten.
+
+
+## 56 · 21.09.2026 — iOS Safari: Premium-EPUB verschwand nach kurzem Rendern
+
+Live-Test mit `The Road it came by`: Die Premium-EPUB selbst ist valide und
+wird vollständig geladen. Auf iOS Safari erschien die Titelseite kurz und
+wurde nach dem vollständigen CSS-Reflow nach unten aus dem sichtbaren Reader
+verschoben, so dass nur noch eine leere helle Fläche blieb.
+
+Ursache: Die Premium-EPUB verwendet korrekte Buchsatz-Regeln wie
+`break-before: page` / `page-break-before: always` auf eigenständigen
+Spine-Dokumenten (Titelseite, Frontmatter, Parts, Kapitel). In einem normalen
+paginierten EPUB-Reader ist das gewollt. Im bestehenden epub.js-Setup
+`continuous + scrolled-doc` auf iOS kann WebKit diese Umbrüche nachträglich
+anwenden und dadurch innerhalb des separaten Spine-Iframes eine zusätzliche
+leere Seite vor dem eigentlichen Inhalt erzeugen.
+
+Fix in `audio-library.js`: Der reine Web-Reader-Kompatibilitätslayer setzt
+nur für `.title,.dedication,.epigraph,.part,.front,.back,.chapter`
+`break-before:auto!important` und `page-break-before:auto!important`.
+Typografie, Farben, Abstände, Min-Heights und die EPUB-Datei selbst bleiben
+unverändert. Da jedes dieser Dokumente ohnehin ein eigener Spine-Eintrag ist,
+geht dadurch im Inline-Reader keine echte Kapiteltrennung verloren.
+
+`service-worker.js` wurde gleichzeitig von Cache v4 auf v5 angehoben, damit
+iOS nicht die alte `audio-library.js` weiter ausliefert.
