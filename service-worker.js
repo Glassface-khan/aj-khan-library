@@ -70,7 +70,10 @@ async function injectAudioLibrary_(response) {
   if (text.indexOf('audio-library.js') !== -1) {
     return new Response(text, { status: response.status, statusText: response.statusText, headers: response.headers });
   }
-  const injected = text.replace('</body>', '  <script src="./audio-library.js" defer></script>\\n</body>');
+  const pos = text.lastIndexOf('</body>');
+  const injected = pos >= 0
+    ? text.slice(0, pos) + '  <script src="./audio-library.js" defer></script>\\n' + text.slice(pos)
+    : text;
   const headers = new Headers(response.headers);
   headers.delete('content-length');
   return new Response(injected, { status: response.status, statusText: response.statusText, headers });
