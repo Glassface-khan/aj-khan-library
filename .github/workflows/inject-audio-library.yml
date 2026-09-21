@@ -21,11 +21,15 @@ jobs:
           p = Path("index.html")
           text = p.read_text(encoding="utf-8")
           tag = '<script src="audio-library.js" defer></script>'
-          if tag not in text:
-              if "</body>" not in text:
-                  raise SystemExit("index.html has no </body> tag")
-              text = text.replace("</body>", "  " + tag + "\n</body>", 1)
-              p.write_text(text, encoding="utf-8")
+          # index.html contains an embedded template string with its own </body>.
+          # Remove any previous loader insertion and place it before the LAST
+          # closing body tag, which is the real outer document body.
+          text = text.replace("  " + tag + "\n", "")
+          pos = text.rfind("</body>")
+          if pos < 0:
+              raise SystemExit("index.html has no </body> tag")
+          text = text[:pos] + "  " + tag + "\n" + text[pos:]
+          p.write_text(text, encoding="utf-8")
       - name: Commit change
         shell: bash
         run: |
