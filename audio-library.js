@@ -52,7 +52,9 @@
                 style.setAttribute('data-ajk-reader-theme', 'light');
                 style.textContent =
                   'html,body{background:#fbf7ef!important;color:#27221e!important;}' +
-                  'h1,h2,h3,h4,h5,h6{color:#332922!important;}';
+                  'h1,h2,h3,h4,h5,h6{color:#332922!important;}' +
+                  '.title,.dedication,.epigraph,.part,.front,.back,.chapter{' +
+                  'break-before:auto!important;page-break-before:auto!important;}';
                 (doc.head || doc.documentElement).appendChild(style);
               } catch (err) {}
             });
