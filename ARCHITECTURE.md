@@ -2637,12 +2637,13 @@ Der eigentliche Zugangscode wird **nicht** in Supabase gespeichert.
 
 ### Apps-Script-Integration
 
-Der Referenz-Snapshot `reference/apps-script/Code.gs` ruft am Anfang von
-`handle(e)` zusätzlich `handleAudioAccessAction(e)` auf. Das Live-Apps-
-Script im Google-Konto bleibt jedoch Source of Truth und muss deshalb nach
-dieser Repo-Änderung noch aktualisiert und als **New version** deployed
-werden. Zusätzlich muss `AudioAccess.gs` als Script-Datei im selben Apps-
-Script-Projekt vorhanden sein.
+Der kanonische Deploy-Stand `apps-script/Code.gs` ruft am Anfang von
+`handle(e)` zusätzlich `handleAudioAccessAction(e)` auf und enthält die
+AudioAccess-Funktionen inzwischen direkt am Dateiende. Das Live-Apps-Script
+muss deshalb nur durch diese vollständige `Code.gs` ersetzt und anschließend
+als **New version** deployed werden; eine zusätzliche Script-Datei ist nicht
+mehr nötig. `reference/apps-script/AudioAccess.gs` bleibt als modulare
+Referenz erhalten.
 
 Neue Aktionen:
 
@@ -2663,7 +2664,7 @@ bei einem späteren Neu-Export von `index.html` erneut sicher setzen.
 
 ### Noch nötig, bevor echtes Audio abgespielt werden kann
 
-1. Live-`Code.gs` + `AudioAccess.gs` in Apps Script aktualisieren und
+1. Live-`Code.gs` durch `apps-script/Code.gs` ersetzen und als
    **New version** deployen.
 2. Mindestens ein Hörbuch und seine Kapitel-Audiodateien in Supabase
    hinterlegen/hochladen.
