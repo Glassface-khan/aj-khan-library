@@ -48,6 +48,19 @@
                   return;
                 }
 
+                // Premium EPUBs use real-book page-break rules (correct in
+                // Apple Books/Kindle) that iOS Safari can apply late inside
+                // epub.js continuous/scrolled mode. Inline !important wins
+                // even if the EPUB stylesheet finishes loading afterwards,
+                // preventing the visible title/chapter from being pushed onto
+                // a phantom blank page. This changes only the web rendition.
+                doc.querySelectorAll('.title,.dedication,.epigraph,.part,.front,.back,.chapter')
+                  .forEach((el) => {
+                    el.style.setProperty('break-before', 'auto', 'important');
+                    el.style.setProperty('page-break-before', 'auto', 'important');
+                    el.style.setProperty('-webkit-column-break-before', 'auto', 'important');
+                  });
+
                 const style = doc.createElement('style');
                 style.setAttribute('data-ajk-reader-theme', 'light');
                 style.textContent =
