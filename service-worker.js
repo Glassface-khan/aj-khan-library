@@ -28,8 +28,10 @@
 // v6 recovery (21.09.2026): nach Rollback des experimentellen EPUB-Reflow-
 // Patches bewusst neue Cache-ID, damit bereits installierte v5-Caches auf
 // iOS sicher verworfen werden und die stabile audio-library.js neu geladen wird.
-const SHELL_CACHE = 'ajk-shell-v6';
-const DATA_CACHE = 'ajk-data-v6';
+// v7 (21.09.2026): lädt den validierten, ausschließlich EPUB-internen
+// iOS-Seitenumbruch-Fix neu; Root/index.html bleibt unverändert.
+const SHELL_CACHE = 'ajk-shell-v7';
+const DATA_CACHE = 'ajk-data-v7';
 const SHELL_FILES = ['./', './index.html', './audio-library.js', './manifest.webmanifest', './icons/icon-192.png', './icons/icon-512.png'];
 
 // Aktionen, deren Antwort für Offline-Nutzung zwischengespeichert werden
