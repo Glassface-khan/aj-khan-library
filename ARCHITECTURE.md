@@ -2289,3 +2289,312 @@ weiterhin fehlerfrei bis zum Zugangscode-Screen.
 
 **Nächster Schritt:** `Code.gs` erneut deployen (enthält jetzt auch
 diesen Fix zusammen mit §44/§45/§47).
+
+## 49 · Nachtrag (19.09.2026, Teil 2) — Fortschrittsanzeige beim Datei-Upload (`index.html`)
+
+Nutzer-Wunsch: gerade EPUB-/Manuskript-Uploads vom Handy (oft auf
+Mobilfunknetz, Dateien mehrere MB groß) zeigten bisher nur einen
+statischen "wird hochgeladen…"-Text ohne jedes Feedback, wie weit der
+Upload tatsächlich ist.
+
+**Nur `index.html`, kein Backend-Änderung nötig** — `uploadBookFile_()`
+lief bisher über `fetch()`, das keinen Zugriff auf den Upload-Fortschritt
+bietet (nur auf den fertigen Response). Umgestellt auf `XMLHttpRequest`
+mit `xhr.upload.onprogress`: bei jedem Fortschritts-Event wird, falls
+`lengthComputable`, ein neues `progress`-Feld im bestehenden
+`uploadState[i]`-Objekt auf den gerundeten Prozentsatz gesetzt (gleiches
+`setUploadField`-Muster wie die bestehenden Busy-Flags). Response-Handling
+(`data.ok`/`data.error`/Netzwerkfehler) blieb inhaltlich unverändert, nur
+von `.then((r) => r.json())` auf `xhr.onload`/`JSON.parse` umgestellt, da
+XHR kein eingebautes Promise-Interface hat. `progress` wird vor jedem
+Upload auf `0` gesetzt und nach Abschluss (Erfolg, Fehler-Response oder
+Netzwerkfehler) wieder auf `0` zurückgesetzt.
+
+Betrifft **alle vier** Upload-Felder gleichermaßen (sie teilen sich
+`uploadBookFile_`): Manuskript, Klappentext, `metadata.json`, fertige
+EPUB-Datei (§48). Die vier bestehenden `sc-if`-Spinner-Texte im
+Admin-Panel zeigen jetzt zusätzlich `{{ book.upload.progress }}%` an,
+z. B. "EPUB wird hochgeladen… 42%".
+
+**Verifiziert:** JSON-Parse der `__bundler/template`-Zeile grün,
+`node --check` auf die extrahierte Component-Klasse grün, alle vier
+Template-Stellen sowie die neue `XMLHttpRequest`-Umstellung per gezielter
+String-Ersetzung eingefügt (kein freihändiges Retippen). Kein Playwright
+in dieser Sandbox verfügbar (Paket nicht installiert) — Live-Test des
+tatsächlichen Fortschrittsbalkens beim Hochladen einer echten Datei vom
+Handy steht noch aus.
+
+## 50 · Nachtrag (19.09.2026, Teil 3) — KI-generierter Klappentext beim EPUB-/Manuskript-Upload
+
+Nutzer-Wunsch: Wenn eine EPUB (oder ein Manuskript) hochgeladen wird und
+noch kein Klappentext existiert, soll automatisch ein Klappentext-Entwurf
+erzeugt werden — "Weltklasse", spannungserzeugend, nach Bestseller-
+Best-Practices, gemäß dem eigenen Stilstandard des Autors. Als Referenz
+zwei hochgeladene Dokumente ausgewertet: `AJ_Khan_Novel_Master_Standard
+_v5_0.docx` (Schreibstandard) und `AJ_Khan_Literary_Constitution_v3_3
+_fixed.docx` (enthält keine Klappentext-/Backcover-Vorgaben — betrifft
+Canon-/Konsistenzregeln der Romane selbst, nicht Marketing-Text; daher
+nicht in den Prompt eingeflossen). Der Master Standard enthält keine
+fertige Klappentext-Formel, nur die generelle Tonalitäts-Leitlinie
+"Propulsion ohne Thrillerisierung" (nicht jedes Buch braucht Countdown/
+Leiche/Chase — Neugier, Intimität, Scham, Pflicht, Beziehung, Entdeckung
+oder Konsequenz ziehen genauso stark wie Gefahr) plus die Forderung, dass
+Titel/Opening/Cover/Blurb/Comp-Titel demselben Leser dasselbe
+Leseerlebnis versprechen müssen. Ergänzt um branchenübliche Backcover-
+Konventionen kommerzieller Bestseller (destilliert, keine Zitate aus
+fremden Büchern): starker Einstiegshaken, Hauptfigur + auslösendes
+Ereignis, eskalierender Konflikt/Einsatz, offenes Ende ohne Twist-Verrat,
+aktive statt zusammenfassende Sprache, keine Klischees, ~120–180 Wörter.
+
+**Nur `reference/apps-script/Code.gs`, kein Frontend-Änderung nötig** —
+der Trigger ist bereits vorhanden: `uploadBookFile` (EPUB/FINAL/ENTWURF)
+ruft direkt nach dem Ablegen der Datei `syncDriveForAllBooks()` auf
+(siehe §48). Neue Logik dort, pro fertiger Sprache:
+
+- **Neue Funktion `generateBlurbWithAI_(manuscriptText, bookTitle, genre,
+  langCode)`** — ruft die **Google-Gemini-API** (`https://
+  generativelanguage.googleapis.com/v1beta/models/<Modell>:
+  generateContent`) per `UrlFetchApp` auf, mit dem oben destillierten
+  Stil-Prompt (sprachbewusst: DE/EN/BS) als `systemInstruction`, max. 700
+  Output-Tokens, Modell konfigurierbar über die neue Script Property
+  `GEMINI_MODEL` (Default `gemini-2.5-flash`).
+  **Ohne die neue Script Property `GEMINI_API_KEY` bleibt die Funktion
+  ein reines No-op** (kein Fehler, kein API-Aufruf).
+  **Bewusst Gemini statt Anthropic gewählt** (Nutzer-Nachfrage: "geht es
+  nicht ohne API-Key, wie Claude Code, oder mit einer Gratis-KI wie
+  Gemini/DeepSeek/Qwen?"): ein Server-Aufruf braucht immer irgendeinen
+  Schlüssel — Claude Code selbst authentifiziert sich im Hintergrund
+  genauso, nur unsichtbar über das eigene Abo. Google AI Studio
+  (`aistudio.google.com/apikey`) vergibt aber einen **echten
+  Gratis-API-Key ohne Kreditkarte** mit großzügigem Tageslimit, passend
+  zur ohnehin komplett auf Google-Infrastruktur laufenden Automatisierung
+  hier (Drive/Sheets/Apps Script). DeepSeek/Qwen wurden verworfen: beide
+  API-Key-pflichtig, aber ohne dauerhaften Gratis-Tarif wie Gemini (nur
+  Test-Guthaben).
+- **Wo es greift:** in `syncDriveForAllBooks()`, im bestehenden
+  Klappentext-Block pro Sprache — nur im `else`-Zweig, wenn **keine**
+  `KLAPPENTEXT_`-Datei gefunden wurde. Nimmt `blurbSourceText` (Volltext
+  aus `FINAL_`-Dokument oder, falls kein Dokument vorliegt, aus der
+  direkt hochgeladenen `EPUB_`-Datei über das bestehende
+  `epubTextExtract_`) und schickt ihn komplett (bis 400 000 Zeichen
+  Deckel, reiner Ausreißer-Schutz, kein bewusstes Kürzen auf "nur den
+  Anfang" — Geminis Kontextfenster trägt ganze Romane) an die API.
+- **Neues Feld `entry.hookSource`** (`'file'` oder `'ai'`) pro
+  Sprachfassung in `b.langs[code]`: markiert, woher der aktuelle
+  Klappentext kommt. Eine manuell hochgeladene `KLAPPENTEXT_`-Datei setzt
+  `hookSource='file'` und hat **für immer Vorrang** — der KI-Vorschlag
+  wird nie über einen vom Autor selbst geschriebenen/hochgeladenen
+  Klappentext geschrieben, auch nicht bei künftigen Syncs. Alte Einträge
+  ohne dieses Feld (vor §50) heilen sich beim nächsten Sync automatisch:
+  liegt eine `KLAPPENTEXT_`-Datei vor, wird `hookSource` nachträglich auf
+  `'file'` gesetzt.
+- **Neues Feld `entry.hookSourceHash`** (MD5 von `blurbSourceText`):
+  verhindert, dass bei jedem stündlichen Sync erneut ein API-Aufruf
+  passiert, solange sich das Manuskript/die EPUB nicht geändert hat.
+  Ändert sich der Text (neue Fassung hochgeladen) und es liegt weiterhin
+  keine `KLAPPENTEXT_`-Datei vor, wird automatisch neu generiert.
+- **Kein Override eines bereits gesetzten manuellen Textes über den
+  Admin-Formular-Weg möglich, ohne eine Datei hochzuladen** — das war
+  aber schon vor §50 so: das `hook`-Formularfeld im Admin-Panel wird bei
+  jedem Sync von `sourceEntry.hook` überschrieben, sobald dieses einen
+  Wert hat (bestehendes Verhalten, nicht neu). Will der Autor einen
+  KI-Vorschlag verwerfen/ersetzen, muss er wie gehabt eine eigene
+  `KLAPPENTEXT_`-Datei hochladen — kein neuer Endpunkt nötig.
+
+**Nötiger manueller Schritt für den Nutzer (zwingend, sonst inaktiv):**
+1. Kostenlosen Gemini-API-Key beschaffen: `aistudio.google.com/apikey`
+   (mit dem gleichen Google-Konto, das auch Drive/Apps Script nutzt) —
+   kein Kreditkarten-Zwang für den Gratis-Tarif.
+2. Im Apps-Script-Editor unter **Projekteinstellungen → Script Properties**
+   eine neue Property `GEMINI_API_KEY` mit dem Key als Wert anlegen
+   (niemals im Code selbst — wie beim bestehenden `ADMIN_PASSWORD`-Muster,
+   Abschnitt 7). Optional zusätzlich `GEMINI_MODEL`, falls ein anderes
+   Modell als der Default (`gemini-2.5-flash`) gewünscht ist.
+3. `Code.gs` erneut per "New version" deployen (siehe Abschnitt 7 — enthält
+   jetzt §48/§49/§50 zusammen).
+
+**Verifiziert:** `node --check` auf die vollständige `Code.gs`-Datei grün.
+**Nicht getestet in dieser Session** (kein API-Key verfügbar, kein
+Netzwerkzugriff auf `generativelanguage.googleapis.com` aus dieser
+Sandbox möglich): der tatsächliche API-Roundtrip, Tonalität/Qualität der
+generierten Klappentexte gegen ein echtes Manuskript, und ob
+Antwortlänge/-format bei allen Genres stabil den Vorgaben (120–180
+Wörter, kein Markdown) folgt. Sollte vom Nutzer nach dem Deploy an einem
+echten Buch ohne Klappentext geprüft werden — bei Bedarf lässt sich der
+Stil-Prompt in `generateBlurbWithAI_` direkt nachschärfen, ohne an der
+Trigger-/Vorrang-Logik etwas zu ändern. Gemini-Tageslimit des Gratis-
+Tarifs kann sich ändern — bei `429`/Quota-Fehlern wirft die Funktion
+einen Fehler, der geloggt wird (`logDriveSync`), der Upload selbst
+schlägt dadurch nicht fehl (siehe bestehendes `try/catch`-Muster im
+Aufrufer).
+
+## 51 · Nachtrag (19.09.2026, Teil 4) — Script-Properties-UI durch nie geleerte Admin-Tokens read-only geworden
+
+Beim Versuch, `GEMINI_API_KEY` einzutragen: Nutzer-Screenshot zeigte
+über 50 Script Properties, fast alle `admintoken_<uuid>`. Ursache
+gefunden: jeder Admin-Login (`action==='checkPassword'`) erzeugt einen
+neuen `admintoken_`-Eintrag (Abschnitt 7, 7 Tage Lebensdauer), aber
+nichts hat abgelaufene Einträge je wieder gelöscht — reines Wachstum bei
+jedem Login. Ab 50 Properties zeigt die Apps-Script-Oberfläche unter
+Projekteinstellungen nur noch die ersten 50 an und schaltet komplett auf
+**Lesemodus** — neue Properties lassen sich dann über die UI gar nicht
+mehr anlegen, nur noch programmatisch. Das hat den eigentlichen
+Vorhaben (Gemini-Key eintragen) live blockiert.
+
+**Fix (`reference/apps-script/Code.gs`):** neue Funktion
+`cleanupExpiredAdminTokens_()` — iteriert alle Script Properties, löscht
+jeden `admintoken_`-Eintrag, dessen gespeicherter Zeitstempel älter als
+`ADMIN_TOKEN_LIFETIME_MS` ist. Aufgerufen bei jedem erfolgreichen
+Admin-Login, direkt vor der Ausgabe eines neuen Tokens — räumt sich damit
+von selbst laufend auf, ohne separaten Cron/Trigger.
+
+**Sofortiger manueller Schritt für den bereits bestehenden Rückstand**
+(die UI selbst ist ja gerade gesperrt): im Apps-Script-Editor unter dem
+Code-Tab (`<>`-Symbol) eine neue, temporäre Funktion einfügen, sie oben
+im Dropdown neben "Debuggen" auswählen und über "Ausführen" **einmal**
+laufen lassen — danach kann die Funktion wieder gelöscht werden:
+
+```javascript
+function _einmaligerAufraeumSchritt() {
+  cleanupExpiredAdminTokens_();
+  PropertiesService.getScriptProperties().setProperty('GEMINI_API_KEY', 'DEIN_NEUER_KEY_HIER');
+}
+```
+
+Danach ist die Properties-Liste wieder unter 50 Einträgen und in der UI
+normal bearbeitbar (z. B. um den Wert später zu ändern), und
+`GEMINI_API_KEY` ist gesetzt. Nach dem Ausführen den Platzhaltertext im
+Code wieder durch Leerzeichen/Kommentar ersetzen oder die ganze Funktion
+löschen, damit der Key nicht dauerhaft im Editor-Verlauf sichtbar
+herumliegt (die Script-Property selbst bleibt davon unberührt).
+
+**Verifiziert:** `node --check` grün. **Nicht getestet:** der reale
+Effekt auf die Apps-Script-Properties-UI (kein Zugriff auf das echte
+Apps-Script-Projekt aus dieser Sandbox) — sollte sich nach dem nächsten
+Admin-Login von selbst zeigen (Anzahl `admintoken_`-Einträge sinkt).
+
+**Live durchgeführt (19.09.2026):** Nutzer hat `_setupGemini()` (Variante
+mit `cleanupExpiredAdminTokens_()` + `setProperty('GEMINI_API_KEY', ...)`)
+im Apps-Script-Editor ausgeführt — Execution log zeigte "Execution
+completed" ohne Fehler. `GEMINI_API_KEY` ist damit gesetzt, alte
+`admintoken_`-Einträge aufgeräumt. Temporäre Funktion anschließend wieder
+entfernt, `Code.gs` neu deployt.
+
+## 52 · Nachtrag (19.09.2026, Teil 5) — Buchtitel automatisch aus EPUB-Metadaten übernehmen
+
+Nutzer-Wunsch: Beim Hochladen einer fertigen EPUB-Datei (§48) soll der
+Buchtitel nicht mehr von Hand eingetragen werden müssen, solange er noch
+leer oder noch der Default `"New Book"` ist (siehe `addBook` in
+`index.html` — ein neu angelegtes Buch bekommt sofort diesen Platzhalter-
+titel statt eines leeren Strings, daher die Prüfung auf beide Fälle).
+
+**Backend (`reference/apps-script/Code.gs`):**
+- Neue Funktion `epubTitleFromBytes_(bytes)` — entpackt die EPUB-Bytes
+  direkt per `Utilities.unzip()` (kein vorheriges Speichern in Drive
+  nötig, anders als bei `epubTextExtract_`, das eine Drive-Datei-ID
+  braucht), findet die `.opf`-Datei (Endung statt festem Namen, gleiches
+  Prinzip wie `findMetadataJsonFile_`) und liest `<dc:title>` per Regex
+  aus. Neuer kleiner Helfer `decodeXmlEntities_` für die Handvoll in
+  Buchtiteln realistisch vorkommender XML-Entities (`&amp;`, `&#39;` etc.).
+- Neue Aktion `detectEpubTitle` (admin-geschützt wie `uploadBookFile`) —
+  nimmt `fileData` (Base64, wie bei `uploadBookFile`) entgegen, schreibt
+  **nichts** nach Drive (reine Vorab-Leseaktion), gibt `{ ok: true, title:
+  '...' }` zurück (leerer String, falls keine `dc:title` gefunden wurde).
+
+**Frontend (`index.html`):**
+- Neue Methode `detectAndUploadEpub_(i, file)` — liest die Datei wie
+  gehabt per `readFileAsBase64_`, ruft `detectEpubTitle` auf; bei
+  gefundenem Titel: aktualisiert sowohl `state.books[i].title` als auch
+  das offene Bearbeitungsformular (`bookForms[i].title`, damit das
+  Titel-Feld sofort den neuen Wert zeigt, falls der Admin gerade im
+  Bearbeiten-Modus ist), ruft `persistBooks()` auf (Titel landet sofort
+  im Sheet, nicht erst nach manuellem "Speichern") und startet danach
+  automatisch den eigentlichen Upload (`uploadBookFile_(i, 'EPUB', ...)`)
+  — der greift jetzt, weil `b.title` nicht mehr leer/Default ist. Wird
+  kein Titel gefunden: Hinweis-Dialog wie bisher ("bitte zuerst den
+  Buchtitel eintragen"), kein Upload.
+- `pickEpubReadyFile` prüft jetzt vor dem Upload den aktuellen (bereits
+  gespeicherten) Buchtitel: leer oder `"New Book"` → `detectAndUploadEpub_`
+  statt direkt `uploadBookFile_`. Hat das Buch bereits einen echten,
+  vom Autor selbst vergebenen Titel, ändert sich am bisherigen Verhalten
+  **nichts** — die Datei-Metadaten werden dann gar nicht erst abgefragt,
+  ein bewusst gewählter Titel wird nie überschrieben.
+
+**Bewusst nicht gebaut:** ein Upload-Weg, der ganz ohne vorher angelegten
+Buch-Eintrag auskommt (erste Option aus der Rückfrage an den Nutzer) —
+der Nutzer wollte stattdessen die zweite, kleinere Variante (Auto-Fill
+im leeren Titel-Feld eines bestehenden Eintrags).
+
+**Verifiziert:** JSON-Parse der `__bundler/template`-Zeile grün,
+`node --check` auf `Code.gs` und auf die extrahierte Component-Klasse
+grün, `b` (Buchobjekt) im Scope von `pickEpubReadyFile` bestätigt (andere
+Zeilen im selben View-Model-Block referenzieren bereits `b.series` etc.).
+**Nicht getestet:** der tatsächliche Roundtrip gegen eine echte EPUB-Datei
+(kein Apps-Script-Zugriff aus dieser Sandbox) — insbesondere, ob das
+Dateiformat-Präfix `.opf` bei allen gängigen EPUB-Erzeugern (Calibre,
+Word-Export, Pandoc, Vellum …) zuverlässig zutrifft, und ob `dc:title`
+dort immer ohne zusätzliche Namespace-Präfixe/Attribute vorkommt, die die
+Regex verfehlen könnte. Sollte der Nutzer nach dem Deploy an einer echten
+EPUB-Datei ohne Buchtitel prüfen.
+
+## 53 · Nachtrag (19.09.2026, Teil 6) — Cover aus EPUB übernehmen + neue Bücher standardmäßig „fertig"
+
+Nutzer-Nachfrage nach §52: Warum braucht es noch ein separates Cover,
+wenn die EPUB doch eins eingebettet hat? Und: Der Status neuer Bücher
+soll direkt auf „fertig" stehen, weil der ganze Workflow (Titel,
+Wortzahl, Klappentext) jetzt ohnehin automatisch beim Upload passiert.
+
+**1. Cover-Extraktion aus der EPUB (`reference/apps-script/Code.gs`):**
+- Neue Funktion `epubCoverBlobFromFile_(file)` — findet das Cover-Bild
+  über das EPUB3-Manifest-Attribut `properties="cover-image"`, mit
+  Fallback auf das ältere EPUB2-Muster `<meta name="cover"
+  content="ID"/>` + zugehöriges `<item id="ID" href="...">`. Attribute
+  einzeln per kleiner Regex ausgelesen (nicht ein großes kombiniertes
+  Muster), weil die Reihenfolge von `id`/`href`/`properties` zwischen
+  Erzeuger-Tools (Calibre, Pandoc, Vellum, Word-Export) variiert. Der
+  `href` wird relativ zum Ordner der `.opf`-Datei aufgelöst (EPUBs legen
+  Bilder meist relativ dazu ab, z. B. `images/cover.jpg` von `OEBPS/`
+  aus gesehen).
+- **Wo es greift:** in `syncDriveForAllBooks()`, direkt nach dem
+  Wortzahl-Block für eine hochgeladene `EPUB_`-Datei — **nur wenn noch
+  kein Cover** im `Bilder/Cover`-Ordner liegt (`!coverFile`). Ein dort
+  manuell abgelegtes Bild hat weiterhin immer Vorrang und wird nie
+  ersetzt — die EPUB-Extraktion ist reiner Fallback für den Fall, dass
+  noch gar kein Cover existiert. Gefundenes Bild wird als eigene Datei
+  (`cover_from_epub.<ext>`) in den bestehenden `Bilder/Cover`-Ordner
+  gelegt — läuft danach über exakt dieselbe Weiterverarbeitung
+  (`firstImageFile`/`publicViewUrlFor`) wie jedes andere Cover, kein
+  Sonderfall im Rest des Codes nötig.
+- Kein Cover in der EPUB gefunden (z. B. weil das Manuskript ganz ohne
+  Coverbild exportiert wurde) → bleibt wie bisher: kein Cover, bis der
+  Autor eins über den bestehenden Weg (URL/Datei-Upload) einträgt.
+
+**2. Neue Bücher standardmäßig „fertig" (`index.html`, `addBook`):**
+`status` von `'In Entwicklung'` auf `'Fertig'`, **und** — das ist der
+eigentlich wirksame Schalter — `isFinished` von `false` auf `true`.
+Grund für beides: `bookIsFinished` im Frontend prüft `isFinished`
+**zuerst** (`b.isFinished !== undefined ? !!b.isFinished : status
+startsWith('fertig')`) — da `addBook` `isFinished` immer explizit setzt
+(nie `undefined`), hätte eine reine Status-Text-Änderung ohne die
+`isFinished`-Änderung **nichts** bewirkt, das EPUB/Read-Gate hängt
+tatsächlich an `isFinished`, nicht am Freitext.
+
+**Bewusste Kompromisse / Nebenwirkungen, mit denen der Nutzer einverstanden
+war:** Ein neu angelegtes Buch gilt jetzt **sofort** als „fertig" und
+erscheint so auf der öffentlichen Seite, auch bevor überhaupt ein
+Manuskript/EPUB hochgeladen wurde — passend zum Nutzer-Workflow (Buch
+anlegen, direkt EPUB hochladen), aber ein Buch, das absichtlich länger
+als Entwurf unsichtbar bleiben soll, muss jetzt aktiv auf einen anderen
+Status/`isFinished:false` zurückgestellt werden, statt es wie bisher
+default so vorzufinden.
+
+**Verifiziert:** JSON-Parse der `__bundler/template`-Zeile grün,
+`node --check` auf `Code.gs` und die extrahierte Component-Klasse grün.
+**Nicht getestet:** der tatsächliche Cover-Extraktions-Roundtrip gegen
+eine echte EPUB-Datei (kein Apps-Script-Zugriff aus dieser Sandbox) —
+insbesondere Pfad-Auflösung bei tief verschachtelten OEBPS-Strukturen
+und ob alle gängigen Erzeuger-Tools durchgängig `properties="cover-
+image"` setzen (ältere Calibre-Versionen z. B. nutzen teils nur das
+EPUB2-`<meta>`-Muster, das als Fallback abgedeckt ist). Sollte der
+Nutzer nach dem Deploy an einer echten EPUB ohne vorhandenes Cover
+prüfen.

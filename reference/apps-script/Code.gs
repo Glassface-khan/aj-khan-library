@@ -37,6 +37,27 @@ function checkAdmin(e) {
   return { ok: valid, token: token, cached: stored };
 }
 
+// Raeumt abgelaufene admintoken_-Eintraege auf. Ohne das sammelt sich pro
+// Admin-Login ein neuer Eintrag an, der nie geloescht wird -- am
+// 19.09.2026 live aufgefallen: ab 50 Script Properties zeigt die
+// Apps-Script-Oberflaeche unter Projekteinstellungen nur noch die ersten
+// 50 an und schaltet komplett auf Lesemodus (neue Properties lassen sich
+// dann nur noch per Code setzen, nicht mehr ueber die UI). Wird bei jedem
+// erfolgreichen Admin-Login mit aufgerufen (siehe action==='checkPassword'
+// unten), damit die Liste sich von selbst kurz haelt, statt unbegrenzt zu
+// wachsen.
+function cleanupExpiredAdminTokens_() {
+  const props = PropertiesService.getScriptProperties();
+  const all = props.getProperties();
+  Object.keys(all).forEach(function(key) {
+    if (key.indexOf('admintoken_') !== 0) return;
+    const issuedAt = Number(all[key]);
+    if (!issuedAt || (Date.now() - issuedAt) >= ADMIN_TOKEN_LIFETIME_MS) {
+      props.deleteProperty(key);
+    }
+  });
+}
+
 // E-Mail-Benachrichtigung an den Autor beim ERSTEN Login eines Zugangscodes
 // (Wiedererkennung via PropertiesService, damit es nicht bei jedem erneuten
 // Besuch spammt). Empfänger ist automatisch das eigene Google-Konto, in dem
@@ -171,6 +192,200 @@ function epubTextExtract_(fileId) {
     }
   });
   return parts.length ? parts.join('\n\n') : null;
+}
+
+// Wandelt die paar in EPUB-Metadaten ueblichen XML-Entities zurueck in
+// normalen Text (z.B. "&amp;" -> "&") -- absichtlich keine vollstaendige
+// XML-Entity-Tabelle, nur die Handvoll, die in Buchtiteln realistisch
+// vorkommt.
+function decodeXmlEntities_(s) {
+  return String(s || '')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&apos;/g, "'")
+    .replace(/&#(\d+);/g, function(_, code) { return String.fromCharCode(Number(code)); });
+}
+
+// Liest den Buchtitel (dc:title) direkt aus den EPUB-eigenen Metadaten
+// (der .opf-Datei, z.B. "content.opf" oder "package.opf" -- Name variiert
+// je nach Erzeuger-Tool, daher per Endung statt festem Namen gesucht,
+// gleiches Prinzip wie findMetadataJsonFile_). Arbeitet direkt auf den
+// rohen Datei-Bytes, OHNE dass die Datei vorher in Drive gespeichert sein
+// muss -- Utilities.unzip() akzeptiert jeden Blob. Wird von der neuen
+// Aktion 'detectEpubTitle' genutzt (§52, siehe ARCHITECTURE.md): bevor
+// eine EPUB ohne bereits eingetragenen Buchtitel endgueltig hochgeladen
+// wird, ermittelt der Client so den Titel direkt aus der Datei, statt ihn
+// von Hand eintippen zu muessen.
+function epubTitleFromBytes_(bytes) {
+  const blob = Utilities.newBlob(bytes, 'application/epub+zip', 'temp.epub');
+  let entries;
+  try {
+    entries = Utilities.unzip(blob);
+  } catch (err) {
+    return null;
+  }
+  const opfEntry = entries.filter(function(e) { return e.getName().toLowerCase().endsWith('.opf'); })[0];
+  if (!opfEntry) return null;
+  const xml = opfEntry.getDataAsString('UTF-8');
+  const m = xml.match(/<dc:title[^>]*>([\s\S]*?)<\/dc:title>/i);
+  if (!m) return null;
+  const title = decodeXmlEntities_(m[1]).trim();
+  return title || null;
+}
+
+// Extrahiert das im EPUB eingebettete Cover-Bild direkt aus einer bereits
+// als Drive-Datei vorliegenden EPUB (§53) -- ueber das im Manifest als
+// properties="cover-image" markierte Item (EPUB3) bzw. als Fallback das
+// aeltere <meta name="cover" content="ID"/>-Muster (EPUB2). Attribute
+// einzeln per kleiner Regex statt eines grossen kombinierten Musters
+// ausgelesen, weil die Reihenfolge von id/href/properties in <item .../>
+// zwischen Erzeuger-Tools (Calibre, Pandoc, Vellum, Word-Export ...)
+// variiert. Gibt null zurueck, wenn kein Cover gefunden wird -- der
+// Aufrufer in syncDriveForAllBooks behandelt das als "kein Cover
+// verfuegbar", genau wie bisher ohne EPUB-Cover-Extraktion.
+function epubCoverBlobFromFile_(file) {
+  let entries;
+  try {
+    entries = Utilities.unzip(file.getBlob());
+  } catch (err) {
+    return null;
+  }
+  const opfEntry = entries.filter(function(e) { return e.getName().toLowerCase().endsWith('.opf'); })[0];
+  if (!opfEntry) return null;
+  const opfPath = opfEntry.getName();
+  const opfDir = opfPath.indexOf('/') >= 0 ? opfPath.slice(0, opfPath.lastIndexOf('/') + 1) : '';
+  const xml = opfEntry.getDataAsString('UTF-8');
+
+  const items = [];
+  const itemRe = /<item\b([^>]*)\/?>/gi;
+  let m;
+  while ((m = itemRe.exec(xml))) {
+    const attrs = m[1];
+    const id = (attrs.match(/\bid="([^"]*)"/i) || [])[1] || '';
+    const href = (attrs.match(/\bhref="([^"]*)"/i) || [])[1] || '';
+    const properties = (attrs.match(/\bproperties="([^"]*)"/i) || [])[1] || '';
+    if (id || href) items.push({ id: id, href: href, properties: properties });
+  }
+
+  let coverHref = null;
+  const byProperties = items.filter(function(it) { return /\bcover-image\b/i.test(it.properties); })[0];
+  if (byProperties) {
+    coverHref = byProperties.href;
+  } else {
+    const metaMatch = xml.match(/<meta\s+name="cover"\s+content="([^"]+)"/i);
+    if (metaMatch) {
+      const byId = items.filter(function(it) { return it.id === metaMatch[1]; })[0];
+      if (byId) coverHref = byId.href;
+    }
+  }
+  if (!coverHref) return null;
+
+  const targetPath = (opfDir + coverHref).replace(/^\.\//, '');
+  const targetEntry = entries.filter(function(e) {
+    return e.getName() === targetPath || e.getName() === decodeURIComponent(targetPath);
+  })[0];
+  return targetEntry ? targetEntry.getBlob() : null;
+}
+
+// ───────────────────────── KI-Klappentext (optional, §50) ─────────────────
+//
+// Erzeugt automatisch einen Klappentext-Vorschlag aus dem Manuskript-
+// bzw. EPUB-Text, wenn (a) noch kein manueller Klappentext (KLAPPENTEXT_-
+// Datei) fuer diese Sprache hinterlegt ist und (b) ein Gemini-API-Key als
+// Script Property gesetzt ist ("GEMINI_API_KEY" ueber Apps-Script-
+// Projekteinstellungen -> Script Properties, NIE im Code selbst). Google
+// Gemini statt Anthropic gewaehlt, weil es einen echten Gratis-Tarif ohne
+// Kreditkarte gibt (aistudio.google.com/apikey) -- passt ausserdem zur
+// ohnehin komplett auf Google-Infrastruktur laufenden Automatisierung
+// hier (Drive/Sheets/Apps Script). Ohne Key bleibt dieser Codepfad
+// bewusst inaktiv (kein Fehler, siehe syncDriveForAllBooks-Aufrufer).
+// Sobald irgendwann eine echte KLAPPENTEXT_-Datei hochgeladen wird, hat
+// die dauerhaft Vorrang (siehe hookSource-Feld im Aufrufer) -- der
+// KI-Text ist ein Entwurf, kein endgueltiger Ersatz fuer die eigene
+// Stimme des Autors.
+//
+// Stilvorgaben, destilliert aus zwei Quellen:
+// 1) A. J. Khans "Novel Master Standard v5.0": "Propulsion ohne
+//    Thrillerisierung" (nicht jedes Buch braucht Countdown/Leiche/Chase --
+//    Neugier, Intimitaet, Scham, Pflicht, Beziehung, Entdeckung oder
+//    Konsequenz ziehen genauso stark wie Gefahr, WENN es zum Genre passt)
+//    und die Forderung, dass Titel/Opening/Cover/Blurb/Comp-Titel
+//    demselben Leser dasselbe Erlebnis versprechen muessen (kein falsches
+//    Genre-Signal).
+// 2) Branchenuebliche Backcover-/Query-Letter-Konventionen kommerzieller
+//    Bestseller (Haken-Satz, Hauptfigur + ausloesendes Ereignis,
+//    eskalierender Konflikt/Einsatz, offenes Ende ohne Twist-Verrat,
+//    aktive statt zusammenfassende Sprache, keine Klischees).
+function generateBlurbWithAI_(manuscriptText, bookTitle, genre, langCode) {
+  const props = PropertiesService.getScriptProperties();
+  const apiKey = props.getProperty('GEMINI_API_KEY');
+  if (!apiKey || !manuscriptText || !manuscriptText.trim()) return null;
+
+  const model = props.getProperty('GEMINI_MODEL') || 'gemini-2.5-flash';
+  // Gemini 2.5 Flash traegt ganze Romane im Kontextfenster -- der Deckel
+  // schuetzt nur vor Ausreissern (z.B. versehentlich mehrfach
+  // verkettetem Text), ist keine bewusste Kuerzung auf "nur den Anfang".
+  const MAX_CHARS = 400000;
+  const text = manuscriptText.length > MAX_CHARS ? manuscriptText.slice(0, MAX_CHARS) : manuscriptText;
+
+  const langNames = { DE: 'Deutsch', EN: 'English', BS: 'bosanski/hrvatski/srpski' };
+  const langName = langNames[(langCode || '').toUpperCase()] || langCode || 'Deutsch';
+
+  const systemPrompt = [
+    'Du schreibst professionelle Backcover-Klappentexte fuer Romane, auf dem Niveau internationaler Bestseller-Verlage.',
+    '',
+    'Stilvorgabe (A. J. Khan Novel Master Standard v5.0):',
+    '- "Propulsion ohne Thrillerisierung": nicht jedes Buch braucht Countdown, Leiche, Verfolgungsjagd oder Cliffhanger -- Neugier, Intimitaet, Scham, Pflicht, Beziehung, Entdeckung oder Konsequenz koennen genauso stark ziehen wie Gefahr. Der Ton muss zum tatsaechlichen Genre des Manuskripts passen, niemals generisch "thrillerisiert" wirken, wenn das Buch das nicht ist.',
+    '- Titel, Opening, Cover, Klappentext und Comp-Titel muessen demselben Leser dasselbe Leseerlebnis versprechen -- kein falsches Genre-Signal, keine Ueberhoehung.',
+    '',
+    'Handwerkliche Pflicht-Elemente eines Weltklasse-Klappentexts (Bestseller-Praxis):',
+    '1. Ein starker Einstiegssatz/Haken, der sofort eine Frage oder Spannung im Kopf des Lesers erzeugt.',
+    '2. Hauptfigur klar benennen, plus das ausloesende Ereignis, das ihr Leben aus der Balance bringt.',
+    '3. Den zentralen Konflikt und was auf dem Spiel steht -- eskalierend erzaehlt, nicht als Aufzaehlung.',
+    '4. Endet auf einer offenen, ungeloesten Frage oder einem Moment maximaler Spannung -- verraet NIEMALS das Ende, die Aufloesung oder die grosse Wendung des Romans.',
+    '5. Aktive, praesente Sprache -- kein "In diesem Roman geht es um...", keine Inhaltsangabe im Schulaufsatz-Stil.',
+    '6. Keine abgenutzten Klischees ("In einer Welt, in der...", "Was sie nicht ahnte...", "Nichts ist mehr wie es scheint").',
+    '7. Laenge: ca. 120-180 Woerter in 3-5 kurzen Absaetzen, kein Bulletpoint-Format, kein Fettdruck/Markdown.',
+    '',
+    'Sprache des fertigen Textes: ' + langName + '.',
+    '',
+    'Gib AUSSCHLIESSLICH den fertigen Klappentext zurueck -- keine Ueberschrift, keine Anfuehrungszeichen drumherum, keine Erklaerung, kein Markdown, keine Meta-Kommentare davor oder danach.'
+  ].join('\n');
+
+  const userPrompt = 'Buchtitel: ' + bookTitle + (genre ? ('\nGenre: ' + genre) : '') +
+    '\n\nManuskripttext (vollstaendig oder grosser Auszug):\n\n' + text;
+
+  // Gemini kennt keine eigene "system"-Rolle im Message-Array wie
+  // Anthropic -- stattdessen der separate Top-Level-Block
+  // "systemInstruction", inhaltlich aequivalent.
+  const payload = {
+    systemInstruction: { parts: [{ text: systemPrompt }] },
+    contents: [{ role: 'user', parts: [{ text: userPrompt }] }],
+    generationConfig: { maxOutputTokens: 700 }
+  };
+
+  const url = 'https://generativelanguage.googleapis.com/v1beta/models/' + encodeURIComponent(model) +
+    ':generateContent?key=' + encodeURIComponent(apiKey);
+  const response = UrlFetchApp.fetch(url, {
+    method: 'post',
+    contentType: 'application/json',
+    payload: JSON.stringify(payload),
+    muteHttpExceptions: true
+  });
+
+  const status = response.getResponseCode();
+  if (status !== 200) {
+    throw new Error('Gemini-API-Fehler ' + status + ': ' + response.getContentText().slice(0, 300));
+  }
+  const data = JSON.parse(response.getContentText());
+  const candidate = data && data.candidates && data.candidates[0];
+  const parts = candidate && candidate.content && candidate.content.parts;
+  const blurb = (parts && parts.length ? parts.map(function(p) { return p.text || ''; }).join('') : '').trim();
+  if (!blurb) return null;
+  // Falls das Modell trotz Anweisung Anfuehrungszeichen drumherum setzt.
+  return blurb.replace(/^["“„]+|["“”]+$/g, '').trim();
 }
 
 // ───────────────────────── Drive-Automatisierung ─────────────────────────
@@ -793,11 +1008,20 @@ function syncDriveForAllBooks() {
         const entry = Object.assign({}, newLangs[code] || {});
         let entryChanged = false;
         let manuscriptText = '';
+        // Separat von manuscriptText: nur fuer den KI-Klappentext gedacht.
+        // manuscriptText steuert weiter unten den EPUB-Eigenbau
+        // (buildEpub_) und darf im epubReadyFile-Fall NICHT gesetzt werden
+        // (sonst wuerde eine bereits fertige, hochgeladene EPUB durch eine
+        // selbstgebaute aus dem grob tag-gestripten Extraktionstext
+        // ueberschrieben). blurbSourceText traegt in beiden Faellen den
+        // bestmoeglichen Volltext fuer generateBlurbWithAI_.
+        let blurbSourceText = '';
         if (info.finalFile) {
           try {
             const text = docTextById(info.finalFile.getId());
             if (text) {
               manuscriptText = text;
+              blurbSourceText = text;
               const words = text.trim().split(/\s+/).filter(Boolean).length;
               if (words && words !== entry.wordCount) { entry.wordCount = words; entryChanged = true; }
             }
@@ -811,11 +1035,32 @@ function syncDriveForAllBooks() {
           try {
             const text = epubTextExtract_(info.epubReadyFile.getId());
             if (text) {
+              blurbSourceText = text;
               const words = text.trim().split(/\s+/).filter(Boolean).length;
               if (words && words !== entry.wordCount) { entry.wordCount = words; entryChanged = true; }
             }
           } catch (err) {
             logDriveSync(logSheet, b.title, 'Wortzahl-Fehler aus EPUB (' + code + '): ' + err.message);
+          }
+          // Cover aus der EPUB uebernehmen (§53), aber NUR wenn noch kein
+          // eigenes Cover im Bilder/Cover-Ordner liegt -- ein dort manuell
+          // abgelegtes Bild hat immer Vorrang und wird nie ersetzt. coverFile
+          // ist eine Variable aus dem umgebenden Scope (oben im forEach ueber
+          // alle Buecher deklariert) -- wird sie hier gesetzt, greift der
+          // bestehende Cover-URL-Block weiter unten im selben Buchdurchlauf
+          // automatisch mit, ohne eigenen Code dafuer.
+          if (!coverFile) {
+            try {
+              const coverBlob = epubCoverBlobFromFile_(info.epubReadyFile);
+              if (coverBlob) {
+                const ct = coverBlob.getContentType() || 'image/jpeg';
+                const ext = ct.indexOf('png') >= 0 ? 'png' : (ct.indexOf('webp') >= 0 ? 'webp' : (ct.indexOf('gif') >= 0 ? 'gif' : 'jpg'));
+                coverFile = folders.coverFolder.createFile(coverBlob.copyBlob().setName('cover_from_epub.' + ext));
+                logDriveSync(logSheet, b.title, 'Cover aus EPUB uebernommen (' + code + ').');
+              }
+            } catch (err) {
+              logDriveSync(logSheet, b.title, 'Cover-aus-EPUB-Fehler (' + code + '): ' + err.message);
+            }
           }
         }
         if (info.klappentextFile) {
@@ -834,6 +1079,12 @@ function syncDriveForAllBooks() {
                 text = text.slice(0, MAX_HOOK_LENGTH) + '…';
                 note = ' — ACHTUNG: gekürzt, vermutlich kein echter Klappentext, bitte Datei prüfen.';
               }
+              // hookSource='file' markiert: ein manueller Klappentext hat
+              // Vorrang und darf vom KI-Vorschlag unten nie mehr
+              // ueberschrieben werden. Auch bei unveraendertem Text
+              // gesetzt, damit sich alte Eintraege ohne dieses Feld
+              // (vor §50) beim naechsten Sync selbst heilen.
+              if (entry.hookSource !== 'file') { entry.hookSource = 'file'; entryChanged = true; }
               if (text !== entry.hook) {
                 entry.hook = text;
                 entryChanged = true;
@@ -849,6 +1100,30 @@ function syncDriveForAllBooks() {
           }
         } else {
           logDriveSync(logSheet, b.title, 'Kein Klappentext-Datei-Objekt (' + code + ') gefunden (info.klappentextFile ist leer) — entry.hook bleibt unveraendert.');
+          // Kein manueller Klappentext hinterlegt: KI-Vorschlag generieren,
+          // aber nur wenn (a) noch kein manueller Text vorher gesetzt war
+          // (hookSource !== 'file') und (b) der zuletzt per KI erzeugte
+          // Text nicht schon zur aktuellen Manuskriptfassung passt (Hash-
+          // Vergleich, verhindert unnoetige API-Aufrufe bei jedem
+          // stuendlichen Sync). Ohne GEMINI_API_KEY (Script Property)
+          // bleibt generateBlurbWithAI_ ein reines No-op, siehe dort.
+          if (blurbSourceText && entry.hookSource !== 'file') {
+            try {
+              const srcHash = Utilities.base64Encode(Utilities.computeDigest(Utilities.DigestAlgorithm.MD5, blurbSourceText));
+              if (entry.hookSourceHash !== srcHash || !entry.hook) {
+                const aiBlurb = generateBlurbWithAI_(blurbSourceText, b.title, b.kind, code);
+                if (aiBlurb) {
+                  entry.hook = aiBlurb;
+                  entry.hookSource = 'ai';
+                  entry.hookSourceHash = srcHash;
+                  entryChanged = true;
+                  logDriveSync(logSheet, b.title, 'Klappentext (' + code + ') per KI generiert, neuer Anfang: "' + aiBlurb.slice(0, 60) + '"');
+                }
+              }
+            } catch (err) {
+              logDriveSync(logSheet, b.title, 'KI-Klappentext-Fehler (' + code + '): ' + err.message);
+            }
+          }
         }
 
         // EPUB neu bauen — nur wenn sich der Manuskripttext gerade geändert
@@ -1213,6 +1488,7 @@ function handle(e) {
     const ok = !!expected && e.parameter.password === expected;
     const result = { ok: ok };
     if (ok) {
+      cleanupExpiredAdminTokens_();
       const token = Utilities.getUuid();
       props.setProperty('admintoken_' + token, String(Date.now()));
       result.adminToken = token;
@@ -1390,6 +1666,24 @@ function handle(e) {
       return jsonOut({ ok: true, dataBase64: Utilities.base64Encode(bytes) });
     } catch (err) {
       return jsonOut({ ok: false, error: err.message });
+    }
+  }
+
+  // Ermittelt den Buchtitel direkt aus einer EPUB-Datei, BEVOR sie
+  // endgueltig hochgeladen wird (§52) -- schreibt nichts nach Drive, rein
+  // lesende Vorab-Aktion. Admin-geschuetzt wie uploadBookFile, weil sie
+  // denselben adminToken-Kontext braucht und kein oeffentlicher Endpunkt
+  // sein muss.
+  if (action === 'detectEpubTitle') {
+    const admin = checkAdmin(e);
+    if (!admin.ok) return jsonOut({ ok: false, error: 'unauthorized', debugTokenReceived: admin.token, debugCacheValue: admin.cached });
+    try {
+      const base64Data = e.parameter.fileData || '';
+      if (!base64Data) return jsonOut({ ok: false, error: 'Keine Datei erhalten.' });
+      const title = epubTitleFromBytes_(Utilities.base64Decode(base64Data));
+      return jsonOut({ ok: true, title: title || '' });
+    } catch (err) {
+      return jsonOut({ ok: false, error: String(err && err.message || err) });
     }
   }
 
