@@ -5,6 +5,102 @@
   const AUDIO_API = 'https://ipoqyjrojljmbqslmxxf.supabase.co/functions/v1/audio-library';
   const ROOT_ID = 'ajk-audio-root';
 
+
+  // Inline EPUB compatibility layer.
+  // Apple Books renders our premium EPUBs correctly, but epub.js in iOS
+  // Safari can re-insert a non-linear cover page in continuous mode after
+  // the title page was already visible. A dark cover then looks like an
+  // empty black reader. Some premium EPUBs also carry their own dark-mode
+  // CSS. This shim changes only the web reader; it never modifies the EPUB.
+  function installEpubReaderCompatibility_() {
+    const originalEpub = window.ePub;
+    if (typeof originalEpub !== 'function') return false;
+    if (originalEpub.__ajkIosReaderCompat) return true;
+
+    const wrappedEpub = function() {
+      const book = originalEpub.apply(this, arguments);
+      if (!book || typeof book.renderTo !== 'function' || book.__ajkRenderCompat) return book;
+
+      const originalRenderTo = book.renderTo.bind(book);
+      book.renderTo = function(target, options) {
+        const rendition = originalRenderTo(target, options);
+
+        try {
+          if (rendition && rendition.hooks && rendition.hooks.content) {
+            rendition.hooks.content.register((contents) => {
+              try {
+                const doc = contents && contents.document;
+                if (!doc || !doc.body) return;
+
+                const isCoverDoc =
+                  ((doc.title || '').trim().toLowerCase() === 'cover') ||
+                  !!doc.querySelector('.cover-page');
+
+                if (isCoverDoc) {
+                  doc.documentElement.style.setProperty('background', 'transparent', 'important');
+                  doc.body.style.setProperty('background', 'transparent', 'important');
+                  doc.body.style.setProperty('margin', '0', 'important');
+                  doc.body.style.setProperty('min-height', '0', 'important');
+                  doc.body.style.setProperty('height', '0', 'important');
+                  doc.body.style.setProperty('overflow', 'hidden', 'important');
+                  const cover = doc.querySelector('.cover-page');
+                  if (cover) cover.style.setProperty('display', 'none', 'important');
+                  return;
+                }
+
+                const style = doc.createElement('style');
+                style.setAttribute('data-ajk-reader-theme', 'light');
+                style.textContent =
+                  'html,body{background:#fbf7ef!important;color:#27221e!important;}' +
+                  'h1,h2,h3,h4,h5,h6{color:#332922!important;}';
+                (doc.head || doc.documentElement).appendChild(style);
+              } catch (err) {}
+            });
+          }
+
+          if (rendition && typeof rendition.display === 'function') {
+            const originalDisplay = rendition.display.bind(rendition);
+            rendition.display = function(location) {
+              let targetLocation = location;
+              if (!targetLocation && book.spine && book.spine.items) {
+                const firstLinear = book.spine.items.find((item) => item && item.linear !== 'no');
+                if (firstLinear && firstLinear.href) targetLocation = firstLinear.href;
+              }
+              return originalDisplay(targetLocation);
+            };
+          }
+        } catch (err) {}
+
+        return rendition;
+      };
+
+      book.__ajkRenderCompat = true;
+      return book;
+    };
+
+    try {
+      Object.keys(originalEpub).forEach((key) => {
+        try { wrappedEpub[key] = originalEpub[key]; } catch (err) {}
+      });
+    } catch (err) {}
+
+    wrappedEpub.__ajkIosReaderCompat = true;
+    wrappedEpub.__ajkOriginal = originalEpub;
+    window.ePub = wrappedEpub;
+    return true;
+  }
+
+  function scheduleEpubReaderCompatibility_() {
+    if (installEpubReaderCompatibility_()) return;
+    let attempts = 0;
+    const timer = setInterval(() => {
+      attempts += 1;
+      if (installEpubReaderCompatibility_() || attempts >= 240) clearInterval(timer);
+    }, 250);
+  }
+
+  scheduleEpubReaderCompatibility_();
+
   const state = {
     open: false,
     loading: false,
