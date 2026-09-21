@@ -51,7 +51,11 @@ for (const marker of [
 
 const templateMatch = s.match(/<script type="__bundler\/template">([\s\S]*?)<\/script>/);
 if (!templateMatch) throw new Error('Bundler template not found');
-JSON.parse(templateMatch[1]);
+try {
+  JSON.parse(templateMatch[1]);
+} catch (err) {
+  throw new Error('Bundler JSON invalid after patch: ' + err.message);
+}
 
 fs.writeFileSync(path, s, 'utf8');
 console.log('Patched and JSON-validated index.html:', s.length, 'characters');
