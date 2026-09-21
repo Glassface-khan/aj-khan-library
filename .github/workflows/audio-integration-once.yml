@@ -1,0 +1,41 @@
+name: One-shot audiobook integration
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'tools/patch-audio-integration.js'
+
+permissions:
+  contents: write
+
+jobs:
+  integrate-audio:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Patch compiled site
+        run: node tools/patch-audio-integration.js
+
+      - name: Validate patch
+        run: |
+          grep -q "AUDIO_API_URL" index.html
+          grep -q "audioPlayerOpen" index.html
+          grep -q "newAccessAudioBookRows" index.html
+
+      - name: Remove one-shot helper
+        run: |
+          rm -f tools/patch-audio-integration.js
+          rm -f .github/workflows/audio-integration-once.yml
+
+      - name: Commit result
+        run: |
+          git config user.name "AJ Khan Audio Integration"
+          git config user.email "actions@users.noreply.github.com"
+          git add index.html tools/patch-audio-integration.js .github/workflows/audio-integration-once.yml
+          git commit -m "Integrate protected audiobook player and per-book audio rights"
+          git push
