@@ -39,6 +39,73 @@
 
         const rendition = originalRenderTo(target, renderOptions);
 
+        if (isIOSWebKit) {
+          try {
+            const viewport = (typeof target === 'string')
+              ? (document.getElementById(target.replace(/^#/, '')) || document.querySelector(target))
+              : target;
+
+            if (viewport && !viewport.querySelector('[data-ajk-page-nav]')) {
+              const computed = window.getComputedStyle(viewport);
+              if (computed.position === 'static') viewport.style.position = 'relative';
+
+              const makeZone = (side, label, go) => {
+                const zone = document.createElement('button');
+                zone.type = 'button';
+                zone.setAttribute('data-ajk-page-nav', side);
+                zone.setAttribute('aria-label', label);
+                zone.textContent = side === 'left' ? '‹' : '›';
+                zone.style.position = 'absolute';
+                zone.style.top = '50%';
+                zone.style[side] = '6px';
+                zone.style.transform = 'translateY(-50%)';
+                zone.style.zIndex = '20';
+                zone.style.width = '42px';
+                zone.style.height = '72px';
+                zone.style.padding = '0';
+                zone.style.border = '0';
+                zone.style.borderRadius = '22px';
+                zone.style.background = 'rgba(28,24,20,.12)';
+                zone.style.color = '#4a4038';
+                zone.style.font = '400 42px/1 Georgia,serif';
+                zone.style.opacity = '.58';
+                zone.style.webkitTapHighlightColor = 'transparent';
+                zone.style.touchAction = 'manipulation';
+                zone.addEventListener('click', (ev) => {
+                  ev.preventDefault();
+                  ev.stopPropagation();
+                  try { go(); } catch (err) {}
+                });
+                viewport.appendChild(zone);
+              };
+
+              makeZone('left', 'Vorherige Seite', () => rendition.prev());
+              makeZone('right', 'Nächste Seite', () => rendition.next());
+
+              let startX = 0;
+              let startY = 0;
+              viewport.addEventListener('touchstart', (ev) => {
+                const t = ev.touches && ev.touches[0];
+                if (!t) return;
+                startX = t.clientX;
+                startY = t.clientY;
+              }, { passive: true });
+
+              viewport.addEventListener('touchend', (ev) => {
+                const t = ev.changedTouches && ev.changedTouches[0];
+                if (!t) return;
+                const dx = t.clientX - startX;
+                const dy = t.clientY - startY;
+                if (Math.abs(dx) < 55 || Math.abs(dx) <= Math.abs(dy) * 1.2) return;
+                try {
+                  if (dx < 0) rendition.next();
+                  else rendition.prev();
+                } catch (err) {}
+              }, { passive: true });
+            }
+          } catch (err) {}
+        }
+
         try {
           if (rendition && rendition.hooks && rendition.hooks.content) {
             rendition.hooks.content.register((contents) => {
@@ -75,35 +142,7 @@
                   '[data-ajk-section-nav]{display:none!important;}';
                 (doc.head || doc.documentElement).appendChild(style);
 
-                if (isIOSWebKit && doc.documentElement.dataset.ajkSwipeBound !== '1') {
-                  doc.documentElement.dataset.ajkSwipeBound = '1';
-                  let startX = 0;
-                  let startY = 0;
 
-                  doc.addEventListener('touchstart', (ev) => {
-                    const t = ev.touches && ev.touches[0];
-                    if (!t) return;
-                    startX = t.clientX;
-                    startY = t.clientY;
-                  }, { passive: true });
-
-                  doc.addEventListener('touchend', (ev) => {
-                    const t = ev.changedTouches && ev.changedTouches[0];
-                    if (!t) return;
-                    const dx = t.clientX - startX;
-                    const dy = t.clientY - startY;
-                    const absX = Math.abs(dx);
-                    const absY = Math.abs(dy);
-
-                    // Deliberate horizontal swipe only; normal taps/text
-                    // selection and vertical gestures are left untouched.
-                    if (absX < 50 || absX <= absY * 1.2) return;
-                    try {
-                      if (dx < 0) rendition.next();
-                      else rendition.prev();
-                    } catch (err) {}
-                  }, { passive: true });
-                }
               } catch (err) {}
             });
           }
