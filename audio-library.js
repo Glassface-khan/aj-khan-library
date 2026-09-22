@@ -85,29 +85,38 @@
               let targetLocation = location;
 
               // iOS/epub.js can mis-scroll when restoring a CFI inside short
-              // frontmatter documents (title/copyright/dedication/epigraph/nav)
-              // in continuous scrolled mode. Keep precise CFIs for real reading
-              // sections, but restore frontmatter at document start instead.
+              // frontmatter documents. For the inline web reader, resume from
+              // the first body-matter section instead (normally prologue or
+              // chapter 1). The EPUB itself is untouched.
+              const firstBodyHref = () => {
+                if (!book.spine || !book.spine.items) return '';
+                const items = book.spine.items;
+                const body = items.find((item) => {
+                  const href = String(item && item.href || '').toLowerCase();
+                  return item && item.linear !== 'no' &&
+                    /(^|\/)(prologue|chapter[_-]?0*1|chapter-?one)\.xhtml(?:$|[?#])/.test(href);
+                });
+                if (body && body.href) return body.href;
+                const firstLinear = items.find((item) => item && item.linear !== 'no');
+                return firstLinear && firstLinear.href ? firstLinear.href : '';
+              };
+
               if (typeof targetLocation === 'string' && /^epubcfi\(/.test(targetLocation)) {
                 try {
                   const section = book.spine && book.spine.get ? book.spine.get(targetLocation) : null;
                   const href = String(section && section.href || '');
                   const lower = href.toLowerCase();
                   const isFrontmatter = /(^|\/)(title|copyright|dedication|epigraph|nav)\.xhtml(?:$|[?#])/.test(lower);
-                  if (section && section.linear === 'no') {
-                    const firstLinear = book.spine && book.spine.items
-                      ? book.spine.items.find((item) => item && item.linear !== 'no')
-                      : null;
-                    if (firstLinear && firstLinear.href) targetLocation = firstLinear.href;
-                  } else if (isFrontmatter && href) {
-                    targetLocation = href;
+                  if ((section && section.linear === 'no') || isFrontmatter) {
+                    const bodyHref = firstBodyHref();
+                    if (bodyHref) targetLocation = bodyHref;
                   }
                 } catch (err) {}
               }
 
-              if (!targetLocation && book.spine && book.spine.items) {
-                const firstLinear = book.spine.items.find((item) => item && item.linear !== 'no');
-                if (firstLinear && firstLinear.href) targetLocation = firstLinear.href;
+              if (!targetLocation) {
+                const bodyHref = firstBodyHref();
+                if (bodyHref) targetLocation = bodyHref;
               }
               return originalDisplay(targetLocation);
             };
