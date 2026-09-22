@@ -55,28 +55,45 @@
                 zone.setAttribute('data-ajk-page-nav', side);
                 zone.setAttribute('aria-label', label);
                 zone.textContent = side === 'left' ? '‹' : '›';
-                zone.style.position = 'absolute';
-                zone.style.top = '50%';
-                zone.style[side] = '6px';
-                zone.style.transform = 'translateY(-50%)';
-                zone.style.zIndex = '20';
-                zone.style.width = '42px';
-                zone.style.height = '72px';
+                zone.style.position = 'fixed';
+                zone.style.zIndex = '9996';
+                zone.style.width = '28px';
+                zone.style.height = '54px';
                 zone.style.padding = '0';
                 zone.style.border = '0';
-                zone.style.borderRadius = '22px';
-                zone.style.background = 'rgba(28,24,20,.12)';
-                zone.style.color = '#4a4038';
-                zone.style.font = '400 42px/1 Georgia,serif';
-                zone.style.opacity = '.58';
+                zone.style.borderRadius = '14px';
+                zone.style.background = 'rgba(230,226,215,.10)';
+                zone.style.color = 'rgba(230,226,215,.72)';
+                zone.style.font = '400 34px/1 Georgia,serif';
+                zone.style.opacity = '.82';
                 zone.style.webkitTapHighlightColor = 'transparent';
                 zone.style.touchAction = 'manipulation';
+
+                const place = () => {
+                  const rect = viewport.getBoundingClientRect();
+                  zone.style.top = Math.round(rect.top + rect.height / 2 - 27) + 'px';
+                  if (side === 'left') {
+                    zone.style.left = Math.max(4, Math.round(rect.left - 34)) + 'px';
+                    zone.style.right = 'auto';
+                  } else {
+                    zone.style.right = Math.max(4, Math.round(window.innerWidth - rect.right - 34)) + 'px';
+                    zone.style.left = 'auto';
+                  }
+                };
+
+                place();
+                window.addEventListener('resize', place, { passive: true });
+                window.addEventListener('orientationchange', place, { passive: true });
+
                 zone.addEventListener('click', (ev) => {
                   ev.preventDefault();
                   ev.stopPropagation();
                   try { go(); } catch (err) {}
                 });
-                viewport.appendChild(zone);
+
+                // Keep controls outside the EPUB viewport so they never cover
+                // book text. Fixed positioning places them in the dark margins.
+                document.body.appendChild(zone);
               };
 
               makeZone('left', 'Vorherige Seite', () => rendition.prev());
@@ -757,6 +774,9 @@
     const launch = document.getElementById('ajk-audio-launch');
     const epubReaderOpen = !!document.getElementById('epub-reader-viewport');
     if (launch) launch.hidden = !isEligible() || epubReaderOpen;
+    if (!epubReaderOpen) {
+      document.querySelectorAll('[data-ajk-page-nav]').forEach((el) => el.remove());
+    }
     if (!isEligible() && state.open) close();
   }
 
