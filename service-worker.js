@@ -25,8 +25,8 @@
 // v3 -> v4 (21.09.2026): audio-library.js traegt jetzt zusaetzlich den kleinen
 // iOS-Safari-Kompatibilitaetslayer fuer den Inline-EPUB-Reader. Der Sprung auf
 // v4 verhindert, dass iPhones die zuvor gecachte JS-Datei weiterverwenden.
-const SHELL_CACHE = 'ajk-shell-v17';
-const DATA_CACHE = 'ajk-data-v17';
+const SHELL_CACHE = 'ajk-shell-v18';
+const DATA_CACHE = 'ajk-data-v18';
 const SHELL_FILES = ['./', './index.html', './audio-library.js', './manifest.webmanifest', './icons/icon-192.png', './icons/icon-512.png'];
 
 // Aktionen, deren Antwort für Offline-Nutzung zwischengespeichert werden
@@ -145,6 +145,26 @@ self.addEventListener('fetch', (event) => {
         return fetch(req);
       }
       const action = params.get('action');
+
+      // A bookmark is optional reader state, never a prerequisite for
+      // opening the EPUB. If the live bookmark endpoint is unavailable or
+      // returns {ok:false}, degrade to an empty bookmark so openReader can
+      // continue with the successfully loaded EPUB.
+      if (action === 'getBookmark') {
+        try {
+          const res = await fetch(req);
+          if (!res || !res.ok) throw new Error('bookmark_http');
+          const text = await res.clone().text();
+          let data = null;
+          try { data = JSON.parse(text); } catch (_) {}
+          if (data && data.ok) return res;
+        } catch (_) {}
+        return new Response(JSON.stringify({ ok: true, cfi: '' }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json; charset=utf-8' }
+        });
+      }
+
       if (!CACHEABLE_POST_ACTIONS.has(action)) {
         // Alle schreibenden/nicht zwischenspeicherbaren Aktionen: immer
         // direkt übers Netz, nie aus dem Cache.
