@@ -1132,7 +1132,20 @@ function releasePackageEnsureBookRecord_(metadata) {
   books.forEach(function(b) {
     if (!found && String(b.title || '').trim().toLowerCase() === title.toLowerCase()) found = b;
   });
-  if (found) return;
+
+  // Ein Release-Paket ist per Definition die abgeschlossene Buchfassung.
+  // Daher muss der automatisch erzeugte/aktualisierte Website-Eintrag auch
+  // sofort als fertig markiert werden. Ohne diese Felder konnte ein sauber
+  // importiertes Buch zwar in BooksData/Drive existieren, aber die Website
+  // behandelte es weiter wie einen unfertigen Entwurf.
+  if (found) {
+    found.isFinished = true;
+    if (!String(found.status || '').trim().toLowerCase().startsWith('fertig')) {
+      found.status = 'Fertig';
+    }
+    setBooksArray(books);
+    return;
+  }
 
   const primaryGenre = metadata && metadata.genre && metadata.genre.primary
     ? String(metadata.genre.primary)
@@ -1143,6 +1156,8 @@ function releasePackageEnsureBookRecord_(metadata) {
     title: title,
     kind: primaryGenre,
     hook: '',
+    status: 'Fertig',
+    isFinished: true,
     wordCount: Number(metadata.word_count || 0) || 0,
     chapterCount: Number(metadata.chapter_count || 0) || 0,
     translations: '',
