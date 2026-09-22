@@ -1,0 +1,36 @@
+name: Diagnose admin drive sync
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - '.github/workflows/diagnose-admin-sync.yml'
+permissions:
+  contents: read
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Extract snippets
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          s=Path('index.html').read_text(encoding='utf-8', errors='replace')
+          terms=['Drive synchronisieren','Drive-Sync','syncDrive','syncWordCount','Jetzt aus Drive','Synchronisieren','sync']
+          out=[]
+          for term in terms:
+              start=0; n=0
+              while True:
+                  i=s.find(term,start)
+                  if i<0: break
+                  n+=1
+                  out.append(f'\n=== {term} occurrence {n} @ {i} ===\n'+s[max(0,i-2200):min(len(s),i+6500)])
+                  start=i+len(term)
+                  if n>=20: break
+          Path('admin-sync-diagnosis.txt').write_text('\n'.join(out),encoding='utf-8')
+          print('snippets',len(out))
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: admin-sync-diagnosis
+          path: admin-sync-diagnosis.txt
