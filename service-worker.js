@@ -33,8 +33,10 @@
 // v8 (22.09.2026): Frontmatter-Bookmarks werden auf iOS dokumentweise statt
 // per CFI restauriert, damit epub.js continuous mode nicht in einen leeren
 // Viewport scrollt. Root/index.html bleibt unverändert.
-const SHELL_CACHE = 'ajk-shell-v8';
-const DATA_CACHE = 'ajk-data-v8';
+// v9 (22.09.2026): epub.js continuous reader verwendet jetzt die offizielle
+// Kombination manager:'continuous' + flow:'scrolled' statt scrolled-doc.
+const SHELL_CACHE = 'ajk-shell-v9';
+const DATA_CACHE = 'ajk-data-v9';
 const SHELL_FILES = ['./', './index.html', './audio-library.js', './manifest.webmanifest', './icons/icon-192.png', './icons/icon-512.png'];
 
 // Aktionen, deren Antwort für Offline-Nutzung zwischengespeichert werden
