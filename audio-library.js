@@ -48,11 +48,17 @@
                   return;
                 }
 
+                // Remove any legacy section-navigation controls injected by
+                // earlier experimental iOS reader builds. Premium EPUBs remain
+                // untouched; this affects only the inline web rendition.
+                doc.querySelectorAll('[data-ajk-section-nav]').forEach((el) => el.remove());
+
                 const style = doc.createElement('style');
                 style.setAttribute('data-ajk-reader-theme', 'light');
                 style.textContent =
                   'html,body{background:#fbf7ef!important;color:#27221e!important;}' +
-                  'h1,h2,h3,h4,h5,h6{color:#332922!important;}';
+                  'h1,h2,h3,h4,h5,h6{color:#332922!important;}' +
+                  '[data-ajk-section-nav]{display:none!important;}';
                 (doc.head || doc.documentElement).appendChild(style);
               } catch (err) {}
             });
