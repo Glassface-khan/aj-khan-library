@@ -1,0 +1,25 @@
+name: Package Code.gs
+
+on:
+  push:
+    paths:
+      - 'apps-script/Code.gs'
+      - '.github/workflows/package-code-gs.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  package:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Package Code.gs
+        run: zip -j Code.gs.zip apps-script/Code.gs
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Code.gs-package
+          path: Code.gs.zip
+          if-no-files-found: error
