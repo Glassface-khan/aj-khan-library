@@ -28,7 +28,19 @@
         // continuous + scrolled-doc can jump/reposition while sections are
         // injected, which on iOS showed up as "content flashes, then blank".
         const renderOptions = Object.assign({}, options || {});
-        if (renderOptions.manager === 'continuous' && renderOptions.flow === 'scrolled-doc') {
+        const isIOSWebKit =
+          /iP(?:hone|ad|od)/.test(navigator.userAgent || '') &&
+          /WebKit/.test(navigator.userAgent || '');
+
+        // iOS Safari is unstable with epub.js' continuous manager for these
+        // premium multi-document EPUBs: the current section renders, then the
+        // viewport jumps into a blank area when neighbouring spine items are
+        // injected. Use the default single-section manager on iOS only.
+        // Desktop/tablet browsers keep the existing continuous experience.
+        if (isIOSWebKit && renderOptions.manager === 'continuous') {
+          renderOptions.manager = 'default';
+          renderOptions.flow = 'scrolled-doc';
+        } else if (renderOptions.manager === 'continuous' && renderOptions.flow === 'scrolled-doc') {
           renderOptions.flow = 'scrolled';
         }
         const rendition = originalRenderTo(target, renderOptions);
@@ -72,9 +84,34 @@
                 const style = doc.createElement('style');
                 style.setAttribute('data-ajk-reader-theme', 'light');
                 style.textContent =
-                  'html,body{background:#fbf7ef!important;color:#27221e!important;}' +
-                  'h1,h2,h3,h4,h5,h6{color:#332922!important;}';
+                  'html,body{background:#fbf7ef!important;color:#27221e!important;overflow-anchor:none!important;}' +
+                  'h1,h2,h3,h4,h5,h6{color:#332922!important;}' +
+                  '[data-ajk-section-nav]{display:flex!important;justify-content:space-between!important;gap:1rem!important;margin:3rem 0 1rem!important;padding-top:1.25rem!important;border-top:1px solid #c8bda8!important;}' +
+                  '[data-ajk-section-nav] button{font:inherit!important;background:transparent!important;color:#4c3528!important;border:1px solid #9f8d72!important;padding:.65rem .9rem!important;border-radius:0!important;}';
                 (doc.head || doc.documentElement).appendChild(style);
+
+                if (isIOSWebKit && !doc.querySelector('[data-ajk-section-nav]')) {
+                  const nav = doc.createElement('div');
+                  nav.setAttribute('data-ajk-section-nav', '1');
+
+                  const prev = doc.createElement('button');
+                  prev.type = 'button';
+                  prev.textContent = '← Zurück';
+                  prev.addEventListener('click', () => {
+                    try { rendition.prev(); } catch (err) {}
+                  });
+
+                  const next = doc.createElement('button');
+                  next.type = 'button';
+                  next.textContent = 'Weiter →';
+                  next.addEventListener('click', () => {
+                    try { rendition.next(); } catch (err) {}
+                  });
+
+                  nav.appendChild(prev);
+                  nav.appendChild(next);
+                  doc.body.appendChild(nav);
+                }
               } catch (err) {}
             });
           }
