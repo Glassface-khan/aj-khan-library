@@ -35,8 +35,8 @@
 // Viewport scrollt. Root/index.html bleibt unverändert.
 // v9 (22.09.2026): epub.js continuous reader verwendet jetzt die offizielle
 // Kombination manager:'continuous' + flow:'scrolled' statt scrolled-doc.
-const SHELL_CACHE = 'ajk-shell-v11';
-const DATA_CACHE = 'ajk-data-v11';
+const SHELL_CACHE = 'ajk-shell-v12';
+const DATA_CACHE = 'ajk-data-v12';
 const SHELL_FILES = ['./', './index.html', './audio-library.js', './manifest.webmanifest', './icons/icon-192.png', './icons/icon-512.png'];
 
 // Aktionen, deren Antwort für Offline-Nutzung zwischengespeichert werden
