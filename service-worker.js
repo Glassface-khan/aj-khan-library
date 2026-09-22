@@ -30,8 +30,11 @@
 // iOS sicher verworfen werden und die stabile audio-library.js neu geladen wird.
 // v7 (21.09.2026): lädt den validierten, ausschließlich EPUB-internen
 // iOS-Seitenumbruch-Fix neu; Root/index.html bleibt unverändert.
-const SHELL_CACHE = 'ajk-shell-v7';
-const DATA_CACHE = 'ajk-data-v7';
+// v8 (22.09.2026): Frontmatter-Bookmarks werden auf iOS dokumentweise statt
+// per CFI restauriert, damit epub.js continuous mode nicht in einen leeren
+// Viewport scrollt. Root/index.html bleibt unverändert.
+const SHELL_CACHE = 'ajk-shell-v8';
+const DATA_CACHE = 'ajk-data-v8';
 const SHELL_FILES = ['./', './index.html', './audio-library.js', './manifest.webmanifest', './icons/icon-192.png', './icons/icon-512.png'];
 
 // Aktionen, deren Antwort für Offline-Nutzung zwischengespeichert werden
