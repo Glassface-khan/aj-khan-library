@@ -23,7 +23,21 @@
 
       const originalRenderTo = book.renderTo.bind(book);
       book.renderTo = function(target, options) {
-        const rendition = originalRenderTo(target, options);
+        const isIOSWebKit =
+          /iP(?:hone|ad|od)/.test(navigator.userAgent || '') ||
+          (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+
+        // Proven on the isolated reader test page: iOS Safari is stable in
+        // paginated/default mode, while scrolled/continuous jumps into a blank
+        // viewport after a few seconds. Force only iPhone/iPad to the tested
+        // stable mode; all other platforms keep the site's existing options.
+        const renderOptions = Object.assign({}, options || {});
+        if (isIOSWebKit) {
+          renderOptions.manager = 'default';
+          renderOptions.flow = 'paginated';
+        }
+
+        const rendition = originalRenderTo(target, renderOptions);
 
         try {
           if (rendition && rendition.hooks && rendition.hooks.content) {
@@ -60,6 +74,36 @@
                   'h1,h2,h3,h4,h5,h6{color:#332922!important;}' +
                   '[data-ajk-section-nav]{display:none!important;}';
                 (doc.head || doc.documentElement).appendChild(style);
+
+                if (isIOSWebKit && doc.documentElement.dataset.ajkSwipeBound !== '1') {
+                  doc.documentElement.dataset.ajkSwipeBound = '1';
+                  let startX = 0;
+                  let startY = 0;
+
+                  doc.addEventListener('touchstart', (ev) => {
+                    const t = ev.touches && ev.touches[0];
+                    if (!t) return;
+                    startX = t.clientX;
+                    startY = t.clientY;
+                  }, { passive: true });
+
+                  doc.addEventListener('touchend', (ev) => {
+                    const t = ev.changedTouches && ev.changedTouches[0];
+                    if (!t) return;
+                    const dx = t.clientX - startX;
+                    const dy = t.clientY - startY;
+                    const absX = Math.abs(dx);
+                    const absY = Math.abs(dy);
+
+                    // Deliberate horizontal swipe only; normal taps/text
+                    // selection and vertical gestures are left untouched.
+                    if (absX < 50 || absX <= absY * 1.2) return;
+                    try {
+                      if (dx < 0) rendition.next();
+                      else rendition.prev();
+                    } catch (err) {}
+                  }, { passive: true });
+                }
               } catch (err) {}
             });
           }
@@ -672,7 +716,8 @@
   function syncVisibility() {
     const root = ensureShell();
     const launch = document.getElementById('ajk-audio-launch');
-    if (launch) launch.hidden = !isEligible();
+    const epubReaderOpen = !!document.getElementById('epub-reader-viewport');
+    if (launch) launch.hidden = !isEligible() || epubReaderOpen;
     if (!isEligible() && state.open) close();
   }
 
@@ -737,7 +782,10 @@
       });
     }
 
-    const observer = new MutationObserver(() => window.requestAnimationFrame(scan));
+    const observer = new MutationObserver(() => window.requestAnimationFrame(() => {
+      scan();
+      try { syncVisibility(); } catch (_) {}
+    }));
     observer.observe(document.documentElement, { childList: true, subtree: true });
     scan();
     // epub.js may recycle iframe contents without replacing the iframe node.
