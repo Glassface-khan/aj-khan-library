@@ -23,7 +23,15 @@
 
       const originalRenderTo = book.renderTo.bind(book);
       book.renderTo = function(target, options) {
-        const rendition = originalRenderTo(target, options);
+        // epub.js' official continuous-scrolling setup uses
+        // manager:"continuous" + flow:"scrolled". The old combination
+        // continuous + scrolled-doc can jump/reposition while sections are
+        // injected, which on iOS showed up as "content flashes, then blank".
+        const renderOptions = Object.assign({}, options || {});
+        if (renderOptions.manager === 'continuous' && renderOptions.flow === 'scrolled-doc') {
+          renderOptions.flow = 'scrolled';
+        }
+        const rendition = originalRenderTo(target, renderOptions);
 
         try {
           if (rendition && rendition.hooks && rendition.hooks.content) {
