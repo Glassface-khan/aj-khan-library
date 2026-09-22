@@ -196,7 +196,69 @@
     return true;
   }
 
+  function loadReaderScript_(src, readyCheck) {
+    return new Promise((resolve, reject) => {
+      if (readyCheck()) { resolve(true); return; }
+      const script = document.createElement('script');
+      script.src = src;
+      script.async = true;
+      script.onload = () => readyCheck()
+        ? resolve(true)
+        : reject(new Error('Reader library loaded but did not initialize.'));
+      script.onerror = () => reject(new Error('Reader library failed to load.'));
+      document.head.appendChild(script);
+    });
+  }
+
+  async function ensureEpubReaderRuntime_() {
+    if (typeof window.ePub === 'function') {
+      installEpubReaderCompatibility_();
+      return true;
+    }
+
+    try {
+      // Archived EPUBs need JSZip. The page normally loads both libraries
+      // from jsDelivr in <head>; these alternate CDNs are a lazy fallback
+      // for iOS/Safari/content blockers when that primary request fails.
+      if (typeof window.JSZip === 'undefined') {
+        try {
+          await loadReaderScript_(
+            'https://unpkg.com/jszip@3.10.1/dist/jszip.min.js',
+            () => typeof window.JSZip !== 'undefined'
+          );
+        } catch (_) {
+          await loadReaderScript_(
+            'https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js',
+            () => typeof window.JSZip !== 'undefined'
+          );
+        }
+      }
+
+      try {
+        await loadReaderScript_(
+          'https://unpkg.com/epubjs@0.3.93/dist/epub.min.js',
+          () => typeof window.ePub === 'function'
+        );
+      } catch (_) {
+        await loadReaderScript_(
+          'https://cdn.jsdelivr.net/npm/epubjs@0.3.93/dist/epub.min.js',
+          () => typeof window.ePub === 'function'
+        );
+      }
+
+      installEpubReaderCompatibility_();
+      return typeof window.ePub === 'function';
+    } catch (_) {
+      return false;
+    }
+  }
+
   function scheduleEpubReaderCompatibility_() {
+    // Start the fallback immediately instead of only polling for a library
+    // that may never arrive. This fixes the misleading READ alert on iOS
+    // where an existing EPUB looked like "no reading access" solely because
+    // window.ePub was missing.
+    ensureEpubReaderRuntime_();
     if (installEpubReaderCompatibility_()) return;
     let attempts = 0;
     const timer = setInterval(() => {
