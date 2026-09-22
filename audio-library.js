@@ -75,6 +75,28 @@
             const originalDisplay = rendition.display.bind(rendition);
             rendition.display = function(location) {
               let targetLocation = location;
+
+              // iOS/epub.js can mis-scroll when restoring a CFI inside short
+              // frontmatter documents (title/copyright/dedication/epigraph/nav)
+              // in continuous scrolled mode. Keep precise CFIs for real reading
+              // sections, but restore frontmatter at document start instead.
+              if (typeof targetLocation === 'string' && /^epubcfi\(/.test(targetLocation)) {
+                try {
+                  const section = book.spine && book.spine.get ? book.spine.get(targetLocation) : null;
+                  const href = String(section && section.href || '');
+                  const lower = href.toLowerCase();
+                  const isFrontmatter = /(^|\/)(title|copyright|dedication|epigraph|nav)\.xhtml(?:$|[?#])/.test(lower);
+                  if (section && section.linear === 'no') {
+                    const firstLinear = book.spine && book.spine.items
+                      ? book.spine.items.find((item) => item && item.linear !== 'no')
+                      : null;
+                    if (firstLinear && firstLinear.href) targetLocation = firstLinear.href;
+                  } else if (isFrontmatter && href) {
+                    targetLocation = href;
+                  }
+                } catch (err) {}
+              }
+
               if (!targetLocation && book.spine && book.spine.items) {
                 const firstLinear = book.spine.items.find((item) => item && item.linear !== 'no');
                 if (firstLinear && firstLinear.href) targetLocation = firstLinear.href;
