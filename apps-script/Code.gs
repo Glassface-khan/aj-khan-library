@@ -1586,7 +1586,32 @@ function syncDriveForAllBooks() {
         // Sync unnötig erneut, nur wenn tatsächlich eine neue FINAL_-
         // Fassung erkannt wurde. Liest gut auf Handy/iPad (verstellbare
         // Schrift, Kapitel-Navigation) statt nur PDF/Drive-Link.
-        if (manuscriptText && (entryChanged || !entry.epubUrl)) {
+        // EPUB-Prioritaet:
+        // Wenn eine fertige EPUB_-Datei vorhanden ist (z.B. aus dem
+        // BUCH-ABSCHLIESSEN Release-Paket), ist sie die kanonische Ausgabe
+        // und darf NICHT durch den einfachen Apps-Script-EPUB-Eigenbau aus
+        // dem FINAL_-DOCX ueberschrieben werden. FINAL_ bleibt trotzdem
+        // Quelle fuer Wortzahl/Klappentextanalyse.
+        if (info.epubReadyFile) {
+          try {
+            // Alte automatisch erzeugte Fallback-EPUB entfernen, damit im
+            // Sprachordner keine zweite, minderwertigere Ausgabe neben der
+            // Premium-EPUB liegen bleibt.
+            const generated = info.folder.getFilesByName('manuscript.epub');
+            while (generated.hasNext()) generated.next().setTrashed(true);
+
+            const epubUrl = epubDownloadUrlFor_(info.epubReadyFile);
+            if (epubUrl !== entry.epubUrl) {
+              entry.epubUrl = epubUrl;
+              entryChanged = true;
+              logDriveSync(logSheet, b.title, 'Fertige Premium-EPUB uebernommen (' + code + '): ' + info.epubReadyFile.getName());
+            }
+          } catch (err) {
+            logDriveSync(logSheet, b.title, 'EPUB-Uebernahme-Fehler (' + code + '): ' + err.message);
+          }
+        } else if (manuscriptText && (entryChanged || !entry.epubUrl)) {
+          // Nur wenn KEINE fertige EPUB_-Datei vorhanden ist, darf aus dem
+          // FINAL_-Manuskript eine einfache Fallback-EPUB gebaut werden.
           try {
             const chapters = splitIntoChapters_(manuscriptText);
             const epubBlob = buildEpub_(b.title, 'A. J. Khan', code.toLowerCase(), chapters, coverFile ? coverFile.getBlob() : null);
@@ -1599,19 +1624,6 @@ function syncDriveForAllBooks() {
             }
           } catch (err) {
             logDriveSync(logSheet, b.title, 'EPUB-Fehler (' + code + '): ' + err.message);
-          }
-        } else if (!info.finalFile && info.epubReadyFile) {
-          // Kein Manuskript-Dokument -- die direkt hochgeladene, fertige
-          // EPUB wird unveraendert uebernommen statt selbst eine zu bauen.
-          try {
-            const epubUrl = epubDownloadUrlFor_(info.epubReadyFile);
-            if (epubUrl !== entry.epubUrl) {
-              entry.epubUrl = epubUrl;
-              entryChanged = true;
-              logDriveSync(logSheet, b.title, 'Fertige EPUB-Datei uebernommen (' + code + '): ' + info.epubReadyFile.getName());
-            }
-          } catch (err) {
-            logDriveSync(logSheet, b.title, 'EPUB-Uebernahme-Fehler (' + code + '): ' + err.message);
           }
         }
 
