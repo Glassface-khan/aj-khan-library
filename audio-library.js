@@ -23,27 +23,7 @@
 
       const originalRenderTo = book.renderTo.bind(book);
       book.renderTo = function(target, options) {
-        // epub.js' official continuous-scrolling setup uses
-        // manager:"continuous" + flow:"scrolled". The old combination
-        // continuous + scrolled-doc can jump/reposition while sections are
-        // injected, which on iOS showed up as "content flashes, then blank".
-        const renderOptions = Object.assign({}, options || {});
-        const isIOSWebKit =
-          /iP(?:hone|ad|od)/.test(navigator.userAgent || '') &&
-          /WebKit/.test(navigator.userAgent || '');
-
-        // iOS Safari is unstable with epub.js' continuous manager for these
-        // premium multi-document EPUBs: the current section renders, then the
-        // viewport jumps into a blank area when neighbouring spine items are
-        // injected. Use the default single-section manager on iOS only.
-        // Desktop/tablet browsers keep the existing continuous experience.
-        if (isIOSWebKit && renderOptions.manager === 'continuous') {
-          renderOptions.manager = 'default';
-          renderOptions.flow = 'scrolled-doc';
-        } else if (renderOptions.manager === 'continuous' && renderOptions.flow === 'scrolled-doc') {
-          renderOptions.flow = 'scrolled';
-        }
-        const rendition = originalRenderTo(target, renderOptions);
+        const rendition = originalRenderTo(target, options);
 
         try {
           if (rendition && rendition.hooks && rendition.hooks.content) {
@@ -68,88 +48,12 @@
                   return;
                 }
 
-                // Premium EPUBs use real-book page-break rules (correct in
-                // Apple Books/Kindle) that iOS Safari can apply late inside
-                // epub.js continuous/scrolled mode. Inline !important wins
-                // even if the EPUB stylesheet finishes loading afterwards,
-                // preventing the visible title/chapter from being pushed onto
-                // a phantom blank page. This changes only the web rendition.
-                doc.querySelectorAll('.title,.dedication,.epigraph,.part,.front,.back,.chapter')
-                  .forEach((el) => {
-                    el.style.setProperty('break-before', 'auto', 'important');
-                    el.style.setProperty('page-break-before', 'auto', 'important');
-                    el.style.setProperty('-webkit-column-break-before', 'auto', 'important');
-                  });
-
                 const style = doc.createElement('style');
                 style.setAttribute('data-ajk-reader-theme', 'light');
                 style.textContent =
-                  'html,body{background:#fbf7ef!important;color:#27221e!important;overflow-anchor:none!important;}' +
-                  'h1,h2,h3,h4,h5,h6{color:#332922!important;}' +
-                  (isIOSWebKit
-                    ? 'body{padding-bottom:7rem!important;}' +
-                      'h1{margin-top:3.5rem!important;}' +
-                      '.title,.dedication,.epigraph,.part{min-height:auto!important;}' +
-                      '.title h1,.part h1,.front h1,.back h1{margin-top:3.5rem!important;}' +
-                      '.dedication .ded-text,.epigraph blockquote{margin-top:3.5rem!important;}'
-                    : '') +
-                  '[data-ajk-section-nav]{display:grid!important;grid-template-columns:1fr 1fr!important;gap:1rem!important;margin:3rem 0 7rem!important;padding-top:1.25rem!important;border-top:1px solid #c8bda8!important;}' +
-                  '[data-ajk-section-nav] button{font:inherit!important;background:transparent!important;color:#4c3528!important;border:1px solid #9f8d72!important;padding:.8rem .9rem!important;border-radius:0!important;width:100%!important;}';
+                  'html,body{background:#fbf7ef!important;color:#27221e!important;}' +
+                  'h1,h2,h3,h4,h5,h6{color:#332922!important;}';
                 (doc.head || doc.documentElement).appendChild(style);
-
-                if (isIOSWebKit && !doc.querySelector('[data-ajk-section-nav]')) {
-                  const nav = doc.createElement('div');
-                  nav.setAttribute('data-ajk-section-nav', '1');
-
-                  const currentIndex = Number(contents.sectionIndex);
-                  const sectionItems = (book.spine && book.spine.items) ? book.spine.items : [];
-                  const isReadableItem = (item) => {
-                    if (!item || item.linear === 'no') return false;
-                    const href = String(item.href || '').toLowerCase().split('#')[0].split('?')[0];
-                    return !(href === 'nav.xhtml' || href.endsWith('/nav.xhtml'));
-                  };
-                  const findNeighbour = (delta) => {
-                    if (!Number.isFinite(currentIndex)) return null;
-                    for (let i = currentIndex + delta; i >= 0 && i < sectionItems.length; i += delta) {
-                      if (isReadableItem(sectionItems[i])) return sectionItems[i];
-                    }
-                    return null;
-                  };
-                  const goToItem = (item) => {
-                    if (!item || !item.href) return;
-                    try {
-                      Promise.resolve(rendition.display(item.href)).then(() => {
-                        try {
-                          const el = (typeof target === 'string')
-                            ? (document.getElementById(target) || document.querySelector(target))
-                            : target;
-                          if (el) el.scrollTop = 0;
-                        } catch (err) {}
-                      });
-                    } catch (err) {}
-                  };
-
-                  const prevItem = findNeighbour(-1);
-                  const nextItem = findNeighbour(1);
-
-                  const prev = doc.createElement('button');
-                  prev.type = 'button';
-                  prev.textContent = '← Zurück';
-                  prev.disabled = !prevItem;
-                  prev.style.opacity = prevItem ? '1' : '.35';
-                  prev.addEventListener('click', () => goToItem(prevItem));
-
-                  const next = doc.createElement('button');
-                  next.type = 'button';
-                  next.textContent = 'Weiter →';
-                  next.disabled = !nextItem;
-                  next.style.opacity = nextItem ? '1' : '.35';
-                  next.addEventListener('click', () => goToItem(nextItem));
-
-                  nav.appendChild(prev);
-                  nav.appendChild(next);
-                  doc.body.appendChild(nav);
-                }
               } catch (err) {}
             });
           }
@@ -158,40 +62,9 @@
             const originalDisplay = rendition.display.bind(rendition);
             rendition.display = function(location) {
               let targetLocation = location;
-
-              // iOS/epub.js can mis-scroll when restoring a CFI inside short
-              // frontmatter documents. For the inline web reader, resume from
-              // the first body-matter section instead (normally prologue or
-              // chapter 1). The EPUB itself is untouched.
-              const firstBodyHref = () => {
-                if (!book.spine || !book.spine.items) return '';
-                const items = book.spine.items;
-                const body = items.find((item) => {
-                  const href = String(item && item.href || '').toLowerCase();
-                  return item && item.linear !== 'no' &&
-                    /(^|\/)(prologue|chapter[_-]?0*1|chapter-?one)\.xhtml(?:$|[?#])/.test(href);
-                });
-                if (body && body.href) return body.href;
-                const firstLinear = items.find((item) => item && item.linear !== 'no');
-                return firstLinear && firstLinear.href ? firstLinear.href : '';
-              };
-
-              if (typeof targetLocation === 'string' && /^epubcfi\(/.test(targetLocation)) {
-                try {
-                  const section = book.spine && book.spine.get ? book.spine.get(targetLocation) : null;
-                  const href = String(section && section.href || '');
-                  const lower = href.toLowerCase();
-                  const isFrontmatter = /(^|\/)(title|copyright|dedication|epigraph|nav)\.xhtml(?:$|[?#])/.test(lower);
-                  if ((section && section.linear === 'no') || isFrontmatter) {
-                    const bodyHref = firstBodyHref();
-                    if (bodyHref) targetLocation = bodyHref;
-                  }
-                } catch (err) {}
-              }
-
-              if (!targetLocation) {
-                const bodyHref = firstBodyHref();
-                if (bodyHref) targetLocation = bodyHref;
+              if (!targetLocation && book.spine && book.spine.items) {
+                const firstLinear = book.spine.items.find((item) => item && item.linear !== 'no');
+                if (firstLinear && firstLinear.href) targetLocation = firstLinear.href;
               }
               return originalDisplay(targetLocation);
             };
