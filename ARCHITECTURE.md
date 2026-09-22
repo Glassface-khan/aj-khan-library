@@ -2695,3 +2695,38 @@ geht dadurch im Inline-Reader keine echte Kapiteltrennung verloren.
 
 `service-worker.js` wurde gleichzeitig von Cache v4 auf v5 angehoben, damit
 iOS nicht die alte `audio-library.js` weiter ausliefert.
+
+
+## 57 · 22.09.2026 — Produktiver iOS-EPUB-Reader stabilisiert
+
+Nach isolierten Live-Tests auf iPhone/Safari wurde der EPUB-Reader fuer iOS auf
+einen stabilen Referenzstand festgelegt.
+
+**Validierter Befund**
+- `manager:'default' + flow:'paginated'` blieb auf iPhone stabil.
+- `scrolled-doc` und `continuous` reproduzierten dagegen den Fehler
+  „Inhalt erscheint kurz und springt nach 2–3 Sekunden in eine leere Flaeche“.
+- Die EPUB selbst ist valide; der Fehler lag in der iOS-Safari/epub.js-
+  Kombination fuer Scroll-/Continuous-Modi.
+
+**Produktivverhalten auf iPhone/iPad**
+- Reader wird paginiert gerendert.
+- Navigation erfolgt ueber dezente linke/rechte Randpfeile ausserhalb der
+  weissen Buchseite; horizontales Wischen bleibt zusaetzlich aktiv.
+- Alte grosse `Weiter`/`Zurueck`-Navigation wird nicht verwendet.
+- Der schwebende `HOEREN`-Button wird waehrend des EPUB-Lesens ausgeblendet,
+  damit er keine Buchseite oder Navigation verdeckt.
+- Premium-EPUB-Dateien werden nicht veraendert; alle Anpassungen betreffen nur
+  die Web-Rendition.
+- Desktop behaelt seinen bisherigen Reader-Modus.
+
+**Bookmark-/Backend-Verhalten**
+- `getEpubData` bleibt der eigentliche Pflichtpfad fuer das Laden des Buchs.
+- `getBookmark` ist nicht mehr blockierend: scheitert der Bookmark-Abruf,
+  darf das Buch trotzdem mit leerer Startposition geoeffnet werden.
+- Bestehende Bookmark-Speicherung bleibt erhalten, sobald der Reader laeuft.
+
+Der temporaere `reader-test.html`-Harness wurde nach erfolgreicher
+Validierung wieder entfernt. Dieser Stand ist ab jetzt der produktive
+iOS-Referenzstand; weitere Reader-Aenderungen sollen gegen diesen Stand
+getestet werden, bevor sie live gehen.
