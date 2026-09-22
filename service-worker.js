@@ -25,15 +25,15 @@
 // v3 -> v4 (21.09.2026): audio-library.js traegt jetzt zusaetzlich den kleinen
 // iOS-Safari-Kompatibilitaetslayer fuer den Inline-EPUB-Reader. Der Sprung auf
 // v4 verhindert, dass iPhones die zuvor gecachte JS-Datei weiterverwenden.
-const SHELL_CACHE = 'ajk-shell-v16';
-const DATA_CACHE = 'ajk-data-v16';
+const SHELL_CACHE = 'ajk-shell-v17';
+const DATA_CACHE = 'ajk-data-v17';
 const SHELL_FILES = ['./', './index.html', './audio-library.js', './manifest.webmanifest', './icons/icon-192.png', './icons/icon-512.png'];
 
 // Aktionen, deren Antwort für Offline-Nutzung zwischengespeichert werden
 // darf. Alles andere (insbesondere alle schreibenden Aktionen) läuft immer
 // nur direkt übers Netz.
 const CACHEABLE_GET_ACTIONS = new Set(['getBooks', 'getPoems', 'getSettings']);
-const CACHEABLE_POST_ACTIONS = new Set(['getEpubData', 'getBookmark']);
+const CACHEABLE_POST_ACTIONS = new Set([]);
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
@@ -53,12 +53,11 @@ self.addEventListener('activate', (event) => {
   );
 });
 
-// POST-Anfragen (getEpubData, getBookmark) werden über die Cache API nicht
-// direkt als Schlüssel unterstützt (die matcht nur GET) — daher ein
-// synthetischer GET-Request als Cache-Schlüssel, gebaut aus den relevanten
-// Parametern (Aktion + betroffenes Buch), nicht aus dem kompletten Body
-// (der enthält u.a. Admin-Token/Zugangscode, die sich ändern können, ohne
-// dass sich am eigentlichen Inhalt etwas ändert).
+// EPUB- und Bookmark-POSTs gehen bewusst direkt zum Apps-Script-Backend.
+// Der frühere Offline-Cache für getEpubData/getBookmark wurde auf iOS zur
+// zusätzlichen Fehlerquelle bei großen EPUB-Antworten. Schreibende POSTs
+// waren ohnehin nie cachebar; aktuell werden daher alle POSTs direkt
+// durchgereicht.
 function synthKey(action, params) {
   const keep = ['epubUrl', 'bookTitle', 'code'];
   const qs = keep.map((k) => k + '=' + encodeURIComponent(params.get(k) || '')).join('&');
