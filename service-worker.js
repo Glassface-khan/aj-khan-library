@@ -25,18 +25,8 @@
 // v3 -> v4 (21.09.2026): audio-library.js traegt jetzt zusaetzlich den kleinen
 // iOS-Safari-Kompatibilitaetslayer fuer den Inline-EPUB-Reader. Der Sprung auf
 // v4 verhindert, dass iPhones die zuvor gecachte JS-Datei weiterverwenden.
-// v6 recovery (21.09.2026): nach Rollback des experimentellen EPUB-Reflow-
-// Patches bewusst neue Cache-ID, damit bereits installierte v5-Caches auf
-// iOS sicher verworfen werden und die stabile audio-library.js neu geladen wird.
-// v7 (21.09.2026): lädt den validierten, ausschließlich EPUB-internen
-// iOS-Seitenumbruch-Fix neu; Root/index.html bleibt unverändert.
-// v8 (22.09.2026): Frontmatter-Bookmarks werden auf iOS dokumentweise statt
-// per CFI restauriert, damit epub.js continuous mode nicht in einen leeren
-// Viewport scrollt. Root/index.html bleibt unverändert.
-// v9 (22.09.2026): epub.js continuous reader verwendet jetzt die offizielle
-// Kombination manager:'continuous' + flow:'scrolled' statt scrolled-doc.
-const SHELL_CACHE = 'ajk-shell-v12';
-const DATA_CACHE = 'ajk-data-v12';
+const SHELL_CACHE = 'ajk-shell-v13';
+const DATA_CACHE = 'ajk-data-v13';
 const SHELL_FILES = ['./', './index.html', './audio-library.js', './manifest.webmanifest', './icons/icon-192.png', './icons/icon-512.png'];
 
 // Aktionen, deren Antwort für Offline-Nutzung zwischengespeichert werden
