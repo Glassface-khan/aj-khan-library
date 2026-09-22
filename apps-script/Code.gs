@@ -940,8 +940,460 @@ function setPoemsArray(poems) {
   }
 }
 
+
+// ============================================================================
+// BOOK-CLOSE RELEASE-PACKAGE IMPORT
+// ============================================================================
+//
+// Zweck:
+// Ein komplett produziertes Buch kann als EIN einziges RELEASE_PACKAGE.zip
+// in irgendeinen direkten Unterordner von DRIVE_ROOT_FOLDER_ID hochgeladen
+// werden (z.B. per iPhone). Beim naechsten syncDriveForAllBooks()-Lauf wird
+// das Paket automatisch erkannt, entpackt, archiviert und in die bereits
+// von der Autorenseite erwartete operative Ordnerstruktur gespiegelt.
+//
+// Erwartete Produktionsstruktur im ZIP (A. J. Khan Publication Package):
+//   01_FINAL_BOOK/
+//   02_FRONT_BACKMATTER/
+//   03_SUBMISSION/
+//   04_MARKETING/
+//   05_INTERNAL_AUDITS/
+//   06_REFERENCE_ASSETS/
+//   metadata.json
+//
+// Operative Spiegelung fuer die Website:
+//   /<Buchtitel>/metadata.json
+//   /<Buchtitel>/Manuskript/<LANG>/FINAL_<Titel>.docx|md
+//   /<Buchtitel>/Manuskript/<LANG>/EPUB_<Titel>.epub
+//   /<Buchtitel>/Manuskript/<LANG>/KLAPPENTEXT_<Titel>.txt|docx
+//   /<Buchtitel>/Bilder/Cover/<finales Cover>
+//
+// Das komplette Paket bleibt zusaetzlich reproduzierbar unter
+//   /<Buchtitel>/Release Package/<ZIP-Name ohne .zip>/...
+// erhalten. Die Quell-ZIP wird nach erfolgreichem Import dorthin verschoben
+// und mit IMPORTED_ praefigiert. Dadurch wird sie nicht erneut verarbeitet.
+//
+// WICHTIG:
+// - Kein neuer Trigger noetig: der bereits vorhandene Stunden-Trigger fuer
+//   syncDriveForAllBooks() fuehrt den Scanner automatisch mit aus.
+// - metadata.json ist Source of Truth fuer Titel/Sprache/Dateipfade.
+// - Bei bestehendem Buch werden keine manuellen Buchkartendaten geloescht;
+//   der normale Drive-Sync reconciled Cover, Wortzahl, Klappentext und EPUB.
+// ============================================================================
+
+const RELEASE_PACKAGE_RE_ = /RELEASE_PACKAGE.*\.zip$/i;
+const RELEASE_IMPORTED_PREFIX_ = 'IMPORTED_';
+
+function releasePackageMimeType_(name) {
+  const n = String(name || '').toLowerCase();
+  if (n.endsWith('.docx')) return 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+  if (n.endsWith('.doc')) return 'application/msword';
+  if (n.endsWith('.epub')) return 'application/epub+zip';
+  if (n.endsWith('.json')) return 'application/json';
+  if (n.endsWith('.md')) return 'text/markdown';
+  if (n.endsWith('.txt')) return 'text/plain';
+  if (n.endsWith('.jpg') || n.endsWith('.jpeg')) return 'image/jpeg';
+  if (n.endsWith('.png')) return 'image/png';
+  if (n.endsWith('.webp')) return 'image/webp';
+  if (n.endsWith('.svg')) return 'image/svg+xml';
+  if (n.endsWith('.pdf')) return 'application/pdf';
+  return 'application/octet-stream';
+}
+
+function releasePackageBaseName_(path) {
+  const parts = String(path || '').replace(/\\/g, '/').split('/');
+  return parts[parts.length - 1] || '';
+}
+
+function releasePackageNormalizePath_(path) {
+  return String(path || '')
+    .replace(/\\/g, '/')
+    .replace(/^\.\//, '')
+    .replace(/^\/+/, '');
+}
+
+function releasePackageWrapperPrefix_(entries) {
+  const names = entries
+    .map(function(e) { return releasePackageNormalizePath_(e.getName()); })
+    .filter(function(n) { return n && !n.endsWith('/'); });
+  if (!names.length) return '';
+  const firstSeg = names[0].split('/')[0];
+  if (!firstSeg) return '';
+  const prefix = firstSeg + '/';
+  const allWrapped = names.every(function(n) { return n.indexOf(prefix) === 0; });
+  return allWrapped ? prefix : '';
+}
+
+function releasePackageRelativePath_(entry, wrapperPrefix) {
+  let name = releasePackageNormalizePath_(entry.getName());
+  if (wrapperPrefix && name.indexOf(wrapperPrefix) === 0) name = name.slice(wrapperPrefix.length);
+  return releasePackageNormalizePath_(name);
+}
+
+function releasePackageBlob_(entry, fileName) {
+  return Utilities.newBlob(
+    entry.getBytes(),
+    releasePackageMimeType_(fileName),
+    fileName
+  );
+}
+
+function releasePackageFindEntry_(entries, wrapperPrefix, relativePath) {
+  const target = releasePackageNormalizePath_(relativePath);
+  if (!target) return null;
+  for (let i = 0; i < entries.length; i++) {
+    const rel = releasePackageRelativePath_(entries[i], wrapperPrefix);
+    if (rel === target) return entries[i];
+  }
+  return null;
+}
+
+function releasePackageFindFirst_(entries, wrapperPrefix, predicate) {
+  for (let i = 0; i < entries.length; i++) {
+    const rel = releasePackageRelativePath_(entries[i], wrapperPrefix);
+    if (!rel || rel.endsWith('/')) continue;
+    if (predicate(rel, entries[i])) return entries[i];
+  }
+  return null;
+}
+
+function releasePackageLanguageCode_(language) {
+  const raw = String(language || '').trim().toLowerCase();
+  if (!raw) return 'EN';
+  if (raw.indexOf('en') === 0) return 'EN';
+  if (raw.indexOf('de') === 0) return 'DE';
+  if (raw.indexOf('bs') === 0 || raw.indexOf('hr') === 0 || raw.indexOf('sr') === 0) return 'BS';
+  return raw.slice(0, 2).toUpperCase();
+}
+
+function releasePackageSafeTitle_(title) {
+  return String(title || 'BOOK').replace(/[\\\/:*?"<>|]/g, '_').trim();
+}
+
+function releasePackageReplaceByName_(folder, name, blob) {
+  const existing = folder.getFilesByName(name);
+  while (existing.hasNext()) existing.next().setTrashed(true);
+  return folder.createFile(blob.setName(name));
+}
+
+function releasePackageReplaceByPrefix_(folder, prefix, name, blob) {
+  const it = folder.getFiles();
+  const p = String(prefix || '').toLowerCase();
+  while (it.hasNext()) {
+    const f = it.next();
+    if (f.getName().toLowerCase().indexOf(p) === 0) f.setTrashed(true);
+  }
+  return folder.createFile(blob.setName(name));
+}
+
+function releasePackageEnsureNestedFolder_(baseFolder, segments) {
+  let folder = baseFolder;
+  (segments || []).forEach(function(seg) {
+    if (seg) folder = getOrCreateSubfolder(folder, seg);
+  });
+  return folder;
+}
+
+function releasePackageArchiveEntries_(entries, wrapperPrefix, versionFolder) {
+  entries.forEach(function(entry) {
+    const rel = releasePackageRelativePath_(entry, wrapperPrefix);
+    if (!rel || rel.endsWith('/')) return;
+    const parts = rel.split('/');
+    const fileName = parts.pop();
+    const targetFolder = releasePackageEnsureNestedFolder_(versionFolder, parts);
+    releasePackageReplaceByName_(targetFolder, fileName, releasePackageBlob_(entry, fileName));
+  });
+}
+
+function releasePackageFindMetadataEntry_(entries, wrapperPrefix) {
+  let entry = releasePackageFindEntry_(entries, wrapperPrefix, 'metadata.json');
+  if (entry) return entry;
+  entry = releasePackageFindFirst_(entries, wrapperPrefix, function(rel) {
+    return releasePackageBaseName_(rel).toLowerCase() === 'metadata.json';
+  });
+  if (entry) return entry;
+  return releasePackageFindFirst_(entries, wrapperPrefix, function(rel) {
+    return /_metadata\.json$/i.test(releasePackageBaseName_(rel));
+  });
+}
+
+function releasePackageEntryFromMetadataPath_(entries, wrapperPrefix, metadata, key) {
+  const files = metadata && metadata.files ? metadata.files : {};
+  const path = files && files[key] ? String(files[key]) : '';
+  if (!path) return null;
+  return releasePackageFindEntry_(entries, wrapperPrefix, path);
+}
+
+function releasePackageEnsureBookRecord_(metadata) {
+  const title = String(metadata && metadata.title || '').trim();
+  if (!title) return;
+  const books = getBooksArray();
+  let found = null;
+  books.forEach(function(b) {
+    if (!found && String(b.title || '').trim().toLowerCase() === title.toLowerCase()) found = b;
+  });
+  if (found) return;
+
+  const primaryGenre = metadata && metadata.genre && metadata.genre.primary
+    ? String(metadata.genre.primary)
+    : '';
+
+  books.push({
+    id: Utilities.getUuid(),
+    title: title,
+    kind: primaryGenre,
+    hook: '',
+    wordCount: Number(metadata.word_count || 0) || 0,
+    chapterCount: Number(metadata.chapter_count || 0) || 0,
+    translations: '',
+    langs: {}
+  });
+  setBooksArray(books);
+}
+
+function processReleasePackageZip_(zipFile, rootFolder, logSheet) {
+  if (!zipFile) throw new Error('Keine ZIP-Datei uebergeben.');
+  const originalName = zipFile.getName();
+  if (originalName.indexOf(RELEASE_IMPORTED_PREFIX_) === 0) {
+    return { ok: true, skipped: true, reason: 'already imported' };
+  }
+  if (!RELEASE_PACKAGE_RE_.test(originalName)) {
+    return { ok: true, skipped: true, reason: 'not a release package' };
+  }
+
+  let entries;
+  try {
+    entries = Utilities.unzip(zipFile.getBlob());
+  } catch (err) {
+    throw new Error('Release-ZIP konnte nicht entpackt werden: ' + err.message);
+  }
+  if (!entries || !entries.length) throw new Error('Release-ZIP ist leer.');
+
+  const wrapperPrefix = releasePackageWrapperPrefix_(entries);
+  const metadataEntry = releasePackageFindMetadataEntry_(entries, wrapperPrefix);
+  if (!metadataEntry) throw new Error('metadata.json im Release-Paket nicht gefunden.');
+
+  let metadata;
+  try {
+    metadata = JSON.parse(metadataEntry.getDataAsString('UTF-8'));
+  } catch (err) {
+    throw new Error('metadata.json ist ungueltig: ' + err.message);
+  }
+
+  const title = String(metadata.title || '').trim();
+  if (!title) throw new Error('metadata.json enthaelt keinen Buchtitel.');
+  const langCode = releasePackageLanguageCode_(metadata.language);
+  const safeTitle = releasePackageSafeTitle_(title);
+
+  const folders = ensureBookFolders(rootFolder, title);
+  const langFolder = getOrCreateSubfolder(folders.manuskriptFolder, langCode);
+
+  // 1) Vollstaendiges Produktionspaket unveraendert archivieren.
+  const releaseRoot = getOrCreateSubfolder(folders.bookFolder, 'Release Package');
+  const versionName = originalName.replace(/\.zip$/i, '').replace(/^IMPORTED_/, '');
+  const versionFolder = getOrCreateSubfolder(releaseRoot, versionName);
+  releasePackageArchiveEntries_(entries, wrapperPrefix, versionFolder);
+
+  // 2) metadata.json in den Buch-Hauptordner spiegeln.
+  const jsonIt = folders.bookFolder.getFiles();
+  while (jsonIt.hasNext()) {
+    const f = jsonIt.next();
+    if (f.getName().toLowerCase().endsWith('.json')) f.setTrashed(true);
+  }
+  releasePackageReplaceByName_(
+    folders.bookFolder,
+    'metadata.json',
+    releasePackageBlob_(metadataEntry, 'metadata.json')
+  );
+
+  // 3) Finales Manuskript spiegeln.
+  let manuscriptEntry = releasePackageEntryFromMetadataPath_(entries, wrapperPrefix, metadata, 'manuscript');
+  if (!manuscriptEntry) {
+    manuscriptEntry = releasePackageFindFirst_(entries, wrapperPrefix, function(rel) {
+      return /(^|\/)01_FINAL_BOOK\//i.test(rel) &&
+        /PUBLICATION_MASTER/i.test(rel) &&
+        /\.(docx|doc|md)$/i.test(rel);
+    });
+  }
+  if (manuscriptEntry) {
+    const extMatch = releasePackageBaseName_(manuscriptEntry.getName()).match(/(\.[^.]+)$/);
+    const ext = extMatch ? extMatch[1].toLowerCase() : '.docx';
+    const targetName = 'FINAL_' + safeTitle + ext;
+    releasePackageReplaceByPrefix_(
+      langFolder,
+      'FINAL_',
+      targetName,
+      releasePackageBlob_(manuscriptEntry, targetName)
+    );
+  }
+
+  // 4) Premium-EPUB bevorzugen; nur falls nicht vorhanden Standard-EPUB.
+  let epubEntry = releasePackageEntryFromMetadataPath_(entries, wrapperPrefix, metadata, 'epub');
+  if (!epubEntry) {
+    epubEntry = releasePackageFindFirst_(entries, wrapperPrefix, function(rel) {
+      return /(^|\/)01_FINAL_BOOK\//i.test(rel) &&
+        /PREMIUM_DELUXE/i.test(rel) &&
+        /\.epub$/i.test(rel);
+    });
+  }
+  if (!epubEntry) {
+    epubEntry = releasePackageFindFirst_(entries, wrapperPrefix, function(rel) {
+      return /(^|\/)01_FINAL_BOOK\//i.test(rel) && /\.epub$/i.test(rel);
+    });
+  }
+  if (epubEntry) {
+    const targetName = 'EPUB_' + safeTitle + '.epub';
+    releasePackageReplaceByPrefix_(
+      langFolder,
+      'EPUB_',
+      targetName,
+      releasePackageBlob_(epubEntry, targetName)
+    );
+  }
+
+  // 5) Finales Cover spiegeln.
+  let coverEntry = releasePackageEntryFromMetadataPath_(entries, wrapperPrefix, metadata, 'cover_image');
+  if (!coverEntry) {
+    coverEntry = releasePackageFindFirst_(entries, wrapperPrefix, function(rel) {
+      return /(^|\/)01_FINAL_BOOK\//i.test(rel) &&
+        /COVER_FINAL/i.test(rel) &&
+        /\.(jpe?g|png|webp)$/i.test(rel);
+    });
+  }
+  if (coverEntry) {
+    const coverName = releasePackageBaseName_(coverEntry.getName());
+    const images = folders.coverFolder.getFiles();
+    while (images.hasNext()) {
+      const f = images.next();
+      if (f.getMimeType().indexOf('image/') === 0) f.setTrashed(true);
+    }
+    releasePackageReplaceByName_(
+      folders.coverFolder,
+      coverName,
+      releasePackageBlob_(coverEntry, coverName)
+    );
+  }
+
+  // 6) Klappentext: TXT bevorzugen (sofort lesbar), sonst DOCX aus metadata.
+  let blurbEntry = releasePackageFindFirst_(entries, wrapperPrefix, function(rel) {
+    return /(^|\/)04_MARKETING\//i.test(rel) &&
+      /BACK_COVER_COPY/i.test(rel) &&
+      /\.txt$/i.test(rel);
+  });
+  if (!blurbEntry) {
+    blurbEntry = releasePackageEntryFromMetadataPath_(entries, wrapperPrefix, metadata, 'klappentext');
+  }
+  if (blurbEntry) {
+    const srcName = releasePackageBaseName_(blurbEntry.getName());
+    const extMatch = srcName.match(/(\.[^.]+)$/);
+    const ext = extMatch ? extMatch[1].toLowerCase() : '.txt';
+    const targetName = 'KLAPPENTEXT_' + safeTitle + ext;
+    releasePackageReplaceByPrefix_(
+      langFolder,
+      'KLAPPENTEXT_',
+      targetName,
+      releasePackageBlob_(blurbEntry, targetName)
+    );
+  }
+
+  // 7) Falls das Buch noch nicht auf der Autorenseite existiert, minimalen
+  // BooksData-Eintrag anlegen. Der normale Sync fuellt danach alle
+  // abgeleiteten Felder aus Dateien/metadata.json.
+  releasePackageEnsureBookRecord_(metadata);
+
+  // 8) Quell-ZIP in das archivierte Paket verschieben und eindeutig markieren.
+  const sourceZipFolder = getOrCreateSubfolder(versionFolder, '_SOURCE_ZIP');
+  try {
+    zipFile.setName(RELEASE_IMPORTED_PREFIX_ + originalName.replace(/^IMPORTED_/, ''));
+    zipFile.moveTo(sourceZipFolder);
+  } catch (moveErr) {
+    // Nicht fatal: selbst wenn Move/Rename durch Drive-Rechte scheitert,
+    // ist das Paket bereits importiert. Prefix ggf. separat versuchen.
+    try { zipFile.setName(RELEASE_IMPORTED_PREFIX_ + originalName.replace(/^IMPORTED_/, '')); } catch (e2) {}
+  }
+
+  logDriveSync(
+    logSheet,
+    title,
+    'Release-Paket importiert: ' + originalName + ' -> ' + langCode +
+      ' (Manuskript=' + (!!manuscriptEntry) +
+      ', EPUB=' + (!!epubEntry) +
+      ', Cover=' + (!!coverEntry) +
+      ', Klappentext=' + (!!blurbEntry) + ').'
+  );
+
+  return {
+    ok: true,
+    title: title,
+    language: langCode,
+    manuscript: !!manuscriptEntry,
+    epub: !!epubEntry,
+    cover: !!coverEntry,
+    blurb: !!blurbEntry,
+    archiveFolderId: versionFolder.getId()
+  };
+}
+
+function scanReleasePackageZips_(rootFolder, logSheet) {
+  const candidates = [];
+
+  function collectFromFolder_(folder) {
+    const files = folder.getFiles();
+    while (files.hasNext()) {
+      const f = files.next();
+      const name = f.getName();
+      if (name.indexOf(RELEASE_IMPORTED_PREFIX_) === 0) continue;
+      if (RELEASE_PACKAGE_RE_.test(name)) candidates.push(f);
+    }
+  }
+
+  // ZIP direkt im Bibliotheks-Root.
+  collectFromFolder_(rootFolder);
+
+  // ZIP in einem direkten Unterordner des Roots. Das deckt den mobilen
+  // Workflow ab: Nutzer kann z.B. einen Ordner "Mountain" oder
+  // "_BOOK_CLOSE_INBOX" verwenden, ohne am iPhone Ordnerstrukturen
+  // hochladen zu muessen.
+  const childFolders = rootFolder.getFolders();
+  while (childFolders.hasNext()) collectFromFolder_(childFolders.next());
+
+  const results = [];
+  candidates.forEach(function(file) {
+    try {
+      results.push(processReleasePackageZip_(file, rootFolder, logSheet));
+    } catch (err) {
+      logDriveSync(logSheet, file.getName(), 'Release-Import FEHLER: ' + err.message);
+      results.push({ ok: false, fileName: file.getName(), error: err.message });
+    }
+  });
+  return results;
+}
+
+// Manuell im Apps-Script-Editor ausfuehrbar, falls man nicht auf den
+// Stunden-Trigger warten will. Kein Parameter noetig.
+function runBookCloseImportNow() {
+  const rootFolder = DriveApp.getFolderById(DRIVE_ROOT_FOLDER_ID);
+  const logSheet = getOrCreateSyncLogSheet_();
+  const results = scanReleasePackageZips_(rootFolder, logSheet);
+  syncDriveForAllBooks();
+  Logger.log(JSON.stringify(results));
+  return results;
+}
+
+
 function syncDriveForAllBooks() {
   const logSheet = getOrCreateSyncLogSheet_();
+
+  // Ein-Datei-Workflow "BUCH ABSCHLIESSEN": vor dem normalen Buch-Sync
+  // neue RELEASE_PACKAGE-ZIPs aus Root/direkten Unterordnern importieren.
+  // Fehler eines Pakets werden nur geloggt und blockieren den restlichen
+  // Autorenseiten-Sync nicht.
+  try {
+    const importRoot = DriveApp.getFolderById(DRIVE_ROOT_FOLDER_ID);
+    scanReleasePackageZips_(importRoot, logSheet);
+  } catch (releaseErr) {
+    logDriveSync(logSheet, '(ReleaseImport)', 'Scanner-Fehler: ' + releaseErr.message);
+  }
 
   const books = getBooksArray();
   if (!books.length) return;
@@ -1813,6 +2265,35 @@ function handle(e) {
       try { syncDriveForAllBooks(); } catch (syncErr) { syncError = String(syncErr && syncErr.message || syncErr); }
 
       return jsonOut({ ok: true, fileName: newName, syncError: syncError });
+    } catch (err) {
+      return jsonOut({ ok: false, error: String(err && err.message || err) });
+    }
+  }
+
+  if (action === 'importReleaseZip') {
+    const admin = checkAdmin(e);
+    if (!admin.ok) return jsonOut({ ok: false, error: 'unauthorized' });
+    const zipFileId = String(e.parameter.zipFileId || '').trim();
+    if (!zipFileId) return jsonOut({ ok: false, error: 'zipFileId fehlt.' });
+    try {
+      const rootFolder = DriveApp.getFolderById(DRIVE_ROOT_FOLDER_ID);
+      const logSheet = getOrCreateSyncLogSheet_();
+      const result = processReleasePackageZip_(DriveApp.getFileById(zipFileId), rootFolder, logSheet);
+      syncDriveForAllBooks();
+      return jsonOut({ ok: true, result: result });
+    } catch (err) {
+      return jsonOut({ ok: false, error: String(err && err.message || err) });
+    }
+  }
+
+  if (action === 'scanReleasePackages') {
+    const admin = checkAdmin(e);
+    if (!admin.ok) return jsonOut({ ok: false, error: 'unauthorized' });
+    try {
+      const rootFolder = DriveApp.getFolderById(DRIVE_ROOT_FOLDER_ID);
+      const results = scanReleasePackageZips_(rootFolder, getOrCreateSyncLogSheet_());
+      syncDriveForAllBooks();
+      return jsonOut({ ok: true, results: results });
     } catch (err) {
       return jsonOut({ ok: false, error: String(err && err.message || err) });
     }
