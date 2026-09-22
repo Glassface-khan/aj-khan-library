@@ -1,0 +1,38 @@
+name: Diagnose reader access
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - '.github/workflows/diagnose-reader.yml'
+permissions:
+  contents: read
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Extract access snippets
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          s=Path('index.html').read_text(encoding='utf-8', errors='replace')
+          terms=['Noch kein Lesezugriff hinterlegt','visitorCanDownload','visitorEpubAccess','canRead','bookIsFinished','onOpen','openReader']
+          out=[]
+          for term in terms:
+              start=0
+              n=0
+              while True:
+                  i=s.find(term,start)
+                  if i<0: break
+                  n+=1
+                  a=max(0,i-1800); b=min(len(s),i+4500)
+                  out.append(f'\n=== {term} occurrence {n} @ {i} ===\n'+s[a:b])
+                  start=i+len(term)
+                  if n>=12: break
+          Path('reader-diagnosis.txt').write_text('\n'.join(out),encoding='utf-8')
+          print('wrote', len(out), 'snippets')
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: reader-diagnosis
+          path: reader-diagnosis.txt
