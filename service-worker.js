@@ -25,8 +25,8 @@
 // v3 -> v4 (21.09.2026): audio-library.js traegt jetzt zusaetzlich den kleinen
 // iOS-Safari-Kompatibilitaetslayer fuer den Inline-EPUB-Reader. Der Sprung auf
 // v4 verhindert, dass iPhones die zuvor gecachte JS-Datei weiterverwenden.
-const SHELL_CACHE = 'ajk-shell-v18';
-const DATA_CACHE = 'ajk-data-v18';
+const SHELL_CACHE = 'ajk-shell-v19';
+const DATA_CACHE = 'ajk-data-v19';
 const SHELL_FILES = ['./', './index.html', './audio-library.js', './manifest.webmanifest', './icons/icon-192.png', './icons/icon-512.png'];
 
 // Aktionen, deren Antwort für Offline-Nutzung zwischengespeichert werden
