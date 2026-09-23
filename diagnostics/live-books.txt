@@ -1,13 +1,3 @@
 index_size=9636255
 script_urls=["https://script.google.com/macros/s/AKfycbwcbRDaWkM1wf3MV_dj4RPw9jQl2Fgc4YfGcmFrGU1S243yvh8WGW7mbyXLbSeVJKI/exec"]
-seed_tag=NOT_FOUND
-backend=https://script.google.com/macros/s/AKfycbwcbRDaWkM1wf3MV_dj4RPw9jQl2Fgc4YfGcmFrGU1S243yvh8WGW7mbyXLbSeVJKI/exec
-book_count=3
-BOOK|The Road it came by|status=Fertig|finished=True
-BOOK|The Mountain That Doesn't Answer|status=Fertig|finished=True
-BOOK|The Weight of the Air|status=Fertig|finished=True
-term_ajk_author_books_draft=9532652
-term_?action=getBooks=9536511
-term_visitorVisibleBooks=9530438
-term_visibleBooksSourceRaw=9602212
-term_Books_(=9480527
+backend_error=https://script.google.com/macros/s/AKfycbwcbRDaWkM1wf3MV_dj4RPw9jQl2Fgc4YfGcmFrGU1S243yvh8WGW7mbyXLbSeVJKI/exec|TimeoutError('The read operation timed out')

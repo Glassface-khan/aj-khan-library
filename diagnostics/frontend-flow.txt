@@ -1,0 +1,1299 @@
+
+=== ajk_author_books_draft #1 @ 217077 ===
+g/Regelwerke) ---
+    revisionNovels: [], revisionSelectedNovelId: '', revisionNewNovelTitle: '', revisionNewNovelAuthor: '',
+    revisionRulesets: [], revisionRulesetName: '', revisionRulesetContent: '', revisionRulesetCorridorNotes: '', revisionRulesetScopeGlobal: false,
+    revisionManuscripts: [], revisionManuscriptDetails: {}, revisionOpenManuscriptId: '',
+    revisionUploadFilename: '', revisionUploadRawText: '', revisionSplitSections: [],
+    revisionMsg: '', revisionBusy: false };
+
+  componentDidMount() {
+    let seed = {};
+    try { seed = JSON.parse(document.getElementById('author-data').textContent); } catch (e) {}
+    // Gedichte liegen jetzt serverseitig in einem eigenen Sheet-Tab
+    // (PoemsData, gleiches Muster wie BooksData) statt nur lokal im Browser
+    // — dieser localStorage-Wert ist nur noch ein Cache für sofortiges
+    // Anzeigen beim nächsten Laden, keine Versionsprüfung mehr nötig
+    // (fetchPoems() unten holt kurz danach ohnehin den Serverstand).
+    let poemsCache = null;
+    try { poemsCache = JSON.parse(localStorage.getItem('ajk_author_poems_draft')); } catch (e) {}
+    let booksDraft = null;
+    try { booksDraft = JSON.parse(localStorage.getItem('ajk_author_books_draft')); } catch (e) {}
+    let access = null;
+    try { access = JSON.parse(localStorage.getItem('ajk_visitor_access')); } catch (e) {}
+    let isAdmin = localStorage.getItem('ajk_author_admin') === '1';
+    let adminToken = isAdmin ? (localStorage.getItem('ajk_admin_token') || '') : '';
+    // Stelle aus einer alten Sitzung (vor Einführung des Admin-Tokens): der
+    // isAdmin-Flag ist gesetzt, aber es gibt kein Token dazu. Statt in einem
+    // kaputten Halb-Admin-Zustand zu landen, direkt sauber ausloggen.
+    if (isAdmin && !adminToken) {
+      localStorage.removeItem('ajk_author_admin');
+      isAdmin = false;
+    }
+    this.setState({
+      bio: seed.bio || {},
+      books: (booksDraft && booksDraft.books) || seed.books || [],
+      poems: (poemsCache && poemsCache.poems) || seed.poems || [],
+      settings: seed.settings || {},
+      poemsVersion: seed.poemsVersion,
+      isAdmin,
+      adminToken,
+      isUnlocked: localStorage.getItem('ajk_author_unlocked') === '1',
+      visitorName: (access && access.name) || '',
+      visitorCanDownload: !!(access && access.canDownload),
+      visitorCanCopy: !!(access && access.canCopy),
+      visitorVisibleBooks: (access && Array.isArray(access.visibleBooks)) ? access.visibleBooks : null,
+      visitorShowPoems: !(access && access.showPoems === false),
+      visitorAccessCode: (access && access.code) || '',
+      visitorEpubAccess: (access && access.epubAccess && typeof access.epubAccess === 'object') ? access.epubAccess : {}
+    });
+    if (localStorage.getItem('ajk_author_unlocked') === '1') this.fetchRatings();
+    // Token explizit übergeben statt this.state.adminToken zu lesen — das
+    // setState oben ist evtl. noch nicht angewendet, wenn dieser Aufruf läuft.
+    if (isAdmin) { this.fetchAccessList(adminToken); this.fetchRevisionNovels(); }
+    this.fetchBooks();
+    this.fetchSettings();
+    this.fetchPoems();
+
+    // Tippen/Klicken irgendwo außerhalb einer offenen Part-Liste schließt
+    // sie — ohne das gibt es keine Möglichkeit, ein versehentlich
+    // geöffnetes Panel wieder loszuwerden, außer explizit ein Gedicht
+    // darin auszuwählen. Reines Vanilla-JS über componentDidMount, nicht
+    // über die Template-Bindings (die kennen kein "Klick außerhalb").
+    document.addEventListener('click', (e) => {
+      if (this.state.openTocPart === -1) return;
+      if (!e.target.closest('.poem-toc-wrap')) this.setState({ openTocPart: -1 });
+    });
+    // Analog fuer die Buecher-Sprungliste (siehe toggleBookToc/jumpToBook) --
+    // gleiches Klick-ausserhalb-schliesst-Muster wie bei
+
+=== ajk_author_books_draft #2 @ 221017 ===
+'.book-toc-wrap')) this.setState({ bookTocOpen: false });
+    });
+  }
+
+  // Gedichte vom Server holen (PoemsData-Sheet) — analog zu fetchBooks.
+  // Bewusst dieselbe Absicherung: leeres/kaputtes Ergebnis überschreibt nie
+  // den aktuellen Stand (Seed bzw. Cache). Direkt nach dem Umstellen ist das
+  // Sheet noch leer (nichts wurde je gespeichert) — dann bleibt es einfach
+  // beim eingebauten Seed, bis einmal im Admin-Bereich gespeichert wird;
+  // das schreibt automatisch die komplette Liste ins Sheet.
+  fetchPoems = () => {
+    fetch(this.SCRIPT_URL + '?action=getPoems')
+      .then(r => r.json())
+      .then(data => {
+        const poems = JSON.parse(data.poems || '[]');
+        if (Array.isArray(poems) && poems.length) {
+          this.setState({ poems });
+          localStorage.setItem('ajk_author_poems_draft', JSON.stringify({ poems }));
+        }
+      })
+      .catch(() => {});
+  };
+
+  fetchBooks = () => {
+    fetch(this.SCRIPT_URL + '?action=getBooks')
+      .then(r => r.json())
+      .then(data => {
+        const books = JSON.parse(data.books || '[]');
+        if (Array.isArray(books) && books.length) {
+          this.setState({ books });
+          localStorage.setItem('ajk_author_books_draft', JSON.stringify({ books }));
+        }
+      })
+      .catch(() => {});
+  };
+
+  // Server-gespeicherte Seiten-Einstellungen (aktuell: Part-Bilder für die
+  // Poems-Sektion). Analog zu getBooks/saveBooks, eigener SettingsData-Tab
+  // im selben Sheet — läuft ohne Admin-Token (nur Lesen), damit auch
+  // normale Besucher die aktuellen Bilder sehen.
+  fetchSettings = () => {
+    fetch(this.SCRIPT_URL + '?action=getSettings')
+      .then(r => r.json())
+      .then(data => {
+        const settings = JSON.parse(data.settings || '{}');
+        if (settings && typeof settings === 'object') this.setState({ settings, settingsLoaded: true });
+      })
+      .catch(() => this.setState({ settingsLoaded: true })); // Fehlerfall: nicht dauerhaft blockieren, aber Save bleibt riskant
+  };
+
+  // Nimmt sowohl einen normalen Drive-"Freigeben"-Link
+  // (.../file/d/ID/view?usp=sharing) als auch bereits fertige
+  // Bild-URLs entgegen und wandelt Drive-Links automatisch in die
+  // direkt einbettbare Form um.
+  normalizeDriveImageUrl(url) {
+    const u = (url || '').trim();
+    if (!u) return u;
+    let m = u.match(/\/file\/d\/([-\w]{20,})/) || u.match(/[?&]id=([-\w]{20,})/);
+    // lh3.googleusercontent.com/d/… statt drive.google.com/uc oder
+    // /thumbnail — beide Varianten haben bei eingebetteten <img>-Tags
+    // in der Praxis kaputte Bilder geliefert (Zwischenseite statt
+    // Rohdaten). lh3 ist Googles eigene Bild-CDN-Domain, genau für
+    // diesen Zweck gedacht und liefert die Bilddaten direkt.
+    return m ? ('https://lh3.googleusercontent.com/d/' + m[1] + '=w1000') : u;
+  }
+
+  setPartImage = (label, e) => {
+    const url = this.normalizeDriveImageUrl(e.target.value);
+    this.setState(s => ({ settings: { ...s.settings, partImages: { ...(s.settings.partImages || {}), [label]: url } } }));
+  };
+  // Portrait auf der About-Seite austauschbar ueber das Admin-Panel (wie
+  // die Part-Bilder), statt fest im kompilierten Bundle eingebacken zu
+  // sein -- neue Aenderungen brauchen dadurch keinen Code-Push mehr, nur
+  // Speichern hier. Leer = Standard-Portrait aus dem Bundle bleibt aktiv.
+  setPortraitUrl = (e) => {
+    const url = this.normalizeDriveImageUrl(e.target.value);
+    this.setState(s => ({ settings: { ...s.settings, portraitUrl: url } }));
+  };
+
+  saveSettings = () => {
+    if (!this.state.settingsLoaded) {
+      // Schutz gegen Überschreiben: die vorher gespeicherten Werte sind
+      // noch nicht geladen — ein Speichern jetzt würde sie mit leeren
+      // Feldern überschreiben.
+      this.setState({ settingsSaveMsg: 'Noch am Laden 
+
+=== ajk_author_books_draft #3 @ 257781 ===
+ () => {
+    localStorage.removeItem('ajk_author_unlocked');
+    localStorage.removeItem('ajk_visitor_access');
+    this.setState({ isUnlocked: false, visitorName: '', visitorCanDownload: false, visitorCanCopy: false });
+  };
+
+  addPoem = () => {
+    const np = { title: '', part: '', text: '' };
+    this.setState(s => ({ poems: [...s.poems, np], editingIndex: s.poems.length, forms: { ...s.forms, [s.poems.length]: { ...np } } }));
+  };
+  editPoem = (i) => this.setState(s => ({ editingIndex: i, forms: { ...s.forms, [i]: { ...s.poems[i] } } }));
+  cancelEdit = (i) => this.setState({ editingIndex: null });
+  setFormField = (i, field, value) => this.setState(s => ({ forms: { ...s.forms, [i]: { ...s.forms[i], [field]: value } } }));
+  savePoem = (i) => {
+    this.setState(s => {
+      const poems = s.poems.map((p, idx) => idx === i ? { ...s.forms[i] } : p);
+      return { poems, editingIndex: null };
+    }, () => this.persistPoems());
+  };
+  removePoem = (i) => {
+    if (!window.confirm('Delete this poem?')) return;
+    this.setState(s => ({ poems: s.poems.filter((_, idx) => idx !== i), poemIndex: 0 }), () => this.persistPoems());
+  };
+
+  persistBooks() {
+    try { localStorage.setItem('ajk_author_books_draft', JSON.stringify({ books: this.state.books })); } catch (e) { window.alert('Speichern fehlgeschlagen — Bild evtl. zu groß.'); }
+    const params = new URLSearchParams({ action: 'saveBooks', books: JSON.stringify(this.state.books), adminToken: this.state.adminToken });
+    // Frueher wurde ein Fehlschlagen hier stillschweigend verschluckt (leeres
+    // .catch) — die UI zeigte die Aenderung (aus dem State) trotzdem an, obwohl
+    // sie serverseitig NICHT gespeichert wurde (z.B. abgelaufenes Admin-Token
+    // nach 24h). Ergebnis: ein Buch schien angelegt, verschwand aber beim
+    // naechsten Laden wieder spurlos, ohne jede Fehlermeldung. Jetzt mit klarer
+    // Rueckmeldung.
+    fetch(this.SCRIPT_URL, { method: 'POST', body: params })
+      .then(r => r.json())
+      .then(data => {
+        if (!data.ok) window.alert('Speichern auf dem Server fehlgeschlagen — die Änderung ist NUR lokal in diesem Browser sichtbar, NICHT fuer andere! Grund: ' + (data.error || 'unbekannt') + '. Bitte einmal aus- und wieder als Admin einloggen und danach erneut speichern.'); else this.showSavedToast();
+      })
+      .catch(() => window.alert('Verbindung zum Server fehlgeschlagen — die Änderung ist NUR lokal in diesem Browser sichtbar, NICHT fuer andere! Bitte erneut versuchen.'));
+  }
+  // Alt-Cover DIREKT vom Geraet hochladen (kein Drive noetig), Mehrfach-
+  // Auswahl erlaubt. Gleiches Prinzip wie handleCoverFile: client-seitig
+  // verkleinern/komprimieren und als Data-URL direkt im Buch-Datensatz
+  // speichern. Etwas grosszuegigerer Groessen-Deckel als beim Haupt-Cover
+  // (Galerie-Bilder duerfen etwas groesser sein), aber weiterhin klein
+  // genug, um mehrere Stueck in einer Sheet-Zelle unterzubringen.
+  // Transiente Upload-UI-Werte (Sprachcode, Fertig/Entwurf, Lade-Status)
+  // pro Buch -- bewusst NICHT in bookForms[i] (das wird beim Speichern 1:1
+  // in den Buch-Datensatz uebernommen, wuerde also unerwuenscht mitgespeichert).
+  getUploadState(i) {
+    return this.state.uploadState[i] || { langCode: 'DE', kind: 'FINAL', busy: false, klappentextBusy: false, message: '' };
+  }
+  setUploadField(i, field, value) {
+    this.setState((s) => ({ uploadState: { ...s.uploadState, [i]: { ...this.getUploadState(i), [field]: value } } }));
+  }
+  // Datei als reinen Base64-String lesen (kein Bild, keine Komprimierung --
+  // Manuskripte/Klappentexte muessen unveraendert ankommen). data:-URL-Praefix
+  // vor dem eigentlichen Base64-Teil wird abgeschnitten.
+  readFileAsBase64_(file) {
+    return new Promise((resolve, reject) => {
+      const reader = new 
+
+=== ?action=getBooks #1 @ 220775 ===
+ungliste (siehe toggleBookToc/jumpToBook) --
+    // gleiches Klick-ausserhalb-schliesst-Muster wie beim Gedichte-TOC oben.
+    document.addEventListener('click', (e) => {
+      if (!this.state.bookTocOpen) return;
+      if (!e.target.closest('.book-toc-wrap')) this.setState({ bookTocOpen: false });
+    });
+  }
+
+  // Gedichte vom Server holen (PoemsData-Sheet) — analog zu fetchBooks.
+  // Bewusst dieselbe Absicherung: leeres/kaputtes Ergebnis überschreibt nie
+  // den aktuellen Stand (Seed bzw. Cache). Direkt nach dem Umstellen ist das
+  // Sheet noch leer (nichts wurde je gespeichert) — dann bleibt es einfach
+  // beim eingebauten Seed, bis einmal im Admin-Bereich gespeichert wird;
+  // das schreibt automatisch die komplette Liste ins Sheet.
+  fetchPoems = () => {
+    fetch(this.SCRIPT_URL + '?action=getPoems')
+      .then(r => r.json())
+      .then(data => {
+        const poems = JSON.parse(data.poems || '[]');
+        if (Array.isArray(poems) && poems.length) {
+          this.setState({ poems });
+          localStorage.setItem('ajk_author_poems_draft', JSON.stringify({ poems }));
+        }
+      })
+      .catch(() => {});
+  };
+
+  fetchBooks = () => {
+    fetch(this.SCRIPT_URL + '?action=getBooks')
+      .then(r => r.json())
+      .then(data => {
+        const books = JSON.parse(data.books || '[]');
+        if (Array.isArray(books) && books.length) {
+          this.setState({ books });
+          localStorage.setItem('ajk_author_books_draft', JSON.stringify({ books }));
+        }
+      })
+      .catch(() => {});
+  };
+
+  // Server-gespeicherte Seiten-Einstellungen (aktuell: Part-Bilder für die
+  // Poems-Sektion). Analog zu getBooks/saveBooks, eigener SettingsData-Tab
+  // im selben Sheet — läuft ohne Admin-Token (nur Lesen), damit auch
+  // normale Besucher die aktuellen Bilder sehen.
+  fetchSettings = () => {
+    fetch(this.SCRIPT_URL + '?action=getSettings')
+      .then(r => r.json())
+      .then(data => {
+        const settings = JSON.parse(data.settings || '{}');
+        if (settings && typeof settings === 'object') this.setState({ settings, settingsLoaded: true });
+      })
+      .catch(() => this.setState({ settingsLoaded: true })); // Fehlerfall: nicht dauerhaft blockieren, aber Save bleibt riskant
+  };
+
+  // Nimmt sowohl einen normalen Drive-"Freigeben"-Link
+  // (.../file/d/ID/view?usp=sharing) als auch bereits fertige
+  // Bild-URLs entgegen und wandelt Drive-Links automatisch in die
+  // direkt einbettbare Form um.
+  normalizeDriveImageUrl(url) {
+    const u = (url || '').trim();
+    if (!u) return u;
+    let m = u.match(/\/file\/d\/([-\w]{20,})/) || u.match(/[?&]id=([-\w]{20,})/);
+    // lh3.googleusercontent.com/d/… statt drive.google.com/uc oder
+    // /thumbnail — beide Varianten haben bei eingebetteten <img>-Tags
+    // in der Praxis kaputte Bilder geliefert (Zwischenseite statt
+    // Rohdaten). lh3 ist Googles eigene Bild-CDN-Domain, genau für
+    // diesen Zweck gedacht und liefert die Bilddaten direkt.
+    return m ? ('https://lh3.googleusercontent.com/d/' + m[1] + '=w1000') : u;
+  }
+
+  setPartImage = (label, e) => {
+    const url = this.normalizeDriveImageUrl(e.target.value);
+    this.setState(s => ({ settings: { ...s.settings, partImages: { ...(s.settings.partImages || {}), [label]: url } } }));
+  };
+  // Portrait auf der About-Seite austauschbar ueber das Admin-Panel (wie
+  // die Part-Bilder), statt fest im kompilierten Bundle eingebacken zu
+  // sein -- neue Aenderungen brauchen dadurch keinen Code-Push mehr, nur
+  // Speichern hier. Leer = Standard-Portrait aus dem Bundle bleibt aktiv.
+  setPortraitUrl = (e) => {
+    const url = this.normalizeDriveImageUrl(e.target.value);
+    this.setState(s => ({ settings: { ...s.settings, portraitUrl: url } }));
+  };
+
+  saveSettings = () => {
+    if (!this.state.settin
+
+=== visitorVisibleBooks #1 @ 214911 ===
+ends DCLogic {
+  SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwcbRDaWkM1wf3MV_dj4RPw9jQl2Fgc4YfGcmFrGU1S243yvh8WGW7mbyXLbSeVJKI/exec';
+  STAGE_DEFS = [
+    { key: 'rohfassung', name: 'Rohfassung' },
+    { key: 'stil', name: 'Stil' },
+    { key: 'kontinuitaet', name: 'Kontinuität/Fakten' },
+    { key: 'feedback', name: 'Familie/Freunde-Feedback' },
+    { key: 'submission', name: 'Submission-Pack' }
+  ];
+  STAGE_SYMBOL = { offen: '○', 'in-arbeit': '◐', fertig: '◆' };
+  STAGE_LABEL = { offen: 'offen', 'in-arbeit': 'in Arbeit', fertig: 'fertig' };
+  STAGE_ORDER = ['offen', 'in-arbeit', 'fertig'];
+
+  state = { bio: {}, books: [], poems: [], settings: {}, expandedHooks: {}, savedToast: '', previewBookIndex: null, bookSearchQuery: '', accessListError: '', uploadState: {}, uiLang: (typeof localStorage !== 'undefined' && localStorage.getItem('ajk_ui_lang')) || 'de',
+    poemIndex: 0, showAdminLogin: false, adminPasswordInput: '', adminError: '',
+    isAdmin: false, editingIndex: null, forms: {}, downloadMsg: '',
+    isUnlocked: false, viewerCodeInput: '', viewerError: '', bookForms: {}, editingBookIndex: null,
+    visitorName: '', visitorCanDownload: false, visitorCanCopy: false, visitorVisibleBooks: null, visitorShowPoems: true, visitorAccessCode: '', visitorEpubAccess: {}, altGalleryImages: [], altGalleryIndex: 0, altGalleryTitle: '', readerOpen: false, readerBookTitle: '', readerLoading: false, readerError: '', readerFontSize: 100, readerToc: [], readerTocOpen: false, readerProgress: 0, readerSpeaking: false, ratings: [], drafts: {},
+    adminToken: '', accessPeople: [], newAccessName: '', newAccessCanDownload: true, newAccessCanCopy: true, newAccessShowPoems: true, newAccessEpubAccess: {}, newAccessGeneratedCode: '',
+    newAccessAllBooks: true, newAccessBookDraft: [], editingAccessCode: null, accessBookDraft: {},
+    poemsSectionOpen: false, booksSectionOpen: false, openStageBooks: {}, openTocPart: -1, bookTocOpen: false, bookMobileListMode: false, settingsSaveMsg: '', settingsLoaded: false,
+    activeBookLang: {}, driveSyncBusy: false, driveSyncMsg: '',
+    // --- Stil-Revisions-Modul (Phase 2: Datenmodell/Upload/Splitting/Regelwerke) ---
+    revisionNovels: [], revisionSelectedNovelId: '', revisionNewNovelTitle: '', revisionNewNovelAuthor: '',
+    revisionRulesets: [], revisionRulesetName: '', revisionRulesetContent: '', revisionRulesetCorridorNotes: '', revisionRulesetScopeGlobal: false,
+    revisionManuscripts: [], revisionManuscriptDetails: {}, revisionOpenManuscriptId: '',
+    revisionUploadFilename: '', revisionUploadRawText: '', revisionSplitSections: [],
+    revisionMsg: '', revisionBusy: false };
+
+  componentDidMount() {
+    let seed = {};
+    try { seed = JSON.parse(document.getElementById('author-data').textContent); } catch (e) {}
+    // Gedichte liegen jetzt serverseitig in einem eigenen Sheet-Tab
+    // (PoemsData, gleiches Muster wie BooksData) statt nur lokal im Browser
+    // — dieser localStorage-Wert ist nur noch ein Cache für sofortiges
+    // Anzeigen beim nächsten Laden, keine Versionsprüfung mehr nötig
+    // (fetchPoems() unten holt kurz danach ohnehin den Serverstand).
+    let poemsCache = null;
+    try { poemsCache = JSON.parse(localStorage.getItem('ajk_author_poems_draft')); } catch (e) {}
+    let booksDraft = null;
+    try { booksDraft = JSON.parse(localStorage.getItem('ajk_author_books_draft')); } catch (e) {}
+    let access = null;
+    try { access = JSON.parse(localStorage.getItem('ajk_visitor_access')); } catch (e) {}
+    let isAdmin = localStorage.getItem('ajk_author_admin') === '1';
+    let adminToken = isAdmin ? (localStorage.getItem('ajk_admin_token') || '') : '';
+    // Stelle aus einer alten Sitzung (vor Einführung des Admin-Tokens): der
+    // isAdmin-Flag ist gesetzt, aber es gibt kei
+
+=== visitorVisibleBooks #2 @ 218254 ===
+(localStorage.getItem('ajk_author_books_draft')); } catch (e) {}
+    let access = null;
+    try { access = JSON.parse(localStorage.getItem('ajk_visitor_access')); } catch (e) {}
+    let isAdmin = localStorage.getItem('ajk_author_admin') === '1';
+    let adminToken = isAdmin ? (localStorage.getItem('ajk_admin_token') || '') : '';
+    // Stelle aus einer alten Sitzung (vor Einführung des Admin-Tokens): der
+    // isAdmin-Flag ist gesetzt, aber es gibt kein Token dazu. Statt in einem
+    // kaputten Halb-Admin-Zustand zu landen, direkt sauber ausloggen.
+    if (isAdmin && !adminToken) {
+      localStorage.removeItem('ajk_author_admin');
+      isAdmin = false;
+    }
+    this.setState({
+      bio: seed.bio || {},
+      books: (booksDraft && booksDraft.books) || seed.books || [],
+      poems: (poemsCache && poemsCache.poems) || seed.poems || [],
+      settings: seed.settings || {},
+      poemsVersion: seed.poemsVersion,
+      isAdmin,
+      adminToken,
+      isUnlocked: localStorage.getItem('ajk_author_unlocked') === '1',
+      visitorName: (access && access.name) || '',
+      visitorCanDownload: !!(access && access.canDownload),
+      visitorCanCopy: !!(access && access.canCopy),
+      visitorVisibleBooks: (access && Array.isArray(access.visibleBooks)) ? access.visibleBooks : null,
+      visitorShowPoems: !(access && access.showPoems === false),
+      visitorAccessCode: (access && access.code) || '',
+      visitorEpubAccess: (access && access.epubAccess && typeof access.epubAccess === 'object') ? access.epubAccess : {}
+    });
+    if (localStorage.getItem('ajk_author_unlocked') === '1') this.fetchRatings();
+    // Token explizit übergeben statt this.state.adminToken zu lesen — das
+    // setState oben ist evtl. noch nicht angewendet, wenn dieser Aufruf läuft.
+    if (isAdmin) { this.fetchAccessList(adminToken); this.fetchRevisionNovels(); }
+    this.fetchBooks();
+    this.fetchSettings();
+    this.fetchPoems();
+
+    // Tippen/Klicken irgendwo außerhalb einer offenen Part-Liste schließt
+    // sie — ohne das gibt es keine Möglichkeit, ein versehentlich
+    // geöffnetes Panel wieder loszuwerden, außer explizit ein Gedicht
+    // darin auszuwählen. Reines Vanilla-JS über componentDidMount, nicht
+    // über die Template-Bindings (die kennen kein "Klick außerhalb").
+    document.addEventListener('click', (e) => {
+      if (this.state.openTocPart === -1) return;
+      if (!e.target.closest('.poem-toc-wrap')) this.setState({ openTocPart: -1 });
+    });
+    // Analog fuer die Buecher-Sprungliste (siehe toggleBookToc/jumpToBook) --
+    // gleiches Klick-ausserhalb-schliesst-Muster wie beim Gedichte-TOC oben.
+    document.addEventListener('click', (e) => {
+      if (!this.state.bookTocOpen) return;
+      if (!e.target.closest('.book-toc-wrap')) this.setState({ bookTocOpen: false });
+    });
+  }
+
+  // Gedichte vom Server holen (PoemsData-Sheet) — analog zu fetchBooks.
+  // Bewusst dieselbe Absicherung: leeres/kaputtes Ergebnis überschreibt nie
+  // den aktuellen Stand (Seed bzw. Cache). Direkt nach dem Umstellen ist das
+  // Sheet noch leer (nichts wurde je gespeichert) — dann bleibt es einfach
+  // beim eingebauten Seed, bis einmal im Admin-Bereich gespeichert wird;
+  // das schreibt automatisch die komplette Liste ins Sheet.
+  fetchPoems = () => {
+    fetch(this.SCRIPT_URL + '?action=getPoems')
+      .then(r => r.json())
+      .then(data => {
+        const poems = JSON.parse(data.poems || '[]');
+        if (Array.isArray(poems) && poems.length) {
+          this.setState({ poems });
+          localStorage.setItem('ajk_author_poems_draft', JSON.stringify({ poems }));
+        }
+      })
+      .catch(() => {});
+  };
+
+  fetchBooks = () => {
+    fetch(this.SCRIPT_URL + '?action=getBooks')
+      .then(r => r.json())
+      .then(data => {
+        con
+
+=== visitorVisibleBooks #3 @ 251922 ===
+chRatings();
+      })
+      .catch(() => {});
+  };
+
+  setViewerCodeInput = (e) => this.setState({ viewerCodeInput: e.target.value, viewerError: '' });
+  submitViewerLoginForm = (e) => {
+    e.preventDefault();
+    const params = new URLSearchParams({ action: 'checkAccess', code: this.state.viewerCodeInput });
+    fetch(this.SCRIPT_URL, { method: 'POST', body: params })
+      .then(r => r.json())
+      .then(data => {
+        if (data.ok) {
+          const access = {
+            name: data.name || '', canDownload: !!data.canDownload, canCopy: !!data.canCopy,
+            visibleBooks: Array.isArray(data.visibleBooks) ? data.visibleBooks : null,
+            showPoems: data.showPoems !== false,
+            code: this.state.viewerCodeInput,
+            epubAccess: (data.epubAccess && typeof data.epubAccess === 'object') ? data.epubAccess : {}
+          };
+          localStorage.setItem('ajk_author_unlocked', '1');
+          localStorage.setItem('ajk_visitor_access', JSON.stringify(access));
+          this.setState({
+            isUnlocked: true, viewerCodeInput: '',
+            visitorName: access.name, visitorCanDownload: access.canDownload, visitorCanCopy: access.canCopy,
+            visitorVisibleBooks: access.visibleBooks,
+            visitorShowPoems: access.showPoems,
+            visitorAccessCode: access.code,
+            visitorEpubAccess: access.epubAccess
+          });
+          this.fetchRatings();
+        } else {
+          this.setState({ viewerError: this.tr('Ungültiger Zugangscode.', 'Invalid access code.') });
+        }
+      })
+      .catch(() => this.setState({ viewerError: this.tr('Verbindung fehlgeschlagen — bitte erneut versuchen.', 'Connection failed — please try again.') }));
+  };
+
+  // Speichert die komplette Gedichtliste im PoemsData-Sheet (analog zu
+  // persistBooks) — nicht mehr nur lokal im Browser. Läuft serverseitig
+  // über denselben Admin-Token-Schutz wie saveBooks.
+  // Kurze grüne Bestätigung ("Gespeichert ✓") nach erfolgreichem Speichern,
+  // damit man nicht nur bei FEHLERN eine Rückmeldung bekommt, sondern auch
+  // beim Erfolg sicher weiß, dass etwas wirklich angekommen ist.
+  showSavedToast = (msg) => {
+    clearTimeout(this._savedToastTimer);
+    this.setState({ savedToast: msg || 'Gespeichert ✓' });
+    this._savedToastTimer = setTimeout(() => this.setState({ savedToast: '' }), 2500);
+  };
+  // Zugangscode in die Zwischenablage kopieren, damit man ihn nicht mehr
+  // von Hand abtippen/markieren muss (z.B. zum Weitergeben per WhatsApp/Mail).
+  copyAccessCode = (code) => {
+    if (!code) return;
+    const done = () => this.showSavedToast('Code kopiert ✓');
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(code).then(done).catch(() => window.alert('Kopieren nicht möglich — Code bitte manuell markieren: ' + code));
+    } else {
+      window.alert('Kopieren wird von diesem Browser nicht unterstützt — Code bitte manuell markieren: ' + code);
+    }
+  };
+  persistPoems() {
+    try { localStorage.setItem('ajk_author_poems_draft', JSON.stringify({ poems: this.state.poems })); } catch (e) { window.alert('Speichern fehlgeschlagen — evtl. zu groß.'); }
+    const params = new URLSearchParams({ action: 'savePoems', poems: JSON.stringify(this.state.poems), adminToken: this.state.adminToken });
+    // Gleicher Fix wie bei persistBooks() — vorher stilles Scheitern moeglich.
+    fetch(this.SCRIPT_URL, { method: 'POST', body: params })
+      .then(r => r.json())
+      .then(data => {
+        if (!data.ok) window.alert('Speichern auf dem Server fehlgeschlagen — die Änderung ist NUR lokal in diesem Browser sichtbar, NICHT fuer andere! Grund: ' + (data.error || 'unbekannt') + '. Bitte einmal aus- und wieder als Admin einloggen und danach erneut speichern.'); else thi
+
+=== visitorVisibleBooks #4 @ 284431 ===
+g: 'Fehler: ' + data.error });
+          return;
+        }
+        this.setState({ revisionBusy: false, revisionUploadRawText: '', revisionUploadFilename: '', revisionSplitSections: [], revisionMsg: 'Manuskript gespeichert.' });
+        this.fetchRevisionManuscripts(this.state.revisionSelectedNovelId);
+      })
+      .catch(() => this.setState({ revisionBusy: false, revisionMsg: 'Verbindung fehlgeschlagen.' }));
+  };
+  toggleRevisionManuscript = (id) => {
+    const willOpen = this.state.revisionOpenManuscriptId !== id;
+    this.setState({ revisionOpenManuscriptId: willOpen ? id : '' });
+    if (willOpen && !this.state.revisionManuscriptDetails[id]) {
+      const params = new URLSearchParams({ action: 'revisionGetManuscript', adminToken: this.state.adminToken, id });
+      fetch(this.SCRIPT_URL + '?' + params.toString())
+        .then(r => r.json())
+        .then(data => {
+          this.setState(s => ({ revisionManuscriptDetails: { ...s.revisionManuscriptDetails, [id]: data } }));
+        })
+        .catch(() => {});
+    }
+  };
+
+  renderVals() {
+    const s = this.state;
+    const muted = 'var(--ink-3)';
+    // Manche Zugangscodes dürfen nur eine Teilmenge der Bücher sehen
+    // (visitorVisibleBooks = null heißt: alle sichtbar). Admin sieht beim
+    // Verwalten der Seite immer alles, unabhängig von einem evtl. selbst
+    // eingegebenen Gast-Zugangscode.
+    const visibleBooksSourceRaw = (s.isAdmin || !s.visitorVisibleBooks)
+      ? s.books
+      : s.books.filter(b => s.visitorVisibleBooks.includes(b.title));
+    // Einfache Client-seitige Titel-/Genre-/Klappentext-Suche — bei wachsender
+    // Buchanzahl findet man so schneller das gesuchte Buch, ohne zu scrollen.
+    const bookSearchQueryNorm = (s.bookSearchQuery || '').trim().toLowerCase();
+    const visibleBooksSource = bookSearchQueryNorm
+      ? visibleBooksSourceRaw.filter(b => [b.title, b.kind, b.hook].join(' ').toLowerCase().includes(bookSearchQueryNorm))
+      : visibleBooksSourceRaw;
+    const bookSearchHasNoResults = !!bookSearchQueryNorm && visibleBooksSource.length === 0;
+    // Sprung-Liste (analog zum Gedichte-TOC): zeigt IMMER alle sichtbaren Buchtitel,
+    // unabhaengig von der aktuellen Such-Eingabe -- dient als schnelle Navigation
+    // bei vielen Buechern, ergaenzend zur Suche.
+    const bookTocEntries = visibleBooksSourceRaw.map(function(b) {
+      const anchorId = 'book-card-' + encodeURIComponent(b.title || '');
+      return { title: b.title, jump: () => this.jumpToBook(anchorId) };
+    }, this);
+    const bookTocOpenClass = s.bookTocOpen ? 'book-toc-open' : '';
+    // Manueller Umschalter zwischen Karussell (Mobile-Default, siehe §46
+    // ARCHITECTURE.md) und klassischer Liste -- manche Leser wollen lieber
+    // scrollen statt swipen. Wirkt sich nur unterhalb von 640px aus (siehe
+    // .book-list-wrap.list-mode im CSS), auf dem Desktop ist die Liste ohnehin
+    // immer im Grid-Layout.
+    const bookListWrapClass = 'book-list-wrap' + (s.bookMobileListMode ? ' list-mode' : '');
+    // Übersetzungstabelle für die wenigen bisher deutschen Leser-UI-Texte
+    // (der Rest der öffentlichen Seite war schon auf Englisch).
+    const uiStrings = {
+      de: { accessCodePlaceholder: 'Zugangscode', submit: 'Absenden', series: 'Buchreihe', close: 'Schließen', back: '‹ Zurück', next: 'Weiter ›', contents: 'Inhalt', loading: 'Lädt…', searchPlaceholder: 'Buch suchen (Titel, Genre, Klappentext) …', noResults: 'Keine Bücher gefunden für', jumpTo: 'Sprung-Liste', viewAsList: 'Als Liste', viewAsCarousel: 'Als Karussell' },
+      en: { accessCodePlaceholder: 'Access code', submit: 'Submit', series: 'Book series', close: 'Close', back: '‹ Back', next: 'Next ›', contents: 'Contents', loading: 'Loading…', searchPlaceholder: 'Search books (title, genre, blurb) …', noResult
+
+=== visibleBooksSourceRaw #1 @ 284620 ===
+isionMsg: 'Manuskript gespeichert.' });
+        this.fetchRevisionManuscripts(this.state.revisionSelectedNovelId);
+      })
+      .catch(() => this.setState({ revisionBusy: false, revisionMsg: 'Verbindung fehlgeschlagen.' }));
+  };
+  toggleRevisionManuscript = (id) => {
+    const willOpen = this.state.revisionOpenManuscriptId !== id;
+    this.setState({ revisionOpenManuscriptId: willOpen ? id : '' });
+    if (willOpen && !this.state.revisionManuscriptDetails[id]) {
+      const params = new URLSearchParams({ action: 'revisionGetManuscript', adminToken: this.state.adminToken, id });
+      fetch(this.SCRIPT_URL + '?' + params.toString())
+        .then(r => r.json())
+        .then(data => {
+          this.setState(s => ({ revisionManuscriptDetails: { ...s.revisionManuscriptDetails, [id]: data } }));
+        })
+        .catch(() => {});
+    }
+  };
+
+  renderVals() {
+    const s = this.state;
+    const muted = 'var(--ink-3)';
+    // Manche Zugangscodes dürfen nur eine Teilmenge der Bücher sehen
+    // (visitorVisibleBooks = null heißt: alle sichtbar). Admin sieht beim
+    // Verwalten der Seite immer alles, unabhängig von einem evtl. selbst
+    // eingegebenen Gast-Zugangscode.
+    const visibleBooksSourceRaw = (s.isAdmin || !s.visitorVisibleBooks)
+      ? s.books
+      : s.books.filter(b => s.visitorVisibleBooks.includes(b.title));
+    // Einfache Client-seitige Titel-/Genre-/Klappentext-Suche — bei wachsender
+    // Buchanzahl findet man so schneller das gesuchte Buch, ohne zu scrollen.
+    const bookSearchQueryNorm = (s.bookSearchQuery || '').trim().toLowerCase();
+    const visibleBooksSource = bookSearchQueryNorm
+      ? visibleBooksSourceRaw.filter(b => [b.title, b.kind, b.hook].join(' ').toLowerCase().includes(bookSearchQueryNorm))
+      : visibleBooksSourceRaw;
+    const bookSearchHasNoResults = !!bookSearchQueryNorm && visibleBooksSource.length === 0;
+    // Sprung-Liste (analog zum Gedichte-TOC): zeigt IMMER alle sichtbaren Buchtitel,
+    // unabhaengig von der aktuellen Such-Eingabe -- dient als schnelle Navigation
+    // bei vielen Buechern, ergaenzend zur Suche.
+    const bookTocEntries = visibleBooksSourceRaw.map(function(b) {
+      const anchorId = 'book-card-' + encodeURIComponent(b.title || '');
+      return { title: b.title, jump: () => this.jumpToBook(anchorId) };
+    }, this);
+    const bookTocOpenClass = s.bookTocOpen ? 'book-toc-open' : '';
+    // Manueller Umschalter zwischen Karussell (Mobile-Default, siehe §46
+    // ARCHITECTURE.md) und klassischer Liste -- manche Leser wollen lieber
+    // scrollen statt swipen. Wirkt sich nur unterhalb von 640px aus (siehe
+    // .book-list-wrap.list-mode im CSS), auf dem Desktop ist die Liste ohnehin
+    // immer im Grid-Layout.
+    const bookListWrapClass = 'book-list-wrap' + (s.bookMobileListMode ? ' list-mode' : '');
+    // Übersetzungstabelle für die wenigen bisher deutschen Leser-UI-Texte
+    // (der Rest der öffentlichen Seite war schon auf Englisch).
+    const uiStrings = {
+      de: { accessCodePlaceholder: 'Zugangscode', submit: 'Absenden', series: 'Buchreihe', close: 'Schließen', back: '‹ Zurück', next: 'Weiter ›', contents: 'Inhalt', loading: 'Lädt…', searchPlaceholder: 'Buch suchen (Titel, Genre, Klappentext) …', noResults: 'Keine Bücher gefunden für', jumpTo: 'Sprung-Liste', viewAsList: 'Als Liste', viewAsCarousel: 'Als Karussell' },
+      en: { accessCodePlaceholder: 'Access code', submit: 'Submit', series: 'Book series', close: 'Close', back: '‹ Back', next: 'Next ›', contents: 'Contents', loading: 'Loading…', searchPlaceholder: 'Search books (title, genre, blurb) …', noResults: 'No books found for', jumpTo: 'Jump to', viewAsList: 'As list', viewAsCarousel: 'As carousel' }
+    };
+    const ui = uiStrings[s.uiLang] || uiStrings.de;
+    const bookViewToggleLabel =
+
+=== visibleBooksSourceRaw #2 @ 285066 ===
+anuscriptDetails[id]) {
+      const params = new URLSearchParams({ action: 'revisionGetManuscript', adminToken: this.state.adminToken, id });
+      fetch(this.SCRIPT_URL + '?' + params.toString())
+        .then(r => r.json())
+        .then(data => {
+          this.setState(s => ({ revisionManuscriptDetails: { ...s.revisionManuscriptDetails, [id]: data } }));
+        })
+        .catch(() => {});
+    }
+  };
+
+  renderVals() {
+    const s = this.state;
+    const muted = 'var(--ink-3)';
+    // Manche Zugangscodes dürfen nur eine Teilmenge der Bücher sehen
+    // (visitorVisibleBooks = null heißt: alle sichtbar). Admin sieht beim
+    // Verwalten der Seite immer alles, unabhängig von einem evtl. selbst
+    // eingegebenen Gast-Zugangscode.
+    const visibleBooksSourceRaw = (s.isAdmin || !s.visitorVisibleBooks)
+      ? s.books
+      : s.books.filter(b => s.visitorVisibleBooks.includes(b.title));
+    // Einfache Client-seitige Titel-/Genre-/Klappentext-Suche — bei wachsender
+    // Buchanzahl findet man so schneller das gesuchte Buch, ohne zu scrollen.
+    const bookSearchQueryNorm = (s.bookSearchQuery || '').trim().toLowerCase();
+    const visibleBooksSource = bookSearchQueryNorm
+      ? visibleBooksSourceRaw.filter(b => [b.title, b.kind, b.hook].join(' ').toLowerCase().includes(bookSearchQueryNorm))
+      : visibleBooksSourceRaw;
+    const bookSearchHasNoResults = !!bookSearchQueryNorm && visibleBooksSource.length === 0;
+    // Sprung-Liste (analog zum Gedichte-TOC): zeigt IMMER alle sichtbaren Buchtitel,
+    // unabhaengig von der aktuellen Such-Eingabe -- dient als schnelle Navigation
+    // bei vielen Buechern, ergaenzend zur Suche.
+    const bookTocEntries = visibleBooksSourceRaw.map(function(b) {
+      const anchorId = 'book-card-' + encodeURIComponent(b.title || '');
+      return { title: b.title, jump: () => this.jumpToBook(anchorId) };
+    }, this);
+    const bookTocOpenClass = s.bookTocOpen ? 'book-toc-open' : '';
+    // Manueller Umschalter zwischen Karussell (Mobile-Default, siehe §46
+    // ARCHITECTURE.md) und klassischer Liste -- manche Leser wollen lieber
+    // scrollen statt swipen. Wirkt sich nur unterhalb von 640px aus (siehe
+    // .book-list-wrap.list-mode im CSS), auf dem Desktop ist die Liste ohnehin
+    // immer im Grid-Layout.
+    const bookListWrapClass = 'book-list-wrap' + (s.bookMobileListMode ? ' list-mode' : '');
+    // Übersetzungstabelle für die wenigen bisher deutschen Leser-UI-Texte
+    // (der Rest der öffentlichen Seite war schon auf Englisch).
+    const uiStrings = {
+      de: { accessCodePlaceholder: 'Zugangscode', submit: 'Absenden', series: 'Buchreihe', close: 'Schließen', back: '‹ Zurück', next: 'Weiter ›', contents: 'Inhalt', loading: 'Lädt…', searchPlaceholder: 'Buch suchen (Titel, Genre, Klappentext) …', noResults: 'Keine Bücher gefunden für', jumpTo: 'Sprung-Liste', viewAsList: 'Als Liste', viewAsCarousel: 'Als Karussell' },
+      en: { accessCodePlaceholder: 'Access code', submit: 'Submit', series: 'Book series', close: 'Close', back: '‹ Back', next: 'Next ›', contents: 'Contents', loading: 'Loading…', searchPlaceholder: 'Search books (title, genre, blurb) …', noResults: 'No books found for', jumpTo: 'Jump to', viewAsList: 'As list', viewAsCarousel: 'As carousel' }
+    };
+    const ui = uiStrings[s.uiLang] || uiStrings.de;
+    const bookViewToggleLabel = s.bookMobileListMode ? ui.viewAsCarousel : ui.viewAsList;
+    const uiLangToggleLabel = s.uiLang === 'de' ? 'EN' : 'DE';
+    const books = visibleBooksSource.map(b => {
+      const key = 'book:' + b.title;
+      const anchorId = 'book-card-' + encodeURIComponent(b.title || '');
+      const agg = this.getAgg('book', b.title);
+      const draft = s.drafts[key] || {};
+      const myStars = draft.stars || 0;
+      // Mehrsprachige Bücher (book.l
+
+=== visibleBooksSourceRaw #3 @ 285189 ===
+adminToken, id });
+      fetch(this.SCRIPT_URL + '?' + params.toString())
+        .then(r => r.json())
+        .then(data => {
+          this.setState(s => ({ revisionManuscriptDetails: { ...s.revisionManuscriptDetails, [id]: data } }));
+        })
+        .catch(() => {});
+    }
+  };
+
+  renderVals() {
+    const s = this.state;
+    const muted = 'var(--ink-3)';
+    // Manche Zugangscodes dürfen nur eine Teilmenge der Bücher sehen
+    // (visitorVisibleBooks = null heißt: alle sichtbar). Admin sieht beim
+    // Verwalten der Seite immer alles, unabhängig von einem evtl. selbst
+    // eingegebenen Gast-Zugangscode.
+    const visibleBooksSourceRaw = (s.isAdmin || !s.visitorVisibleBooks)
+      ? s.books
+      : s.books.filter(b => s.visitorVisibleBooks.includes(b.title));
+    // Einfache Client-seitige Titel-/Genre-/Klappentext-Suche — bei wachsender
+    // Buchanzahl findet man so schneller das gesuchte Buch, ohne zu scrollen.
+    const bookSearchQueryNorm = (s.bookSearchQuery || '').trim().toLowerCase();
+    const visibleBooksSource = bookSearchQueryNorm
+      ? visibleBooksSourceRaw.filter(b => [b.title, b.kind, b.hook].join(' ').toLowerCase().includes(bookSearchQueryNorm))
+      : visibleBooksSourceRaw;
+    const bookSearchHasNoResults = !!bookSearchQueryNorm && visibleBooksSource.length === 0;
+    // Sprung-Liste (analog zum Gedichte-TOC): zeigt IMMER alle sichtbaren Buchtitel,
+    // unabhaengig von der aktuellen Such-Eingabe -- dient als schnelle Navigation
+    // bei vielen Buechern, ergaenzend zur Suche.
+    const bookTocEntries = visibleBooksSourceRaw.map(function(b) {
+      const anchorId = 'book-card-' + encodeURIComponent(b.title || '');
+      return { title: b.title, jump: () => this.jumpToBook(anchorId) };
+    }, this);
+    const bookTocOpenClass = s.bookTocOpen ? 'book-toc-open' : '';
+    // Manueller Umschalter zwischen Karussell (Mobile-Default, siehe §46
+    // ARCHITECTURE.md) und klassischer Liste -- manche Leser wollen lieber
+    // scrollen statt swipen. Wirkt sich nur unterhalb von 640px aus (siehe
+    // .book-list-wrap.list-mode im CSS), auf dem Desktop ist die Liste ohnehin
+    // immer im Grid-Layout.
+    const bookListWrapClass = 'book-list-wrap' + (s.bookMobileListMode ? ' list-mode' : '');
+    // Übersetzungstabelle für die wenigen bisher deutschen Leser-UI-Texte
+    // (der Rest der öffentlichen Seite war schon auf Englisch).
+    const uiStrings = {
+      de: { accessCodePlaceholder: 'Zugangscode', submit: 'Absenden', series: 'Buchreihe', close: 'Schließen', back: '‹ Zurück', next: 'Weiter ›', contents: 'Inhalt', loading: 'Lädt…', searchPlaceholder: 'Buch suchen (Titel, Genre, Klappentext) …', noResults: 'Keine Bücher gefunden für', jumpTo: 'Sprung-Liste', viewAsList: 'Als Liste', viewAsCarousel: 'Als Karussell' },
+      en: { accessCodePlaceholder: 'Access code', submit: 'Submit', series: 'Book series', close: 'Close', back: '‹ Back', next: 'Next ›', contents: 'Contents', loading: 'Loading…', searchPlaceholder: 'Search books (title, genre, blurb) …', noResults: 'No books found for', jumpTo: 'Jump to', viewAsList: 'As list', viewAsCarousel: 'As carousel' }
+    };
+    const ui = uiStrings[s.uiLang] || uiStrings.de;
+    const bookViewToggleLabel = s.bookMobileListMode ? ui.viewAsCarousel : ui.viewAsList;
+    const uiLangToggleLabel = s.uiLang === 'de' ? 'EN' : 'DE';
+    const books = visibleBooksSource.map(b => {
+      const key = 'book:' + b.title;
+      const anchorId = 'book-card-' + encodeURIComponent(b.title || '');
+      const agg = this.getAgg('book', b.title);
+      const draft = s.drafts[key] || {};
+      const myStars = draft.stars || 0;
+      // Mehrsprachige Bücher (book.langs = { EN: {coverUrl,hook,pdfUrl,wordCount}, DE: {...} }):
+      // aktive Sprache bestimmt Cover/Klappentext/Read-Link/W
+
+=== visibleBooksSourceRaw #4 @ 285551 ===
+;
+    // Manche Zugangscodes dürfen nur eine Teilmenge der Bücher sehen
+    // (visitorVisibleBooks = null heißt: alle sichtbar). Admin sieht beim
+    // Verwalten der Seite immer alles, unabhängig von einem evtl. selbst
+    // eingegebenen Gast-Zugangscode.
+    const visibleBooksSourceRaw = (s.isAdmin || !s.visitorVisibleBooks)
+      ? s.books
+      : s.books.filter(b => s.visitorVisibleBooks.includes(b.title));
+    // Einfache Client-seitige Titel-/Genre-/Klappentext-Suche — bei wachsender
+    // Buchanzahl findet man so schneller das gesuchte Buch, ohne zu scrollen.
+    const bookSearchQueryNorm = (s.bookSearchQuery || '').trim().toLowerCase();
+    const visibleBooksSource = bookSearchQueryNorm
+      ? visibleBooksSourceRaw.filter(b => [b.title, b.kind, b.hook].join(' ').toLowerCase().includes(bookSearchQueryNorm))
+      : visibleBooksSourceRaw;
+    const bookSearchHasNoResults = !!bookSearchQueryNorm && visibleBooksSource.length === 0;
+    // Sprung-Liste (analog zum Gedichte-TOC): zeigt IMMER alle sichtbaren Buchtitel,
+    // unabhaengig von der aktuellen Such-Eingabe -- dient als schnelle Navigation
+    // bei vielen Buechern, ergaenzend zur Suche.
+    const bookTocEntries = visibleBooksSourceRaw.map(function(b) {
+      const anchorId = 'book-card-' + encodeURIComponent(b.title || '');
+      return { title: b.title, jump: () => this.jumpToBook(anchorId) };
+    }, this);
+    const bookTocOpenClass = s.bookTocOpen ? 'book-toc-open' : '';
+    // Manueller Umschalter zwischen Karussell (Mobile-Default, siehe §46
+    // ARCHITECTURE.md) und klassischer Liste -- manche Leser wollen lieber
+    // scrollen statt swipen. Wirkt sich nur unterhalb von 640px aus (siehe
+    // .book-list-wrap.list-mode im CSS), auf dem Desktop ist die Liste ohnehin
+    // immer im Grid-Layout.
+    const bookListWrapClass = 'book-list-wrap' + (s.bookMobileListMode ? ' list-mode' : '');
+    // Übersetzungstabelle für die wenigen bisher deutschen Leser-UI-Texte
+    // (der Rest der öffentlichen Seite war schon auf Englisch).
+    const uiStrings = {
+      de: { accessCodePlaceholder: 'Zugangscode', submit: 'Absenden', series: 'Buchreihe', close: 'Schließen', back: '‹ Zurück', next: 'Weiter ›', contents: 'Inhalt', loading: 'Lädt…', searchPlaceholder: 'Buch suchen (Titel, Genre, Klappentext) …', noResults: 'Keine Bücher gefunden für', jumpTo: 'Sprung-Liste', viewAsList: 'Als Liste', viewAsCarousel: 'Als Karussell' },
+      en: { accessCodePlaceholder: 'Access code', submit: 'Submit', series: 'Book series', close: 'Close', back: '‹ Back', next: 'Next ›', contents: 'Contents', loading: 'Loading…', searchPlaceholder: 'Search books (title, genre, blurb) …', noResults: 'No books found for', jumpTo: 'Jump to', viewAsList: 'As list', viewAsCarousel: 'As carousel' }
+    };
+    const ui = uiStrings[s.uiLang] || uiStrings.de;
+    const bookViewToggleLabel = s.bookMobileListMode ? ui.viewAsCarousel : ui.viewAsList;
+    const uiLangToggleLabel = s.uiLang === 'de' ? 'EN' : 'DE';
+    const books = visibleBooksSource.map(b => {
+      const key = 'book:' + b.title;
+      const anchorId = 'book-card-' + encodeURIComponent(b.title || '');
+      const agg = this.getAgg('book', b.title);
+      const draft = s.drafts[key] || {};
+      const myStars = draft.stars || 0;
+      // Mehrsprachige Bücher (book.langs = { EN: {coverUrl,hook,pdfUrl,wordCount}, DE: {...} }):
+      // aktive Sprache bestimmt Cover/Klappentext/Read-Link/Wortzahl für diese Karte.
+      // Bücher ohne langs (die meisten) bleiben unverändert bei ihren einfachen Feldern.
+      const langCodes = (b.langs && typeof b.langs === 'object') ? Object.keys(b.langs) : [];
+      const activeLang = langCodes.length > 1 ? (s.activeBookLang[key] || langCodes[0]) : null;
+      const langInfo = activeLang ? (b.langs[activeLang] 
+
+=== componentDidMount #1 @ 19801 ===
+rt-Bild. */
+    .poem-toc-panel::after{
+      content:''; position:absolute; inset:0; z-index:2;
+      background:radial-gradient(ellipse 100% 100% at center, transparent 35%, rgba(4,3,2,.92) 100%);
+      pointer-events:none;
+    }
+    .poem-toc-panel-inner{
+      max-height:56vh; overflow-y:auto; background:rgba(35,29,21,.98); padding:26px 30px;
+    }
+    .poem-toc-panel-inner::-webkit-scrollbar{width:5px;}
+    .poem-toc-panel-inner::-webkit-scrollbar-thumb{background:rgba(217,186,124,.35); border-radius:3px;}
+    .poem-toc-card .poem-toc-panel{left:50%; transform:translate(-50%,-6px) scale(.98);}
+    .poem-toc-panel.poem-toc-open{
+      opacity:1; transform:translateY(0) scale(1); pointer-events:auto;
+    }
+    .poem-toc-card .poem-toc-panel.poem-toc-open{
+      opacity:1; transform:translate(-50%,0) scale(1); pointer-events:auto;
+    }
+    /* Bewusst KEIN CSS-:hover mehr — auf PC blieb das Panel offen hängen,
+       solange die Maus zufällig in der Nähe stehen blieb (z.B. beim
+       Weiterlesen), unabhängig vom eigentlichen Klick-Zustand. Sichtbarkeit
+       läuft jetzt ausschließlich über die poem-toc-open-Klasse (Klick/Tap)
+       plus den Klick-außerhalb-schließt-Handler in componentDidMount. */
+    .poem-scroll-area::-webkit-scrollbar{width:5px;}
+    .poem-scroll-area::-webkit-scrollbar-thumb{background:rgba(217,186,124,.35); border-radius:3px;}
+    /* Part-Bild: echte gemalte Vignette in der Seitenfarbe statt
+       Transparenz-Maske — gegen den gleichfarbigen dunklen Hintergrund
+       wäre ein reiner Alpha-Fade unsichtbar (er zeigt ja nur denselben
+       Hintergrund). Die Vignette liegt als Overlay auf dem Bild. */
+    .poem-part-image-wrap{position:relative; border-radius:22px; overflow:hidden;}
+    .poem-part-image-wrap img{width:100%; height:min(64vh,560px); object-fit:cover; display:block;}
+    .poem-part-image-wrap::after{
+      content:''; position:absolute; inset:0;
+      background:radial-gradient(ellipse 100% 100% at center, transparent 32%, rgba(4,3,2,.92) 100%);
+      pointer-events:none;
+    }
+    /* Mobile: Buecher als horizontal swipebares Karten-Karussell statt langer
+       vertikaler Liste -- bei 30+ Buechern wird die Seite sonst auf dem Handy sehr
+       lang (siehe ARCHITECTURE.md). Nur unterhalb von 640px aktiv, Desktop bleibt
+       beim bestehenden Grid/Spalten-Layout unveraendert. */
+    @media (max-width: 640px) {
+      .book-list-wrap {
+        display: flex !important;
+        flex-wrap: nowrap !important;
+        overflow-x: auto !important;
+        scroll-snap-type: x mandatory !important;
+        gap: 20px !important;
+        padding: 4px 4px 14px !important;
+        -webkit-overflow-scrolling: touch;
+      }
+      .book-list-wrap .book-card {
+        scroll-snap-align: start;
+        flex: 0 0 86vw;
+        max-width: 360px;
+        border-right: none !important;
+      }
+    }
+    /* Manueller Listen/Karussell-Umschalter (siehe toggleBookViewMode) --
+       Button nur auf dem Handy sichtbar, dort wo das Karussell ueberhaupt
+       greift; .list-mode schaltet den Flex-Karussell-Modus wieder auf eine
+       normale gestapelte Liste zurueck. */
+    .book-view-toggle { display: none; }
+    @media (max-width: 640px) {
+      .book-view-toggle { display: inline-block; margin: 0 0 14px; }
+      .book-list-wrap.list-mode {
+        display: block !important;
+        overflow-x: visible !important;
+        scroll-snap-type: none !important;
+      }
+      .book-list-wrap.list-mode .book-card {
+        flex: none !important;
+        max-width: 100% !important;
+        scroll-snap-align: none !important;
+      }
+    }
+    /* Sprung-Liste ueber allen Buechern (analog .poem-toc-*, aber im hellen
+       Buch-Bereich statt im dunklen Gedichte-Bereich) -- Klick statt Hover,
+       aus demselben Grund wie bei
+
+=== componentDidMount #2 @ 216374 ===
+derToc: [], readerTocOpen: false, readerProgress: 0, readerSpeaking: false, ratings: [], drafts: {},
+    adminToken: '', accessPeople: [], newAccessName: '', newAccessCanDownload: true, newAccessCanCopy: true, newAccessShowPoems: true, newAccessEpubAccess: {}, newAccessGeneratedCode: '',
+    newAccessAllBooks: true, newAccessBookDraft: [], editingAccessCode: null, accessBookDraft: {},
+    poemsSectionOpen: false, booksSectionOpen: false, openStageBooks: {}, openTocPart: -1, bookTocOpen: false, bookMobileListMode: false, settingsSaveMsg: '', settingsLoaded: false,
+    activeBookLang: {}, driveSyncBusy: false, driveSyncMsg: '',
+    // --- Stil-Revisions-Modul (Phase 2: Datenmodell/Upload/Splitting/Regelwerke) ---
+    revisionNovels: [], revisionSelectedNovelId: '', revisionNewNovelTitle: '', revisionNewNovelAuthor: '',
+    revisionRulesets: [], revisionRulesetName: '', revisionRulesetContent: '', revisionRulesetCorridorNotes: '', revisionRulesetScopeGlobal: false,
+    revisionManuscripts: [], revisionManuscriptDetails: {}, revisionOpenManuscriptId: '',
+    revisionUploadFilename: '', revisionUploadRawText: '', revisionSplitSections: [],
+    revisionMsg: '', revisionBusy: false };
+
+  componentDidMount() {
+    let seed = {};
+    try { seed = JSON.parse(document.getElementById('author-data').textContent); } catch (e) {}
+    // Gedichte liegen jetzt serverseitig in einem eigenen Sheet-Tab
+    // (PoemsData, gleiches Muster wie BooksData) statt nur lokal im Browser
+    // — dieser localStorage-Wert ist nur noch ein Cache für sofortiges
+    // Anzeigen beim nächsten Laden, keine Versionsprüfung mehr nötig
+    // (fetchPoems() unten holt kurz danach ohnehin den Serverstand).
+    let poemsCache = null;
+    try { poemsCache = JSON.parse(localStorage.getItem('ajk_author_poems_draft')); } catch (e) {}
+    let booksDraft = null;
+    try { booksDraft = JSON.parse(localStorage.getItem('ajk_author_books_draft')); } catch (e) {}
+    let access = null;
+    try { access = JSON.parse(localStorage.getItem('ajk_visitor_access')); } catch (e) {}
+    let isAdmin = localStorage.getItem('ajk_author_admin') === '1';
+    let adminToken = isAdmin ? (localStorage.getItem('ajk_admin_token') || '') : '';
+    // Stelle aus einer alten Sitzung (vor Einführung des Admin-Tokens): der
+    // isAdmin-Flag ist gesetzt, aber es gibt kein Token dazu. Statt in einem
+    // kaputten Halb-Admin-Zustand zu landen, direkt sauber ausloggen.
+    if (isAdmin && !adminToken) {
+      localStorage.removeItem('ajk_author_admin');
+      isAdmin = false;
+    }
+    this.setState({
+      bio: seed.bio || {},
+      books: (booksDraft && booksDraft.books) || seed.books || [],
+      poems: (poemsCache && poemsCache.poems) || seed.poems || [],
+      settings: seed.settings || {},
+      poemsVersion: seed.poemsVersion,
+      isAdmin,
+      adminToken,
+      isUnlocked: localStorage.getItem('ajk_author_unlocked') === '1',
+      visitorName: (access && access.name) || '',
+      visitorCanDownload: !!(access && access.canDownload),
+      visitorCanCopy: !!(access && access.canCopy),
+      visitorVisibleBooks: (access && Array.isArray(access.visibleBooks)) ? access.visibleBooks : null,
+      visitorShowPoems: !(access && access.showPoems === false),
+      visitorAccessCode: (access && access.code) || '',
+      visitorEpubAccess: (access && access.epubAccess && typeof access.epubAccess === 'object') ? access.epubAccess : {}
+    });
+    if (localStorage.getItem('ajk_author_unlocked') === '1') this.fetchRatings();
+    // Token explizit übergeben statt this.state.adminToken zu lesen — das
+    // setState oben ist evtl. noch nicht angewendet, wenn dieser Aufruf läuft.
+    if (isAdmin) { this.fetchAccessList(adminToken); this.fetchRevisionNovels(); }
+    this.fetchBooks();
+    this.fetchSettings();
+   
+
+=== componentDidMount #3 @ 219257 ===
+k_author_unlocked') === '1',
+      visitorName: (access && access.name) || '',
+      visitorCanDownload: !!(access && access.canDownload),
+      visitorCanCopy: !!(access && access.canCopy),
+      visitorVisibleBooks: (access && Array.isArray(access.visibleBooks)) ? access.visibleBooks : null,
+      visitorShowPoems: !(access && access.showPoems === false),
+      visitorAccessCode: (access && access.code) || '',
+      visitorEpubAccess: (access && access.epubAccess && typeof access.epubAccess === 'object') ? access.epubAccess : {}
+    });
+    if (localStorage.getItem('ajk_author_unlocked') === '1') this.fetchRatings();
+    // Token explizit übergeben statt this.state.adminToken zu lesen — das
+    // setState oben ist evtl. noch nicht angewendet, wenn dieser Aufruf läuft.
+    if (isAdmin) { this.fetchAccessList(adminToken); this.fetchRevisionNovels(); }
+    this.fetchBooks();
+    this.fetchSettings();
+    this.fetchPoems();
+
+    // Tippen/Klicken irgendwo außerhalb einer offenen Part-Liste schließt
+    // sie — ohne das gibt es keine Möglichkeit, ein versehentlich
+    // geöffnetes Panel wieder loszuwerden, außer explizit ein Gedicht
+    // darin auszuwählen. Reines Vanilla-JS über componentDidMount, nicht
+    // über die Template-Bindings (die kennen kein "Klick außerhalb").
+    document.addEventListener('click', (e) => {
+      if (this.state.openTocPart === -1) return;
+      if (!e.target.closest('.poem-toc-wrap')) this.setState({ openTocPart: -1 });
+    });
+    // Analog fuer die Buecher-Sprungliste (siehe toggleBookToc/jumpToBook) --
+    // gleiches Klick-ausserhalb-schliesst-Muster wie beim Gedichte-TOC oben.
+    document.addEventListener('click', (e) => {
+      if (!this.state.bookTocOpen) return;
+      if (!e.target.closest('.book-toc-wrap')) this.setState({ bookTocOpen: false });
+    });
+  }
+
+  // Gedichte vom Server holen (PoemsData-Sheet) — analog zu fetchBooks.
+  // Bewusst dieselbe Absicherung: leeres/kaputtes Ergebnis überschreibt nie
+  // den aktuellen Stand (Seed bzw. Cache). Direkt nach dem Umstellen ist das
+  // Sheet noch leer (nichts wurde je gespeichert) — dann bleibt es einfach
+  // beim eingebauten Seed, bis einmal im Admin-Bereich gespeichert wird;
+  // das schreibt automatisch die komplette Liste ins Sheet.
+  fetchPoems = () => {
+    fetch(this.SCRIPT_URL + '?action=getPoems')
+      .then(r => r.json())
+      .then(data => {
+        const poems = JSON.parse(data.poems || '[]');
+        if (Array.isArray(poems) && poems.length) {
+          this.setState({ poems });
+          localStorage.setItem('ajk_author_poems_draft', JSON.stringify({ poems }));
+        }
+      })
+      .catch(() => {});
+  };
+
+  fetchBooks = () => {
+    fetch(this.SCRIPT_URL + '?action=getBooks')
+      .then(r => r.json())
+      .then(data => {
+        const books = JSON.parse(data.books || '[]');
+        if (Array.isArray(books) && books.length) {
+          this.setState({ books });
+          localStorage.setItem('ajk_author_books_draft', JSON.stringify({ books }));
+        }
+      })
+      .catch(() => {});
+  };
+
+  // Server-gespeicherte Seiten-Einstellungen (aktuell: Part-Bilder für die
+  // Poems-Sektion). Analog zu getBooks/saveBooks, eigener SettingsData-Tab
+  // im selben Sheet — läuft ohne Admin-Token (nur Lesen), damit auch
+  // normale Besucher die aktuellen Bilder sehen.
+  fetchSettings = () => {
+    fetch(this.SCRIPT_URL + '?action=getSettings')
+      .then(r => r.json())
+      .then(data => {
+        const settings = JSON.parse(data.settings || '{}');
+        if (settings && typeof settings === 'object') this.setState({ settings, settingsLoaded: true });
+      })
+      .catch(() => this.setState({ settingsLoaded: true })); // Fehlerfall: nicht dauerhaft blockieren, aber Save bleibt riskant
+  };
+
+  // Nimmt sowohl einen normale
+
+=== persistBooks #1 @ 252528 ===
+ta.visibleBooks) ? data.visibleBooks : null,
+            showPoems: data.showPoems !== false,
+            code: this.state.viewerCodeInput,
+            epubAccess: (data.epubAccess && typeof data.epubAccess === 'object') ? data.epubAccess : {}
+          };
+          localStorage.setItem('ajk_author_unlocked', '1');
+          localStorage.setItem('ajk_visitor_access', JSON.stringify(access));
+          this.setState({
+            isUnlocked: true, viewerCodeInput: '',
+            visitorName: access.name, visitorCanDownload: access.canDownload, visitorCanCopy: access.canCopy,
+            visitorVisibleBooks: access.visibleBooks,
+            visitorShowPoems: access.showPoems,
+            visitorAccessCode: access.code,
+            visitorEpubAccess: access.epubAccess
+          });
+          this.fetchRatings();
+        } else {
+          this.setState({ viewerError: this.tr('Ungültiger Zugangscode.', 'Invalid access code.') });
+        }
+      })
+      .catch(() => this.setState({ viewerError: this.tr('Verbindung fehlgeschlagen — bitte erneut versuchen.', 'Connection failed — please try again.') }));
+  };
+
+  // Speichert die komplette Gedichtliste im PoemsData-Sheet (analog zu
+  // persistBooks) — nicht mehr nur lokal im Browser. Läuft serverseitig
+  // über denselben Admin-Token-Schutz wie saveBooks.
+  // Kurze grüne Bestätigung ("Gespeichert ✓") nach erfolgreichem Speichern,
+  // damit man nicht nur bei FEHLERN eine Rückmeldung bekommt, sondern auch
+  // beim Erfolg sicher weiß, dass etwas wirklich angekommen ist.
+  showSavedToast = (msg) => {
+    clearTimeout(this._savedToastTimer);
+    this.setState({ savedToast: msg || 'Gespeichert ✓' });
+    this._savedToastTimer = setTimeout(() => this.setState({ savedToast: '' }), 2500);
+  };
+  // Zugangscode in die Zwischenablage kopieren, damit man ihn nicht mehr
+  // von Hand abtippen/markieren muss (z.B. zum Weitergeben per WhatsApp/Mail).
+  copyAccessCode = (code) => {
+    if (!code) return;
+    const done = () => this.showSavedToast('Code kopiert ✓');
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(code).then(done).catch(() => window.alert('Kopieren nicht möglich — Code bitte manuell markieren: ' + code));
+    } else {
+      window.alert('Kopieren wird von diesem Browser nicht unterstützt — Code bitte manuell markieren: ' + code);
+    }
+  };
+  persistPoems() {
+    try { localStorage.setItem('ajk_author_poems_draft', JSON.stringify({ poems: this.state.poems })); } catch (e) { window.alert('Speichern fehlgeschlagen — evtl. zu groß.'); }
+    const params = new URLSearchParams({ action: 'savePoems', poems: JSON.stringify(this.state.poems), adminToken: this.state.adminToken });
+    // Gleicher Fix wie bei persistBooks() — vorher stilles Scheitern moeglich.
+    fetch(this.SCRIPT_URL, { method: 'POST', body: params })
+      .then(r => r.json())
+      .then(data => {
+        if (!data.ok) window.alert('Speichern auf dem Server fehlgeschlagen — die Änderung ist NUR lokal in diesem Browser sichtbar, NICHT fuer andere! Grund: ' + (data.error || 'unbekannt') + '. Bitte einmal aus- und wieder als Admin einloggen und danach erneut speichern.'); else this.showSavedToast();
+      })
+      .catch(() => window.alert('Verbindung zum Server fehlgeschlagen — die Änderung ist NUR lokal in diesem Browser sichtbar, NICHT fuer andere! Bitte erneut versuchen.'));
+  }
+
+  nextPoem = () => this.setState(s => ({ poemIndex: (s.poemIndex + 1) % Math.max(s.poems.length, 1) }));
+  prevPoem = () => this.setState(s => ({ poemIndex: (s.poemIndex - 1 + s.poems.length) % Math.max(s.poems.length, 1) }));
+  openPartAndJumpToFirst = (i, firstIdx) => this.setState({ poemIndex: firstIdx, openTocPart: i });
+  jumpToPoem = (idx) => this.setState({ poemIndex: idx, openTocPart: -1
+
+=== persistBooks #2 @ 254075 ===
+SavedToast = (msg) => {
+    clearTimeout(this._savedToastTimer);
+    this.setState({ savedToast: msg || 'Gespeichert ✓' });
+    this._savedToastTimer = setTimeout(() => this.setState({ savedToast: '' }), 2500);
+  };
+  // Zugangscode in die Zwischenablage kopieren, damit man ihn nicht mehr
+  // von Hand abtippen/markieren muss (z.B. zum Weitergeben per WhatsApp/Mail).
+  copyAccessCode = (code) => {
+    if (!code) return;
+    const done = () => this.showSavedToast('Code kopiert ✓');
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(code).then(done).catch(() => window.alert('Kopieren nicht möglich — Code bitte manuell markieren: ' + code));
+    } else {
+      window.alert('Kopieren wird von diesem Browser nicht unterstützt — Code bitte manuell markieren: ' + code);
+    }
+  };
+  persistPoems() {
+    try { localStorage.setItem('ajk_author_poems_draft', JSON.stringify({ poems: this.state.poems })); } catch (e) { window.alert('Speichern fehlgeschlagen — evtl. zu groß.'); }
+    const params = new URLSearchParams({ action: 'savePoems', poems: JSON.stringify(this.state.poems), adminToken: this.state.adminToken });
+    // Gleicher Fix wie bei persistBooks() — vorher stilles Scheitern moeglich.
+    fetch(this.SCRIPT_URL, { method: 'POST', body: params })
+      .then(r => r.json())
+      .then(data => {
+        if (!data.ok) window.alert('Speichern auf dem Server fehlgeschlagen — die Änderung ist NUR lokal in diesem Browser sichtbar, NICHT fuer andere! Grund: ' + (data.error || 'unbekannt') + '. Bitte einmal aus- und wieder als Admin einloggen und danach erneut speichern.'); else this.showSavedToast();
+      })
+      .catch(() => window.alert('Verbindung zum Server fehlgeschlagen — die Änderung ist NUR lokal in diesem Browser sichtbar, NICHT fuer andere! Bitte erneut versuchen.'));
+  }
+
+  nextPoem = () => this.setState(s => ({ poemIndex: (s.poemIndex + 1) % Math.max(s.poems.length, 1) }));
+  prevPoem = () => this.setState(s => ({ poemIndex: (s.poemIndex - 1 + s.poems.length) % Math.max(s.poems.length, 1) }));
+  openPartAndJumpToFirst = (i, firstIdx) => this.setState({ poemIndex: firstIdx, openTocPart: i });
+  jumpToPoem = (idx) => this.setState({ poemIndex: idx, openTocPart: -1 });
+
+  openAdminLogin = () => this.setState({ showAdminLogin: true, adminPasswordInput: '', adminError: '' });
+  closeAdminLogin = () => this.setState({ showAdminLogin: false });
+  setAdminPasswordInput = (e) => this.setState({ adminPasswordInput: e.target.value, adminError: '' });
+  submitAdminLoginForm = (e) => { e.preventDefault(); this.submitAdminLogin(); };
+  submitAdminLogin() {
+    const params = new URLSearchParams({ action: 'checkPassword', role: 'admin', password: this.state.adminPasswordInput });
+    fetch(this.SCRIPT_URL, { method: 'POST', body: params })
+      .then(r => r.json())
+      .then(data => {
+        if (data.ok && data.adminToken) {
+          localStorage.setItem('ajk_author_admin', '1');
+          localStorage.setItem('ajk_admin_token', data.adminToken);
+          this.setState({ isAdmin: true, adminToken: data.adminToken, showAdminLogin: false, adminPasswordInput: '' }, () => { this.fetchAccessList(); this.fetchRevisionNovels(); });
+        } else {
+          this.setState({ adminError: 'Incorrect password.' });
+        }
+      })
+      .catch(() => this.setState({ adminError: 'Connection failed — try again.' }));
+  }
+  closeAdminPanel = () => this.setState({ isAdmin: false, editingIndex: null });
+  signOut = () => {
+    localStorage.removeItem('ajk_author_admin');
+    localStorage.removeItem('ajk_admin_token');
+    this.setState({ isAdmin: false, adminToken: '', editingIndex: null });
+  };
+  lockPage = () => {
+    localStorage.removeItem('ajk_author_unlocked');
+    localStorage.removeItem('ajk_
+
+=== persistBooks #3 @ 257732 ===
+ken: '', editingIndex: null });
+  };
+  lockPage = () => {
+    localStorage.removeItem('ajk_author_unlocked');
+    localStorage.removeItem('ajk_visitor_access');
+    this.setState({ isUnlocked: false, visitorName: '', visitorCanDownload: false, visitorCanCopy: false });
+  };
+
+  addPoem = () => {
+    const np = { title: '', part: '', text: '' };
+    this.setState(s => ({ poems: [...s.poems, np], editingIndex: s.poems.length, forms: { ...s.forms, [s.poems.length]: { ...np } } }));
+  };
+  editPoem = (i) => this.setState(s => ({ editingIndex: i, forms: { ...s.forms, [i]: { ...s.poems[i] } } }));
+  cancelEdit = (i) => this.setState({ editingIndex: null });
+  setFormField = (i, field, value) => this.setState(s => ({ forms: { ...s.forms, [i]: { ...s.forms[i], [field]: value } } }));
+  savePoem = (i) => {
+    this.setState(s => {
+      const poems = s.poems.map((p, idx) => idx === i ? { ...s.forms[i] } : p);
+      return { poems, editingIndex: null };
+    }, () => this.persistPoems());
+  };
+  removePoem = (i) => {
+    if (!window.confirm('Delete this poem?')) return;
+    this.setState(s => ({ poems: s.poems.filter((_, idx) => idx !== i), poemIndex: 0 }), () => this.persistPoems());
+  };
+
+  persistBooks() {
+    try { localStorage.setItem('ajk_author_books_draft', JSON.stringify({ books: this.state.books })); } catch (e) { window.alert('Speichern fehlgeschlagen — Bild evtl. zu groß.'); }
+    const params = new URLSearchParams({ action: 'saveBooks', books: JSON.stringify(this.state.books), adminToken: this.state.adminToken });
+    // Frueher wurde ein Fehlschlagen hier stillschweigend verschluckt (leeres
+    // .catch) — die UI zeigte die Aenderung (aus dem State) trotzdem an, obwohl
+    // sie serverseitig NICHT gespeichert wurde (z.B. abgelaufenes Admin-Token
+    // nach 24h). Ergebnis: ein Buch schien angelegt, verschwand aber beim
+    // naechsten Laden wieder spurlos, ohne jede Fehlermeldung. Jetzt mit klarer
+    // Rueckmeldung.
+    fetch(this.SCRIPT_URL, { method: 'POST', body: params })
+      .then(r => r.json())
+      .then(data => {
+        if (!data.ok) window.alert('Speichern auf dem Server fehlgeschlagen — die Änderung ist NUR lokal in diesem Browser sichtbar, NICHT fuer andere! Grund: ' + (data.error || 'unbekannt') + '. Bitte einmal aus- und wieder als Admin einloggen und danach erneut speichern.'); else this.showSavedToast();
+      })
+      .catch(() => window.alert('Verbindung zum Server fehlgeschlagen — die Änderung ist NUR lokal in diesem Browser sichtbar, NICHT fuer andere! Bitte erneut versuchen.'));
+  }
+  // Alt-Cover DIREKT vom Geraet hochladen (kein Drive noetig), Mehrfach-
+  // Auswahl erlaubt. Gleiches Prinzip wie handleCoverFile: client-seitig
+  // verkleinern/komprimieren und als Data-URL direkt im Buch-Datensatz
+  // speichern. Etwas grosszuegigerer Groessen-Deckel als beim Haupt-Cover
+  // (Galerie-Bilder duerfen etwas groesser sein), aber weiterhin klein
+  // genug, um mehrere Stueck in einer Sheet-Zelle unterzubringen.
+  // Transiente Upload-UI-Werte (Sprachcode, Fertig/Entwurf, Lade-Status)
+  // pro Buch -- bewusst NICHT in bookForms[i] (das wird beim Speichern 1:1
+  // in den Buch-Datensatz uebernommen, wuerde also unerwuenscht mitgespeichert).
+  getUploadState(i) {
+    return this.state.uploadState[i] || { langCode: 'DE', kind: 'FINAL', busy: false, klappentextBusy: false, message: '' };
+  }
+  setUploadField(i, field, value) {
+    this.setState((s) => ({ uploadState: { ...s.uploadState, [i]: { ...this.getUploadState(i), [field]: value } } }));
+  }
+  // Datei als reinen Base64-String lesen (kein Bild, keine Komprimierung --
+  // Manuskripte/Klappentexte muessen unveraendert ankommen). data:-URL-Praefix
+  // vor dem eigentlichen Base64-Teil wird abgeschnitten.
+  readFileAsBase64_(file) {
+    return new Promise
+
+=== persistBooks #4 @ 264884 ===
+ ihn ins Buch (State + Formular)
+  // und speichert, bevor der eigentliche Upload wie gewohnt weiterlaeuft.
+  // Findet die EPUB keinen Titel, bleibt alles unveraendert und der
+  // Admin muss ihn wie bisher von Hand eintragen.
+  detectAndUploadEpub_(i, file) {
+    this.setUploadField(i, 'epubReadyBusy', true);
+    this.setUploadField(i, 'message', '');
+    this.readFileAsBase64_(file).then((base64) => {
+      const params = new URLSearchParams({ action: 'detectEpubTitle', adminToken: this.state.adminToken, fileData: base64 });
+      return fetch(this.SCRIPT_URL, { method: 'POST', body: params }).then((r) => r.json());
+    }).then((data) => {
+      const detected = (data && data.ok && data.title) ? data.title.trim() : '';
+      if (!detected) {
+        this.setUploadField(i, 'epubReadyBusy', false);
+        window.alert('Titel konnte nicht automatisch aus der EPUB gelesen werden — bitte zuerst den Buchtitel eintragen und speichern.');
+        return;
+      }
+      this.setState((s) => ({
+        books: s.books.map((b, idx) => idx === i ? { ...b, title: detected } : b),
+        bookForms: { ...s.bookForms, [i]: { ...s.bookForms[i], title: detected } }
+      }), () => {
+        this.persistBooks();
+        this.uploadBookFile_(i, 'EPUB', file, 'epubReadyBusy');
+      });
+    }).catch(() => {
+      this.setUploadField(i, 'epubReadyBusy', false);
+      window.alert('Titel-Erkennung fehlgeschlagen — bitte zuerst den Buchtitel eintragen und speichern.');
+    });
+  }
+  handleAltCoverFiles(i, e) {
+    const files = e.target.files ? Array.from(e.target.files) : [];
+    if (!files.length) return;
+    const readOne = (file) => new Promise((resolve, reject) => {
+      const img = new Image();
+      const reader = new FileReader();
+      reader.onload = (ev) => {
+        img.onload = () => {
+          const maxW = 480;
+          const scale = Math.min(1, maxW / img.width);
+          const canvas = document.createElement('canvas');
+          canvas.width = img.width * scale;
+          canvas.height = img.height * scale;
+          const ctx = canvas.getContext('2d');
+          ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+          let dataUrl = canvas.toDataURL('image/jpeg', 0.65);
+          if (dataUrl.length > 60000) dataUrl = canvas.toDataURL('image/jpeg', 0.4);
+          if (dataUrl.length > 60000) { reject('zu groß'); return; }
+          resolve(dataUrl);
+        };
+        img.onerror = () => reject('kein Bild');
+        img.src = ev.target.result;
+      };
+      reader.onerror = () => reject('Lesefehler');
+      reader.readAsDataURL(file);
+    });
+    Promise.all(files.map((f) => readOne(f).catch(() => null))).then((results) => {
+      const okOnes = results.filter(Boolean);
+      const skipped = results.length - okOnes.length;
+      if (okOnes.length) {
+        this.setState((s) => {
+          const books = s.books.slice();
+          const existing = books[i].altCoversInline || [];
+          books[i] = { ...books[i], altCoversInline: existing.concat(okOnes) };
+          return { books };
+        });
+      }
+      if (skipped) window.alert(skipped + ' Bild(er) konnten nicht hinzugefügt werden (zu groß oder kein gültiges Bild). Bitte kleinere/einfachere Bilder versuchen.');
+    });
+  }
+  removeAltCoverInline(i, idx) {
+    this.setState((s) => {
+      const books = s.books.slice();
+      const existing = (books[i].altCoversInline || []).slice();
+      existing.splice(idx, 1);
+      books[i] = { ...books[i], altCoversInline: existing };
+      return { books };
+    });
+  }
+  handleCoverFile(i, e) {
+    const file = e.target.files && e.target.files[0];
+    if (!file) return;
+    const img = new Image();
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      img.onload = () => {
+        const maxW = 220;
+        cons
