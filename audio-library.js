@@ -27,15 +27,14 @@
           /iP(?:hone|ad|od)/.test(navigator.userAgent || '') ||
           (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
 
-        // Proven on the isolated reader test page: iOS Safari is stable in
-        // paginated/default mode, while scrolled/continuous jumps into a blank
-        // viewport after a few seconds. Force only iPhone/iPad to the tested
-        // stable mode; all other platforms keep the site's existing options.
+        // AJK stable reader baseline (23.09.2026):
+        // use the same tested paginated/default mode on every browser.
+        // The previous split kept desktop browsers on the legacy
+        // scrolled/continuous path, which can also collapse into a blank
+        // viewport after the reader shell has opened.
         const renderOptions = Object.assign({}, options || {});
-        if (isIOSWebKit) {
-          renderOptions.manager = 'default';
-          renderOptions.flow = 'paginated';
-        }
+        renderOptions.manager = 'default';
+        renderOptions.flow = 'paginated';
 
         const rendition = originalRenderTo(target, renderOptions);
 
