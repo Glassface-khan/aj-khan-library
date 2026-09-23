@@ -1,0 +1,53 @@
+name: Diagnose live book source
+
+on:
+  push:
+    paths:
+      - '.github/workflows/diagnose-live-books.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Diagnose frontend and live backend
+        run: |
+          python - <<'PY'
+          import json,re,urllib.request,pathlib,time
+          p=pathlib.Path('index.html')
+          s=p.read_text(encoding='utf-8',errors='replace')
+          urls=sorted(set(re.findall(r'https://script\.google\.com/macros/s/[A-Za-z0-9_-]+/exec',s)))
+          out=[]
+          out.append('index_size='+str(len(s)))
+          out.append('script_urls='+json.dumps(urls))
+          for u in urls:
+              try:
+                  with urllib.request.urlopen(u+'?action=getBooks', timeout=30) as r:
+                      raw=r.read().decode('utf-8','replace')
+                  data=json.loads(raw)
+                  books=json.loads(data.get('books','[]')) if isinstance(data.get('books'),str) else data.get('books',[])
+                  out.append('backend='+u)
+                  out.append('book_count='+str(len(books)))
+                  for b in books:
+                      out.append('BOOK|'+str(b.get('title',''))+'|status='+str(b.get('status',''))+'|finished='+str(b.get('isFinished','')))
+              except Exception as e:
+                  out.append('backend_error='+u+'|'+repr(e))
+          # Relevant frontend snippets, sanitized to just indicate presence.
+          for term in ['ajk_author_books_draft','?action=getBooks','visitorVisibleBooks','visibleBooksSourceRaw','Books (']:
+              out.append('term_'+term.replace(' ','_')+'='+str(s.find(term)))
+          pathlib.Path('diagnostics').mkdir(exist_ok=True)
+          pathlib.Path('diagnostics/live-books.txt').write_text('\n'.join(out)+'\n',encoding='utf-8')
+          print('\n'.join(out))
+          PY
+      - name: Commit diagnostic
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add diagnostics/live-books.txt
+          if git diff --cached --quiet; then exit 0; fi
+          git commit -m "Record live books diagnostic"
+          git push
