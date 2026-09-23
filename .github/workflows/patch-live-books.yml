@@ -1,0 +1,49 @@
+name: Patch live book refresh
+
+on:
+  push:
+    paths:
+      - 'tools/patch_live_books.js'
+      - '.github/workflows/patch-live-books.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Patch bundled index
+        run: node tools/patch_live_books.js
+      - name: Bump PWA cache generation
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p=Path('service-worker.js')
+          s=p.read_text(encoding='utf-8')
+          if "ajk-shell-v23" not in s:
+              s=s.replace("ajk-shell-v22", "ajk-shell-v23").replace("ajk-data-v22", "ajk-data-v23")
+              marker="// v21 -> v22 (23.09.2026): erzwingt nach dem Import von THE WEIGHT OF THE AIR\n"
+              extra="// v22 -> v23 (23.09.2026): Frontend holt BooksData mit Cache-Buster + Retry;\n// erzwingt die neue Lade-Logik auf bereits installierten iOS-PWAs.\n"
+              if extra not in s and marker in s:
+                  s=s.replace(marker, extra+marker)
+              p.write_text(s,encoding='utf-8')
+          PY
+      - name: Commit result
+        run: |
+          if git diff --quiet -- index.html service-worker.js; then
+            echo "No changes needed."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add index.html service-worker.js
+          git commit -m "Refresh live book list reliably on iOS"
+          git push
