@@ -30,14 +30,16 @@
 // erzwingt die neue Lade-Logik auf bereits installierten iOS-PWAs.
 // v21 -> v22 (23.09.2026): erzwingt nach dem Import von THE WEIGHT OF THE AIR
 // einen frischen Bücher-/Shell-Stand und verwirft veraltete getBooks-Caches.
-const SHELL_CACHE = 'ajk-shell-v23';
-const DATA_CACHE = 'ajk-data-v23';
+// v23 -> v25 (23.09.2026): current three-book catalog is a safe local fallback;
+// getBooks itself is never served from the service-worker data cache.
+const SHELL_CACHE = 'ajk-shell-v25';
+const DATA_CACHE = 'ajk-data-v25';
 const SHELL_FILES = ['./', './index.html', './audio-library.js', './manifest.webmanifest', './icons/icon-192.png', './icons/icon-512.png'];
 
 // Aktionen, deren Antwort für Offline-Nutzung zwischengespeichert werden
 // darf. Alles andere (insbesondere alle schreibenden Aktionen) läuft immer
 // nur direkt übers Netz.
-const CACHEABLE_GET_ACTIONS = new Set(['getBooks', 'getPoems', 'getSettings']);
+const CACHEABLE_GET_ACTIONS = new Set(['getPoems', 'getSettings']);
 const CACHEABLE_POST_ACTIONS = new Set([]);
 
 self.addEventListener('install', (event) => {
