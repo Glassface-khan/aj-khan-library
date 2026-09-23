@@ -24,19 +24,6 @@ jobs:
           out=[]
           out.append('index_size='+str(len(s)))
           out.append('script_urls='+json.dumps(urls))
-          # Embedded seed data used before/when live backend fetch fails.
-          m=re.search(r'<script[^>]+id=["\']author-data["\'][^>]*>([\s\S]*?)</script>',s,re.I)
-          if m:
-              try:
-                  seed=json.loads(m.group(1))
-                  books=seed.get('books',[]) if isinstance(seed,dict) else []
-                  out.append('seed_book_count='+str(len(books)))
-                  for b in books:
-                      out.append('SEED|'+str(b.get('title',''))+'|status='+str(b.get('status',''))+'|finished='+str(b.get('isFinished','')))
-              except Exception as e:
-                  out.append('seed_parse_error='+repr(e))
-          else:
-              out.append('seed_tag=NOT_FOUND')
           for u in urls:
               try:
                   with urllib.request.urlopen(u+'?action=getBooks', timeout=12) as r:
@@ -49,17 +36,34 @@ jobs:
                       out.append('BOOK|'+str(b.get('title',''))+'|status='+str(b.get('status',''))+'|finished='+str(b.get('isFinished','')))
               except Exception as e:
                   out.append('backend_error='+u+'|'+repr(e))
-          for term in ['ajk_author_books_draft','?action=getBooks','visitorVisibleBooks','visibleBooksSourceRaw','Books (']:
-              out.append('term_'+term.replace(' ','_')+'='+str(s.find(term)))
+          # Decode the bundled component source, then extract only relevant book-load/filter snippets.
+          flow=[]
+          tm=re.search(r'<script type="__bundler/template">([\s\S]*?)</script>',s,re.I)
+          if tm:
+              try:
+                  decoded=json.loads(tm.group(1))
+                  for term in ['ajk_author_books_draft','?action=getBooks','visitorVisibleBooks','visibleBooksSourceRaw','componentDidMount','persistBooks']:
+                      start=0
+                      n=0
+                      while True:
+                          i=decoded.find(term,start)
+                          if i<0 or n>=4: break
+                          flow.append('\n=== '+term+' #'+str(n+1)+' @ '+str(i)+' ===\n'+decoded[max(0,i-1200):min(len(decoded),i+2600)])
+                          start=i+len(term); n+=1
+              except Exception as e:
+                  flow.append('template_decode_error='+repr(e))
+          else:
+              flow.append('template_tag_not_found')
           pathlib.Path('diagnostics').mkdir(exist_ok=True)
           pathlib.Path('diagnostics/live-books.txt').write_text('\n'.join(out)+'\n',encoding='utf-8')
+          pathlib.Path('diagnostics/frontend-flow.txt').write_text('\n'.join(flow)+'\n',encoding='utf-8')
           print('\n'.join(out))
           PY
       - name: Commit diagnostic
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add diagnostics/live-books.txt
+          git add diagnostics/live-books.txt diagnostics/frontend-flow.txt
           if git diff --cached --quiet; then exit 0; fi
-          git commit -m "Record live books diagnostic"
+          git commit -m "Record frontend book loading diagnostic"
           git push
