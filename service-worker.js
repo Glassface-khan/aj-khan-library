@@ -30,10 +30,10 @@
 // erzwingt die neue Lade-Logik auf bereits installierten iOS-PWAs.
 // v21 -> v22 (23.09.2026): erzwingt nach dem Import von THE WEIGHT OF THE AIR
 // einen frischen Bücher-/Shell-Stand und verwirft veraltete getBooks-Caches.
-// v23 -> v25 (23.09.2026): current three-book catalog is a safe local fallback;
+// v25 -> v26 (23.09.2026): force the validated paginated EPUB rendering mode\n// on desktop as well as iOS to prevent blank reader viewports.\n// v23 -> v25 (23.09.2026): current three-book catalog is a safe local fallback;
 // getBooks itself is never served from the service-worker data cache.
-const SHELL_CACHE = 'ajk-shell-v25';
-const DATA_CACHE = 'ajk-data-v25';
+const SHELL_CACHE = 'ajk-shell-v26';
+const DATA_CACHE = 'ajk-data-v26';
 const SHELL_FILES = ['./', './index.html', './audio-library.js', './manifest.webmanifest', './icons/icon-192.png', './icons/icon-512.png'];
 
 // Aktionen, deren Antwort für Offline-Nutzung zwischengespeichert werden
