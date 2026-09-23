@@ -25,8 +25,11 @@
 // v3 -> v4 (21.09.2026): audio-library.js traegt jetzt zusaetzlich den kleinen
 // iOS-Safari-Kompatibilitaetslayer fuer den Inline-EPUB-Reader. Der Sprung auf
 // v4 verhindert, dass iPhones die zuvor gecachte JS-Datei weiterverwenden.
-const SHELL_CACHE = 'ajk-shell-v21';
-const DATA_CACHE = 'ajk-data-v21';
+//
+// v21 -> v22 (23.09.2026): erzwingt nach dem Import von THE WEIGHT OF THE AIR
+// einen frischen Bücher-/Shell-Stand und verwirft veraltete getBooks-Caches.
+const SHELL_CACHE = 'ajk-shell-v22';
+const DATA_CACHE = 'ajk-data-v22';
 const SHELL_FILES = ['./', './index.html', './audio-library.js', './manifest.webmanifest', './icons/icon-192.png', './icons/icon-512.png'];
 
 // Aktionen, deren Antwort für Offline-Nutzung zwischengespeichert werden
