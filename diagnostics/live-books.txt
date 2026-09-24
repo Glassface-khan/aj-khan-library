@@ -1,7 +1,7 @@
 index_size=9637636
 script_urls=["https://script.google.com/macros/s/AKfycbwcbRDaWkM1wf3MV_dj4RPw9jQl2Fgc4YfGcmFrGU1S243yvh8WGW7mbyXLbSeVJKI/exec"]
 backend=https://script.google.com/macros/s/AKfycbwcbRDaWkM1wf3MV_dj4RPw9jQl2Fgc4YfGcmFrGU1S243yvh8WGW7mbyXLbSeVJKI/exec
-book_count=15
+book_count=17
 BOOK|The Road it came by|status=Fertig|finished=True
 ASSET|The Road it came by|cover|status=None|content-type=image/jpeg|ok=True
 ASSET|The Road it came by|epub|status=200|content-type=application/octet-stream|ok=True
@@ -24,7 +24,7 @@ BOOK|The Book of Seven Thieves|status=Fertig|finished=True
 ASSET|The Book of Seven Thieves|cover|status=200|content-type=image/jpeg|ok=True
 ASSET|The Book of Seven Thieves|epub|status=200|content-type=application/octet-stream|ok=True
 BOOK|The Physician of Ashes|status=Fertig|finished=True
-ASSET|The Physician of Ashes|cover|status=200|content-type=image/png|ok=True
+ASSET|The Physician of Ashes|cover|ERROR|TimeoutError('The read operation timed out')
 ASSET|The Physician of Ashes|epub|status=200|content-type=application/octet-stream|ok=True
 BOOK|The Blue Hour|status=Fertig|finished=True
 ASSET|The Blue Hour|cover|status=200|content-type=image/jpeg|ok=True
@@ -47,4 +47,11 @@ ASSET|Begin With Water|epub|status=200|content-type=application/octet-stream|ok=
 BOOK|The Niche of Light|status=Fertig|finished=True
 ASSET|The Niche of Light|cover|status=200|content-type=image/jpeg|ok=True
 ASSET|The Niche of Light|epub|status=200|content-type=application/octet-stream|ok=True
-asset_failure_count=0
+BOOK|Die Form des Lichts|status=Fertig|finished=True
+ASSET|Die Form des Lichts|cover|status=200|content-type=image/jpeg|ok=True
+ASSET|Die Form des Lichts|epub|status=200|content-type=application/octet-stream|ok=True
+BOOK|What the Clockmaker Kept|status=Fertig|finished=True
+ASSET|What the Clockmaker Kept|cover|status=200|content-type=image/jpeg|ok=True
+ASSET|What the Clockmaker Kept|epub|status=200|content-type=application/octet-stream|ok=True
+asset_failure_count=1
+FAIL|The Physician of Ashes: cover request failed: TimeoutError('The read operation timed out')
