@@ -6,6 +6,152 @@
   const ROOT_ID = 'ajk-audio-root';
 
 
+  // Fast EPUB reopen cache (24.09.2026)
+  // -----------------------------------
+  // getEpubData is intentionally permission-checked by Apps Script. The
+  // expensive part is transferring the complete EPUB as Base64 on every open.
+  // We keep the successful payload in IndexedDB. Before a persistent cache hit
+  // is used, checkAccess revalidates the CURRENT user's book permission with a
+  // tiny request, so revoked read/download rights do not keep working merely
+  // because the EPUB was cached on this device. Admin-only requests (no access
+  // code) are cached in memory for the current page session only.
+  const AJK_EPUB_CACHE_DB = 'ajk-epub-cache-v1';
+  const AJK_EPUB_CACHE_STORE = 'epubs';
+  const ajkEpubMemoryCache_ = new Map();
+  const ajkNativeFetch_ = window.fetch.bind(window);
+
+  function ajkEpubCacheKey_(params) {
+    return [
+      params.get('epubUrl') || '',
+      params.get('bookTitle') || '',
+      params.get('intent') === 'download' ? 'download' : 'read',
+      params.get('code') || ''
+    ].join('\u241f');
+  }
+
+  function ajkOpenEpubCache_() {
+    return new Promise((resolve, reject) => {
+      if (!window.indexedDB) return reject(new Error('indexeddb_unavailable'));
+      const req = indexedDB.open(AJK_EPUB_CACHE_DB, 1);
+      req.onupgradeneeded = () => {
+        const db = req.result;
+        if (!db.objectStoreNames.contains(AJK_EPUB_CACHE_STORE)) {
+          db.createObjectStore(AJK_EPUB_CACHE_STORE, { keyPath: 'key' });
+        }
+      };
+      req.onsuccess = () => resolve(req.result);
+      req.onerror = () => reject(req.error || new Error('indexeddb_open_failed'));
+    });
+  }
+
+  async function ajkReadEpubCache_(key) {
+    try {
+      const db = await ajkOpenEpubCache_();
+      return await new Promise((resolve, reject) => {
+        const tx = db.transaction(AJK_EPUB_CACHE_STORE, 'readonly');
+        const req = tx.objectStore(AJK_EPUB_CACHE_STORE).get(key);
+        req.onsuccess = () => resolve(req.result || null);
+        req.onerror = () => reject(req.error);
+      });
+    } catch (_) { return null; }
+  }
+
+  async function ajkWriteEpubCache_(key, text) {
+    try {
+      const db = await ajkOpenEpubCache_();
+      await new Promise((resolve, reject) => {
+        const tx = db.transaction(AJK_EPUB_CACHE_STORE, 'readwrite');
+        tx.objectStore(AJK_EPUB_CACHE_STORE).put({ key, text, savedAt: Date.now() });
+        tx.oncomplete = resolve;
+        tx.onerror = () => reject(tx.error);
+        tx.onabort = () => reject(tx.error);
+      });
+    } catch (_) {}
+  }
+
+  async function ajkDeleteEpubCache_(key) {
+    try {
+      const db = await ajkOpenEpubCache_();
+      await new Promise((resolve) => {
+        const tx = db.transaction(AJK_EPUB_CACHE_STORE, 'readwrite');
+        tx.objectStore(AJK_EPUB_CACHE_STORE).delete(key);
+        tx.oncomplete = resolve;
+        tx.onerror = resolve;
+        tx.onabort = resolve;
+      });
+    } catch (_) {}
+  }
+
+  async function ajkCachedPermissionStillValid_(params) {
+    const code = (params.get('code') || '').trim();
+    if (!code) return false; // admin-token path uses memory cache only
+    try {
+      const body = new URLSearchParams({ action: 'checkAccess', code });
+      const res = await ajkNativeFetch_(GAS_URL, { method: 'POST', body, cache: 'no-store' });
+      if (!res || !res.ok) return false;
+      const access = await res.json();
+      if (!access || !access.ok) return false;
+
+      const title = params.get('bookTitle') || '';
+      if (Array.isArray(access.visibleBooks) && access.visibleBooks.length && !access.visibleBooks.includes(title)) {
+        return false;
+      }
+      if (access.canDownload) return true;
+      const perm = access.epubAccess && access.epubAccess[title] || {};
+      return params.get('intent') === 'download' ? !!perm.download : !!perm.read;
+    } catch (_) { return false; }
+  }
+
+  function ajkResponseFromCachedText_(text) {
+    return new Response(text, {
+      status: 200,
+      headers: { 'Content-Type': 'application/json; charset=utf-8', 'X-AJK-EPUB-Cache': 'HIT' }
+    });
+  }
+
+  window.fetch = async function(input, init) {
+    let params = null;
+    try {
+      const method = String((init && init.method) || (input && input.method) || 'GET').toUpperCase();
+      if (method === 'POST' && init && init.body instanceof URLSearchParams) params = init.body;
+      else if (method === 'POST' && init && typeof init.body === 'string') params = new URLSearchParams(init.body);
+    } catch (_) {}
+
+    if (!params || params.get('action') !== 'getEpubData') {
+      return ajkNativeFetch_(input, init);
+    }
+
+    const key = ajkEpubCacheKey_(params);
+    const memory = ajkEpubMemoryCache_.get(key);
+    if (memory) return ajkResponseFromCachedText_(memory);
+
+    const code = (params.get('code') || '').trim();
+    if (code) {
+      const cached = await ajkReadEpubCache_(key);
+      if (cached && cached.text) {
+        if (await ajkCachedPermissionStillValid_(params)) {
+          ajkEpubMemoryCache_.set(key, cached.text);
+          return ajkResponseFromCachedText_(cached.text);
+        }
+        await ajkDeleteEpubCache_(key);
+      }
+    }
+
+    const res = await ajkNativeFetch_(input, init);
+    if (!res || !res.ok) return res;
+
+    try {
+      const text = await res.clone().text();
+      const head = text.slice(0, 120);
+      if (head.includes('"ok":true')) {
+        ajkEpubMemoryCache_.set(key, text);
+        if (code) ajkWriteEpubCache_(key, text);
+      }
+    } catch (_) {}
+    return res;
+  };
+
+
   // Inline EPUB compatibility layer.
   // Apple Books renders our premium EPUBs correctly, but epub.js in iOS
   // Safari can re-insert a non-linear cover page in continuous mode after
