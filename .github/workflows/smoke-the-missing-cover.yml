@@ -42,9 +42,13 @@ jobs:
           try:
               d.get(SITE)
               WebDriverWait(d,30).until(lambda x: x.execute_script('return document.readyState')=='complete')
-              time.sleep(6)
+              time.sleep(4)
               out.append('url='+d.current_url)
               out.append('document_title='+repr(d.title))
+              # Public landing gate: enter the site before testing the Books section.
+              for gate in d.find_elements(By.TAG_NAME,'button'):
+                  if (gate.text or '').strip().upper() == 'ENTER':
+                      gate.click(); out.append('clicked_enter=True'); time.sleep(5); break
               buttons=d.find_elements(By.TAG_NAME,'button')
               out.append('buttons='+repr([b.text.strip() for b in buttons if b.text.strip()][:80]))
               # Books are intentionally collapsed by default. Open that section like a real visitor.
