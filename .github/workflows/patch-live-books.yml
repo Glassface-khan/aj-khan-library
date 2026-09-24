@@ -22,22 +22,27 @@ jobs:
           node-version: '22'
       - name: Patch bundled index
         run: node tools/patch_live_books.js
-      - name: Use fresh live catalog requests and bump PWA generation
+      - name: Bump PWA catalog generation
         run: |
           python - <<'PY'
           from pathlib import Path
           p=Path('service-worker.js')
           s=p.read_text(encoding='utf-8')
-          for old in ('ajk-shell-v22','ajk-shell-v23','ajk-shell-v24'):
-              s=s.replace(old, 'ajk-shell-v25')
-          for old in ('ajk-data-v22','ajk-data-v23','ajk-data-v24'):
-              s=s.replace(old, 'ajk-data-v25')
-          s=s.replace("const CACHEABLE_GET_ACTIONS = new Set(['getBooks', 'getPoems', 'getSettings']);",
-                      "const CACHEABLE_GET_ACTIONS = new Set(['getPoems', 'getSettings']);")
-          extra="// v23 -> v25 (23.09.2026): current three-book catalog is a safe local fallback;\n// getBooks itself is never served from the service-worker data cache.\n"
-          anchor="const SHELL_CACHE = 'ajk-shell-v25';"
-          if extra not in s and anchor in s:
-              s=s.replace(anchor, extra+anchor)
+          for old in ('ajk-shell-v22','ajk-shell-v23','ajk-shell-v24','ajk-shell-v25','ajk-shell-v26'):
+              s=s.replace(old, 'ajk-shell-v27')
+          for old in ('ajk-data-v22','ajk-data-v23','ajk-data-v24','ajk-data-v25','ajk-data-v26'):
+              s=s.replace(old, 'ajk-data-v27')
+          # Keep the same-origin fallback available to installed PWAs as well.
+          old="const SHELL_FILES = ['./', './index.html', './audio-library.js', './manifest.webmanifest', './icons/icon-192.png', './icons/icon-512.png'];"
+          new="const SHELL_FILES = ['./', './index.html', './books-live.json', './audio-library.js', './manifest.webmanifest', './icons/icon-192.png', './icons/icon-512.png'];"
+          if old in s:
+              s=s.replace(old,new)
+          elif "'./books-live.json'" not in s:
+              raise SystemExit('SHELL_FILES marker not found')
+          note="// v26 -> v27 (24.09.2026): books-live.json is the immediate catalog fallback;\n// BooksData remains canonical and replaces it whenever the live request succeeds.\n"
+          anchor="const SHELL_CACHE = 'ajk-shell-v27';"
+          if note not in s and anchor in s:
+              s=s.replace(anchor,note+anchor)
           p.write_text(s,encoding='utf-8')
           PY
       - name: Commit result
@@ -49,5 +54,6 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add index.html service-worker.js
-          git commit -m "Use safe current catalog fallback"
+          git commit -m "Use books-live as resilient catalog fallback"
+          git pull --rebase origin main
           git push
