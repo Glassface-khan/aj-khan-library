@@ -1,74 +1,93 @@
-# BOOK CLOSE — Canonical Production → Live Workflow
+# BOOK CLOSE — Single-Root Canonical Workflow
 
-This is the required workflow for the command **BUCH ABSCHLIESSEN – KOMPLETT**.
+This is the required workflow for **BUCH ABSCHLIESSEN – KOMPLETT**.
 
-## Two Drive roots with different roles
+## One canonical Drive root
 
-### 1. Production archive
-**AJ Khan Bücher**
+There is exactly one book root:
 
-Purpose:
-- full release package
-- publication master
-- submission/internal/marketing/QA material
-- checksums and reference assets
+**Alis Books**  
+Drive root ID: `1wCKKVMexGWRPTWx2yQrnb2b4-fLhKLAU`
 
-This is an archive/workspace root. It is **not** the live website source.
-
-### 2. Live operational root
-**Alis Books**
-
-This is the folder monitored by `syncDriveForAllBooks()` and used by the author website pipeline.
-
-Every completed book must also have an operational mirror here:
+Every book has exactly one canonical folder:
 
 ```
-/<Book title>/
+/Alis Books/<Book title>/
   metadata.json
   Manuskript/<LANG>/
     FINAL_<Book title>.docx
     EPUB_<Book title>.epub
     KLAPPENTEXT_<Book title>.txt|docx
-  Bilder/Cover/<cover image>
-  Bilder/Alt-Cover/
+  Bilder/
+    Cover/<final cover>
+    Alt-Cover/
   Intern/
   Extern/
   Video/
+  Release Package/
+    01_FINAL_BOOK/
+    02_FRONT_BACKMATTER/
+    03_SUBMISSION/
+    04_MARKETING/
+    05_INTERNAL_AUDITS/
+    06_REFERENCE_ASSETS/
+    README / inventory / checksums / final ZIP as applicable
 ```
 
-The title folder name must match the website title exactly.
+The folder name must match the website title exactly.
+
+## Important rule
+
+**No second production/archive root is allowed.**
+
+The former folder `AJ Khan Bücher` has been retired and renamed
+`_LEGACY_SYSTEM – NICHT FÜR BÜCHER`. It must never receive final book files.
 
 ## Required close sequence
 
 1. Freeze prose/publication master.
-2. Build and QA EPUB.
-3. Build complete production package in **AJ Khan Bücher**.
-4. Mirror website-operational files to **Alis Books**.
-5. Verify the live cover file inherits/publicly has `anyone -> reader`.
-6. Update `BooksData` using the **live-root file IDs**, never private archive IDs.
-7. Keep `books-live.json` synchronized as fallback using the same live-root IDs.
-8. Run/allow `syncDriveForAllBooks()` and verify `DriveSyncLog` for the book.
-9. Perform a website smoke test:
-   - book card appears
-   - cover actually renders
-   - title/genre/word count/chapter count are correct
-   - Read works when permitted
-   - EPUB link points to the live file
-10. Only then report **WEBSITE COMPLETE**.
+2. Build and QA final EPUB.
+3. Build the complete release package locally.
+4. Place/import the complete package into
+   `Alis Books/<Book title>/Release Package`.
+5. Mirror/select the canonical live files inside the same book folder:
+   - final manuscript
+   - EPUB
+   - blurb
+   - metadata
+   - final cover
+6. Run `syncDriveForAllBooks()`.
+7. Verify `BooksData` contains exactly one row for the title and that all
+   asset IDs resolve to files inside the same `Alis Books/<Book title>` folder.
+8. Verify the cover is publicly readable (`anyone -> reader`) and its URL
+   returns an actual image.
+9. Verify the EPUB URL resolves to the final EPUB.
+10. Verify `DriveSyncLog` contains a successful current sync for the title.
+11. Perform the website smoke test:
+    - book card appears
+    - cover renders
+    - title/genre/word count/chapter count are correct
+    - Read works when permitted
+    - EPUB works
+12. Only then report **WEBSITE COMPLETE**.
 
 ## Hard completion gate
 
-A successful Drive upload or GitHub Pages deployment alone is **not** sufficient.
+A Drive upload, a GitHub commit, a Pages deployment, or a BooksData row by
+itself is never sufficient.
 
-Never mark a title `WEBSITE COMPLETE` until:
-- the book exists in `BooksData`,
-- its cover source is publicly readable,
-- the website card renders the cover,
-- and the live asset IDs point to **Alis Books**.
+A title may be called `WEBSITE COMPLETE` only when all of these are true:
 
-## Why this exists
+- one canonical folder exists under `Alis Books`,
+- the full production package is inside that same folder,
+- `BooksData` points only to assets inside that folder,
+- the cover is publicly readable and renders,
+- the EPUB resolves,
+- and the live website card has passed the smoke test.
 
-A private Drive image can still produce a syntactically valid
-`https://lh3.googleusercontent.com/d/<id>=w1000` URL. The URL may then render as a
-broken image for visitors. The production archive and live website root must
-therefore never be treated as interchangeable.
+## Migration note
+
+On 24 September 2026, the production archives for the existing completed
+titles were moved from the former `AJ Khan Bücher` root into their canonical
+book folders under `Alis Books`. The old root now contains only non-book
+legacy/test material and is not part of the publishing workflow.
