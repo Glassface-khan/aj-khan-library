@@ -94,6 +94,72 @@ if (!s.includes('const firstReadable = spineItems.find')) {
   );
 }
 
+
+// COVER GRID VIEW PATCH
+// Third books view: cover-only thumbnail wall. Frontend-only; it reuses each
+// book's existing onOpen handler, so Apps Script does not need to change.
+if (!s.includes('bookCoverGridMode: false')) {
+  once(
+    'bookTocOpen: false, bookMobileListMode: false, settingsSaveMsg:',
+    'bookTocOpen: false, bookMobileListMode: false, bookCoverGridMode: false, settingsSaveMsg:',
+    'cover grid state'
+  );
+}
+if (!s.includes('toggleBookCoverGrid =')) {
+  once(
+    'toggleBookViewMode = () => this.setState(s => ({ bookMobileListMode: !s.bookMobileListMode }));',
+    String.raw\`toggleBookViewMode = () => this.setState(s => ({ bookMobileListMode: !s.bookMobileListMode, bookCoverGridMode: false }));\n  toggleBookCoverGrid = () => this.setState(s => ({ bookCoverGridMode: !s.bookCoverGridMode }));\`,
+    'cover grid toggle'
+  );
+}
+if (!s.includes('cover-grid-hidden')) {
+  once(
+    "const bookListWrapClass = 'book-list-wrap' + (s.bookMobileListMode ? ' list-mode' : '');",
+    "const bookListWrapClass = 'book-list-wrap' + (s.bookMobileListMode ? ' list-mode' : '') + (s.bookCoverGridMode ? ' cover-grid-hidden' : '');",
+    'cover grid list visibility'
+  );
+}
+if (!s.includes("viewAsCovers: 'Cover'")) {
+  once(
+    "viewAsList: 'Als Liste', viewAsCarousel: 'Als Karussell' },",
+    "viewAsList: 'Als Liste', viewAsCarousel: 'Als Karussell', viewAsCovers: 'Cover' },",
+    'German cover label'
+  );
+  once(
+    "viewAsList: 'As list', viewAsCarousel: 'As carousel' }",
+    "viewAsList: 'As list', viewAsCarousel: 'As carousel', viewAsCovers: 'Covers' }",
+    'English cover label'
+  );
+}
+if (!s.includes('const bookCoverGridButtonStyle =')) {
+  once(
+    "const bookViewToggleLabel = s.bookMobileListMode ? ui.viewAsCarousel : ui.viewAsList;",
+    String.raw\`const bookViewToggleLabel = s.bookMobileListMode ? ui.viewAsCarousel : ui.viewAsList;\n    const bookCoverGridButtonLabel = ui.viewAsCovers;\n    const bookCoverGridButtonStyle = s.bookCoverGridMode\n      ? "white-space:nowrap; background:rgba(212,175,55,.08); border:1px solid var(--gold); color:var(--gold); font-family:'Archivo',sans-serif; font-size:10.5px; letter-spacing:.08em; text-transform:uppercase; padding:10px 14px; cursor:pointer;"\n      : "white-space:nowrap; background:none; border:1px solid var(--rule); color:var(--ink-2); font-family:'Archivo',sans-serif; font-size:10.5px; letter-spacing:.08em; text-transform:uppercase; padding:10px 14px; cursor:pointer;";\`,
+    'cover grid button state'
+  );
+}
+if (!s.includes('bookCoverItems: books')) {
+  once(
+    'bookSearchQuery: s.bookSearchQuery, setBookSearchQuery: this.setBookSearchQuery, bookSearchHasNoResults, bookTocEntries, bookTocOpenClass, toggleBookToc: this.toggleBookToc, bookListWrapClass, bookViewToggleLabel, toggleBookViewMode: this.toggleBookViewMode,',
+    'bookSearchQuery: s.bookSearchQuery, setBookSearchQuery: this.setBookSearchQuery, bookSearchHasNoResults, bookTocEntries, bookTocOpenClass, toggleBookToc: this.toggleBookToc, bookListWrapClass, bookViewToggleLabel, toggleBookViewMode: this.toggleBookViewMode, bookCoverGridMode: s.bookCoverGridMode, bookCoverItems: books, bookCoverGridButtonLabel, bookCoverGridButtonStyle, toggleBookCoverGrid: this.toggleBookCoverGrid,',
+    'cover grid render values'
+  );
+}
+if (!s.includes('class=\\"book-cover-grid-toggle\\"')) {
+  once(
+    String.raw\`      <button type=\\"button\\" class=\\"book-view-toggle\\" sc-camel-on-click=\\"{{ toggleBookViewMode }}\\" style=\\"white-space:nowrap; background:none; border:1px solid var(--rule); color:var(--ink-2); font-family:'Archivo',sans-serif; font-size:10.5px; letter-spacing:.08em; text-transform:uppercase; padding:10px 14px; cursor:pointer;\\">{{ bookViewToggleLabel }}</button>\n    </div>\n    <div class=\\"{{ bookListWrapClass }}\\"\`,
+    String.raw\`      <button type=\\"button\\" class=\\"book-view-toggle\\" sc-camel-on-click=\\"{{ toggleBookViewMode }}\\" style=\\"white-space:nowrap; background:none; border:1px solid var(--rule); color:var(--ink-2); font-family:'Archivo',sans-serif; font-size:10.5px; letter-spacing:.08em; text-transform:uppercase; padding:10px 14px; cursor:pointer;\\">{{ bookViewToggleLabel }}</button>\n      <button type=\\"button\\" class=\\"book-cover-grid-toggle\\" sc-camel-on-click=\\"{{ toggleBookCoverGrid }}\\" style=\\"{{ bookCoverGridButtonStyle }}\\">{{ bookCoverGridButtonLabel }}</button>\n    </div>\n    <sc-if value=\\"{{ bookCoverGridMode }}\\" hint-placeholder-val=\\"{{ false }}\\">\n      <div class=\\"book-cover-grid\\" style=\\"display:grid; grid-template-columns:repeat(auto-fill,minmax(130px,1fr)); gap:24px 16px; padding:24px 0 36px; align-items:start;\\">\n        <sc-for list=\\"{{ bookCoverItems }}\\" as=\\"coverBook\\" hint-placeholder-count=\\"14\\">\n          <button type=\\"button\\" sc-camel-on-click=\\"{{ coverBook.onOpen }}\\" aria-label=\\"{{ coverBook.title }}\\" title=\\"{{ coverBook.title }}\\" style=\\"display:block; width:100%; padding:0; border:0; background:none; cursor:pointer; text-align:left;\\">\n            <sc-if value=\\"{{ coverBook.coverUrl }}\\" hint-placeholder-val=\\"{{ false }}\\">\n              <span style=\\"display:block; width:100%; aspect-ratio:2/3; overflow:hidden; border:1px solid var(--rule); box-shadow:0 8px 24px rgba(43,36,28,.08);\\"><img src=\\"{{ coverBook.coverUrl }}\\" alt=\\"{{ coverBook.title }} cover\\" loading=\\"lazy\\" style=\\"display:block; width:100%; height:100%; object-fit:cover;\\"></span>\n            </sc-if>\n            <sc-if value=\\"{{ coverBook.noCover }}\\" hint-placeholder-val=\\"{{ true }}\\">\n              <span style=\\"display:flex; width:100%; aspect-ratio:2/3; box-sizing:border-box; align-items:center; justify-content:center; padding:12px; border:1px solid var(--rule); background:var(--bone-deep); font-family:'Cormorant Garamond',serif; font-size:14px; line-height:1.25; color:var(--ink-3); text-align:center;\\">{{ coverBook.title }}</span>\n            </sc-if>\n          </button>\n        </sc-for>\n      </div>\n    </sc-if>\n    <div class=\\"{{ bookListWrapClass }}\\"\`,
+    'cover grid template'
+  );
+}
+if (!s.includes('.cover-grid-hidden{display:none!important}')) {
+  once(
+    '</head>',
+    String.raw\`<style>.cover-grid-hidden{display:none!important}@media(max-width:640px){.book-cover-grid{grid-template-columns:repeat(2,minmax(0,1fr))!important;gap:20px 14px!important}}</style>\n</head>\`,
+    'cover grid css'
+  );
+}
+
 for (const marker of [
   'const effChapterCount =',
   "wordCountLabel: statParts.join(' · ')",
