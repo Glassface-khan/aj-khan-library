@@ -96,6 +96,7 @@ if (!s.includes('const firstReadable = spineItems.find')) {
 
 
 // COVER GRID VIEW PATCH
+// Enabled as the third public books view (carousel / list / covers).
 // Third books view: cover-only thumbnail wall. Frontend-only; it reuses each
 // book's existing onOpen handler, so Apps Script does not need to change.
 if (!s.includes('bookCoverGridMode: false')) {
