@@ -147,10 +147,9 @@ if (!s.includes('bookCoverItems: books')) {
   );
 }
 if (!s.includes('class=\\\"book-cover-grid-toggle\\\"')) {
-  const listMarker = '</div>\\\\n    <div class=\\\"{{ bookListWrapClass }}\\\" style=\\\"display:grid; grid-template-columns:repeat(auto-fit,minmax(320px,1fr)); column-gap:64px;\\\">';
+  const listMarker = '    <div class=\\\"{{ bookListWrapClass }}\\\" style=\\\"display:grid; grid-template-columns:repeat(auto-fit,minmax(320px,1fr)); column-gap:64px;\\\">';
   const coverGridMarkup = [
-    '<button type=\\\"button\\\" class=\\\"book-cover-grid-toggle\\\" sc-camel-on-click=\\\"{{ toggleBookCoverGrid }}\\\" style=\\\"{{ bookCoverGridButtonStyle }}\\\">{{ bookCoverGridButtonLabel }}</button>',
-    '    </div>',
+    '    <button type=\\\"button\\\" class=\\\"book-cover-grid-toggle\\\" sc-camel-on-click=\\\"{{ toggleBookCoverGrid }}\\\" style=\\\"{{ bookCoverGridButtonStyle }}\\\">{{ bookCoverGridButtonLabel }}</button>',
     '    <sc-if value=\\\"{{ bookCoverGridMode }}\\\" hint-placeholder-val=\\\"{{ false }}\\\">',
     '      <div class=\\\"book-cover-grid\\\">',
     '        <sc-for list=\\\"{{ bookCoverItems }}\\\" as=\\\"coverBook\\\" hint-placeholder-count=\\\"14\\\">',
