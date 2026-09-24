@@ -1,0 +1,84 @@
+name: Smoke The Missing Cover live card
+
+on:
+  push:
+    paths:
+      - '.github/workflows/smoke-the-missing-cover.yml'
+      - 'books-live.json'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Selenium
+        run: python -m pip install --quiet selenium
+      - name: Smoke live card
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from selenium import webdriver
+          from selenium.webdriver.chrome.options import Options
+          from selenium.webdriver.common.by import By
+          from selenium.webdriver.support.ui import WebDriverWait
+          import pathlib, json
+
+          SITE='https://glassface-khan.github.io/aj-khan-library/'
+          TITLE='The Missing Cover'
+          COVER_ID='1vtDl1D_ToHjoHhab70yl87Wny3LwJZok'
+          EPUB_ID='1Mz_pqtAgcK1iB9yrMAUuqknnoTeXN2Bw'
+
+          opt=Options()
+          opt.add_argument('--headless=new')
+          opt.add_argument('--no-sandbox')
+          opt.add_argument('--disable-dev-shm-usage')
+          opt.add_argument('--disable-gpu')
+          opt.add_argument('--window-size=1440,1600')
+          opt.set_capability('goog:loggingPrefs', {'browser':'ALL'})
+          d=webdriver.Chrome(options=opt)
+          out=[]
+          try:
+              d.get(SITE)
+              WebDriverWait(d,30).until(lambda x: TITLE in x.find_element(By.TAG_NAME,'body').text)
+              body=d.find_element(By.TAG_NAME,'body').text
+              source=d.page_source
+              title_hits=d.find_elements(By.XPATH, "//*[normalize-space(text())='The Missing Cover']")
+              cover_imgs=d.find_elements(By.CSS_SELECTOR, f"img[src*='{COVER_ID}']")
+              cover_ok=any(d.execute_script("return arguments[0].complete && arguments[0].naturalWidth>0", el) for el in cover_imgs)
+              out.append('url='+d.current_url)
+              out.append('document_title='+repr(d.title))
+              out.append('title_in_body='+str(TITLE in body))
+              out.append('title_element_count='+str(len(title_hits)))
+              out.append('cover_id_in_dom='+str(COVER_ID in source))
+              out.append('cover_image_count='+str(len(cover_imgs)))
+              out.append('cover_loaded='+str(cover_ok))
+              out.append('epub_id_in_dom='+str(EPUB_ID in source))
+              out.append('body_has_word_count='+str('43,325' in body or '43325' in body))
+              out.append('body_has_chapter_count='+str('29' in body))
+              out.append('browser_log_count='+str(len(d.get_log('browser'))))
+              assert TITLE in body, 'book title missing from live visitor DOM'
+              assert len(title_hits) >= 1, 'book title element missing'
+              assert COVER_ID in source, 'runtime cover ID missing from live DOM'
+              assert cover_ok, 'runtime cover did not load'
+              assert EPUB_ID in source, 'runtime EPUB ID missing from live DOM'
+              out.append('SMOKE_RESULT=PASS')
+          finally:
+              d.quit()
+          pathlib.Path('diagnostics').mkdir(exist_ok=True)
+          pathlib.Path('diagnostics/smoke-the-missing-cover.txt').write_text('\n'.join(out)+'\n',encoding='utf-8')
+          print('\n'.join(out))
+          PY
+      - name: Commit smoke diagnostic
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add diagnostics/smoke-the-missing-cover.txt
+          if git diff --cached --quiet; then exit 0; fi
+          git commit -m "Record The Missing Cover live smoke test"
+          git pull --rebase origin main
+          git push
