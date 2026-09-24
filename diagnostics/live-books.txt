@@ -1,7 +1,7 @@
 index_size=9637636
 script_urls=["https://script.google.com/macros/s/AKfycbwcbRDaWkM1wf3MV_dj4RPw9jQl2Fgc4YfGcmFrGU1S243yvh8WGW7mbyXLbSeVJKI/exec"]
 backend=https://script.google.com/macros/s/AKfycbwcbRDaWkM1wf3MV_dj4RPw9jQl2Fgc4YfGcmFrGU1S243yvh8WGW7mbyXLbSeVJKI/exec
-book_count=14
+book_count=15
 BOOK|The Road it came by|status=Fertig|finished=True
 ASSET|The Road it came by|cover|status=None|content-type=image/jpeg|ok=True
 ASSET|The Road it came by|epub|status=200|content-type=application/octet-stream|ok=True
@@ -44,4 +44,7 @@ ASSET|The Treasury of Unanswered Prayers|epub|status=200|content-type=applicatio
 BOOK|Begin With Water|status=Fertig|finished=True
 ASSET|Begin With Water|cover|status=200|content-type=image/jpeg|ok=True
 ASSET|Begin With Water|epub|status=200|content-type=application/octet-stream|ok=True
+BOOK|The Niche of Light|status=Fertig|finished=True
+ASSET|The Niche of Light|cover|status=200|content-type=image/jpeg|ok=True
+ASSET|The Niche of Light|epub|status=200|content-type=application/octet-stream|ok=True
 asset_failure_count=0
