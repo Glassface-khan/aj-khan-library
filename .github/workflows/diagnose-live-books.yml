@@ -3,6 +3,8 @@ name: Diagnose live book source
 on:
   push:
     paths:
+      - 'books-live.json'
+      - 'BOOK_CLOSE_WORKFLOW.md'
       - '.github/workflows/diagnose-live-books.yml'
   workflow_dispatch:
 
@@ -14,29 +16,68 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Diagnose frontend and live backend
+      - name: Diagnose frontend, live backend, covers and EPUBs
         run: |
           python - <<'PY'
-          import json,re,urllib.request,pathlib
+          import json,re,urllib.request,pathlib,sys
           p=pathlib.Path('index.html')
           s=p.read_text(encoding='utf-8',errors='replace')
           urls=sorted(set(re.findall(r'https://script\.google\.com/macros/s/[A-Za-z0-9_-]+/exec',s)))
           out=[]
+          failures=[]
           out.append('index_size='+str(len(s)))
           out.append('script_urls='+json.dumps(urls))
+
+          def probe(url, expected, title):
+              if not url:
+                  failures.append(f'{title}: missing {expected} URL')
+                  return 'MISSING'
+              req=urllib.request.Request(url, headers={'User-Agent':'Mozilla/5.0 AJK-Live-Asset-Probe/1.0'})
+              try:
+                  with urllib.request.urlopen(req, timeout=20) as r:
+                      status=getattr(r,'status',200)
+                      ctype=(r.headers.get('Content-Type') or '').lower()
+                      sample=r.read(64)
+                  ok=status==200
+                  if expected=='cover':
+                      ok=ok and ctype.startswith('image/')
+                  elif expected=='epub':
+                      ok=ok and (('epub' in ctype) or ('zip' in ctype) or ('octet-stream' in ctype) or sample[:2]==b'PK')
+                  if not ok:
+                      failures.append(f'{title}: bad {expected} response status={status} content-type={ctype}')
+                  return f'status={status}|content-type={ctype}|ok={ok}'
+              except Exception as e:
+                  failures.append(f'{title}: {expected} request failed: {e!r}')
+                  return 'ERROR|'+repr(e)
+
           for u in urls:
               try:
-                  with urllib.request.urlopen(u+'?action=getBooks', timeout=12) as r:
+                  with urllib.request.urlopen(u+'?action=getBooks', timeout=20) as r:
                       raw=r.read().decode('utf-8','replace')
                   data=json.loads(raw)
                   books=json.loads(data.get('books','[]')) if isinstance(data.get('books'),str) else data.get('books',[])
                   out.append('backend='+u)
                   out.append('book_count='+str(len(books)))
+                  seen_titles=set()
                   for b in books:
-                      out.append('BOOK|'+str(b.get('title',''))+'|status='+str(b.get('status',''))+'|finished='+str(b.get('isFinished','')))
+                      title=str(b.get('title','')).strip()
+                      out.append('BOOK|'+title+'|status='+str(b.get('status',''))+'|finished='+str(b.get('isFinished','')))
+                      if not title:
+                          failures.append('book with empty title')
+                          continue
+                      if title in seen_titles:
+                          failures.append(title+': duplicate BooksData title')
+                      seen_titles.add(title)
+                      if b.get('isFinished'):
+                          cover=probe(str(b.get('coverUrl','')), 'cover', title)
+                          epub=probe(str(b.get('epubUrl','')), 'epub', title)
+                          out.append('ASSET|'+title+'|cover|'+cover)
+                          out.append('ASSET|'+title+'|epub|'+epub)
               except Exception as e:
+                  failures.append('backend_error='+u+'|'+repr(e))
                   out.append('backend_error='+u+'|'+repr(e))
-          # Decode the bundled component source, then extract only relevant book-load/filter snippets.
+
+          # Decode bundled source and retain relevant load/filter snippets.
           flow=[]
           tm=re.search(r'<script type="__bundler/template">([\s\S]*?)</script>',s,re.I)
           if tm:
@@ -54,16 +95,24 @@ jobs:
                   flow.append('template_decode_error='+repr(e))
           else:
               flow.append('template_tag_not_found')
+
+          out.append('asset_failure_count='+str(len(failures)))
+          for f in failures:
+              out.append('FAIL|'+f)
+
           pathlib.Path('diagnostics').mkdir(exist_ok=True)
           pathlib.Path('diagnostics/live-books.txt').write_text('\n'.join(out)+'\n',encoding='utf-8')
           pathlib.Path('diagnostics/frontend-flow.txt').write_text('\n'.join(flow)+'\n',encoding='utf-8')
           print('\n'.join(out))
+          if failures:
+              sys.exit(1)
           PY
       - name: Commit diagnostic
+        if: always()
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add diagnostics/live-books.txt diagnostics/frontend-flow.txt
           if git diff --cached --quiet; then exit 0; fi
-          git commit -m "Record frontend book loading diagnostic"
+          git commit -m "Record live book and asset diagnostic"
           git push
