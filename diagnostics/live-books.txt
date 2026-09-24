@@ -3,7 +3,7 @@ script_urls=["https://script.google.com/macros/s/AKfycbwcbRDaWkM1wf3MV_dj4RPw9jQ
 backend=https://script.google.com/macros/s/AKfycbwcbRDaWkM1wf3MV_dj4RPw9jQl2Fgc4YfGcmFrGU1S243yvh8WGW7mbyXLbSeVJKI/exec
 book_count=9
 BOOK|The Road it came by|status=Fertig|finished=True
-ASSET|The Road it came by|cover|status=None|content-type=image/jpeg|ok=False
+ASSET|The Road it came by|cover|status=None|content-type=image/jpeg|ok=True
 ASSET|The Road it came by|epub|status=200|content-type=application/octet-stream|ok=True
 BOOK|The Mountain That Doesn't Answer|status=Fertig|finished=True
 ASSET|The Mountain That Doesn't Answer|cover|status=200|content-type=image/jpeg|ok=True
@@ -12,7 +12,7 @@ BOOK|The Weight of the Air|status=Fertig|finished=True
 ASSET|The Weight of the Air|cover|status=200|content-type=image/jpeg|ok=True
 ASSET|The Weight of the Air|epub|status=200|content-type=application/octet-stream|ok=True
 BOOK|The Man the World Forgot|status=Fertig|finished=True
-ASSET|The Man the World Forgot|cover|status=None|content-type=image/jpeg|ok=False
+ASSET|The Man the World Forgot|cover|status=None|content-type=image/jpeg|ok=True
 ASSET|The Man the World Forgot|epub|status=200|content-type=text/html; charset=utf-8|ok=False
 BOOK|The Second Ledger|status=Fertig|finished=True
 ASSET|The Second Ledger|cover|status=200|content-type=image/jpeg|ok=True
@@ -29,7 +29,5 @@ ASSET|The Physician of Ashes|epub|status=200|content-type=application/octet-stre
 BOOK|The Blue Hour|status=Fertig|finished=True
 ASSET|The Blue Hour|cover|status=200|content-type=image/jpeg|ok=True
 ASSET|The Blue Hour|epub|status=200|content-type=application/octet-stream|ok=True
-asset_failure_count=3
-FAIL|The Road it came by: bad cover response status=None content-type=image/jpeg
-FAIL|The Man the World Forgot: bad cover response status=None content-type=image/jpeg
+asset_failure_count=1
 FAIL|The Man the World Forgot: bad epub response status=200 content-type=text/html; charset=utf-8
