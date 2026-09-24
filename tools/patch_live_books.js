@@ -3,10 +3,15 @@ const fs = require('fs');
 const path = 'index.html';
 let s = fs.readFileSync(path, 'utf8');
 
-const templateMatch = s.match(/<script type="__bundler\\/template">([\\s\\S]*?)<\\/script>/);
-if (!templateMatch) throw new Error('Bundler template not found');
+const openTag = '<script type="__bundler/template">';
+const closeTag = '</script>';
+const tagPos = s.indexOf(openTag);
+if (tagPos < 0) throw new Error('Bundler template open tag not found');
+const encodedStart = tagPos + openTag.length;
+const encodedEnd = s.indexOf(closeTag, encodedStart);
+if (encodedEnd < 0) throw new Error('Bundler template close tag not found');
 
-let decoded = JSON.parse(templateMatch[1]);
+let decoded = JSON.parse(s.slice(encodedStart, encodedEnd));
 
 const fetchBooksBlock = /\n  fetchBooks = \(attempt = 0\) => \{[\s\S]*?\n  \};/;
 if (!fetchBooksBlock.test(decoded)) {
@@ -70,13 +75,13 @@ decoded = decoded.replace(fetchBooksBlock, replacement);
 if (!decoded.includes('AJK books-live fallback')) throw new Error('fallback marker missing after patch');
 
 const encoded = JSON.stringify(decoded);
-const encodedStart = templateMatch.index + templateMatch[0].indexOf(templateMatch[1]);
-s = s.slice(0, encodedStart) + encoded + s.slice(encodedStart + templateMatch[1].length);
+s = s.slice(0, encodedStart) + encoded + s.slice(encodedEnd);
 
 // Final structural validation: the bundled template must remain valid JSON.
-const verify = s.match(/<script type="__bundler\\/template">([\\s\\S]*?)<\\/script>/);
-if (!verify) throw new Error('Bundler template missing after patch');
-JSON.parse(verify[1]);
+const verifyStart = s.indexOf(openTag);
+const verifyEncodedStart = verifyStart + openTag.length;
+const verifyEncodedEnd = s.indexOf(closeTag, verifyEncodedStart);
+JSON.parse(s.slice(verifyEncodedStart, verifyEncodedEnd));
 
 fs.writeFileSync(path, s, 'utf8');
 console.log('Installed books-live fallback and JSON-validated index.html:', s.length);
