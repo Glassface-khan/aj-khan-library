@@ -18,62 +18,95 @@ jobs:
       - name: Install Selenium
         run: python -m pip install --quiet selenium
       - name: Smoke live card
+        id: smoke
         shell: bash
         run: |
-          set -euo pipefail
           python - <<'PY'
           from selenium import webdriver
           from selenium.webdriver.chrome.options import Options
           from selenium.webdriver.common.by import By
           from selenium.webdriver.support.ui import WebDriverWait
-          import pathlib, json
+          import pathlib, time, traceback, sys
 
           SITE='https://glassface-khan.github.io/aj-khan-library/'
           TITLE='The Missing Cover'
           COVER_ID='1vtDl1D_ToHjoHhab70yl87Wny3LwJZok'
           EPUB_ID='1Mz_pqtAgcK1iB9yrMAUuqknnoTeXN2Bw'
+          out=[]; failed=None
 
           opt=Options()
-          opt.add_argument('--headless=new')
-          opt.add_argument('--no-sandbox')
-          opt.add_argument('--disable-dev-shm-usage')
-          opt.add_argument('--disable-gpu')
-          opt.add_argument('--window-size=1440,1600')
+          for arg in ('--headless=new','--no-sandbox','--disable-dev-shm-usage','--disable-gpu','--window-size=1440,1800'):
+              opt.add_argument(arg)
           opt.set_capability('goog:loggingPrefs', {'browser':'ALL'})
           d=webdriver.Chrome(options=opt)
-          out=[]
           try:
               d.get(SITE)
-              WebDriverWait(d,30).until(lambda x: TITLE in x.find_element(By.TAG_NAME,'body').text)
+              WebDriverWait(d,30).until(lambda x: x.execute_script('return document.readyState')=='complete')
+              time.sleep(6)
+              out.append('url='+d.current_url)
+              out.append('document_title='+repr(d.title))
+              buttons=d.find_elements(By.TAG_NAME,'button')
+              out.append('buttons='+repr([b.text.strip() for b in buttons if b.text.strip()][:80]))
+              # Books are intentionally collapsed by default. Open that section like a real visitor.
+              clicked=False
+              for b in buttons:
+                  t=(b.text or '').strip().lower()
+                  if 'bücher' in t or 'books' in t:
+                      try:
+                          b.click(); clicked=True; out.append('clicked_books_button='+repr(b.text)); break
+                      except Exception:
+                          pass
+              if not clicked:
+                  for xp in ["//*[contains(normalize-space(.),'Bücher')]", "//*[contains(normalize-space(.),'Books')]"]:
+                      for el in d.find_elements(By.XPATH,xp)[:20]:
+                          try:
+                              if el.is_displayed():
+                                  el.click(); clicked=True; out.append('clicked_books_element='+repr(el.text[:120])); break
+                          except Exception:
+                              pass
+                      if clicked: break
+              out.append('books_section_click='+str(clicked))
+              WebDriverWait(d,35).until(lambda x: TITLE in x.find_element(By.TAG_NAME,'body').text)
               body=d.find_element(By.TAG_NAME,'body').text
               source=d.page_source
               title_hits=d.find_elements(By.XPATH, "//*[normalize-space(text())='The Missing Cover']")
               cover_imgs=d.find_elements(By.CSS_SELECTOR, f"img[src*='{COVER_ID}']")
               cover_ok=any(d.execute_script("return arguments[0].complete && arguments[0].naturalWidth>0", el) for el in cover_imgs)
-              out.append('url='+d.current_url)
-              out.append('document_title='+repr(d.title))
-              out.append('title_in_body='+str(TITLE in body))
-              out.append('title_element_count='+str(len(title_hits)))
-              out.append('cover_id_in_dom='+str(COVER_ID in source))
-              out.append('cover_image_count='+str(len(cover_imgs)))
-              out.append('cover_loaded='+str(cover_ok))
-              out.append('epub_id_in_dom='+str(EPUB_ID in source))
-              out.append('body_has_word_count='+str('43,325' in body or '43325' in body))
-              out.append('body_has_chapter_count='+str('29' in body))
-              out.append('browser_log_count='+str(len(d.get_log('browser'))))
-              assert TITLE in body, 'book title missing from live visitor DOM'
-              assert len(title_hits) >= 1, 'book title element missing'
-              assert COVER_ID in source, 'runtime cover ID missing from live DOM'
-              assert cover_ok, 'runtime cover did not load'
-              assert EPUB_ID in source, 'runtime EPUB ID missing from live DOM'
+              out += [
+                'title_in_body='+str(TITLE in body),
+                'title_element_count='+str(len(title_hits)),
+                'cover_id_in_dom='+str(COVER_ID in source),
+                'cover_image_count='+str(len(cover_imgs)),
+                'cover_loaded='+str(cover_ok),
+                'epub_id_in_dom='+str(EPUB_ID in source),
+                'body_has_word_count='+str('43,325' in body or '43.325' in body or '43325' in body),
+                'body_has_chapter_count='+str('29' in body),
+              ]
+              assert TITLE in body
+              assert title_hits
+              assert COVER_ID in source
+              assert cover_ok
+              assert EPUB_ID in source
               out.append('SMOKE_RESULT=PASS')
+          except Exception as e:
+              failed=e
+              out.append('SMOKE_RESULT=FAIL')
+              out.append('ERROR='+repr(e))
+              out.append('TRACE='+traceback.format_exc())
+              try:
+                  out.append('body_snapshot='+repr(d.find_element(By.TAG_NAME,'body').text[:5000]))
+              except Exception:
+                  pass
           finally:
               d.quit()
-          pathlib.Path('diagnostics').mkdir(exist_ok=True)
-          pathlib.Path('diagnostics/smoke-the-missing-cover.txt').write_text('\n'.join(out)+'\n',encoding='utf-8')
-          print('\n'.join(out))
+              pathlib.Path('diagnostics').mkdir(exist_ok=True)
+              pathlib.Path('diagnostics/smoke-the-missing-cover.txt').write_text('\n'.join(out)+'\n',encoding='utf-8')
+              print('\n'.join(out))
+          if failed:
+              sys.exit(1)
           PY
       - name: Commit smoke diagnostic
+        if: always()
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
