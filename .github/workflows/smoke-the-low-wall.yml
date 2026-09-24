@@ -1,0 +1,55 @@
+name: Smoke The Low Wall live card
+
+on:
+  push:
+    paths:
+      - '.github/workflows/smoke-the-low-wall.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Live browser and asset smoke test
+        shell: bash
+        run: |
+          set -euo pipefail
+          SITE='https://glassface-khan.github.io/aj-khan-library/'
+          COVER='https://lh3.googleusercontent.com/d/1yzh_OZLswiVT6Ju_x18T3aEaCSZywQLd=w1000'
+          EPUB='https://drive.google.com/uc?export=download&id=10bNdY1RXTFU-EGmC8sHEM0Rk4w4YJaVs'
+          BROWSER="$(command -v google-chrome || command -v chromium || command -v chromium-browser || true)"
+          test -n "$BROWSER"
+          "$BROWSER" --headless=new --no-sandbox --disable-dev-shm-usage --disable-gpu             --virtual-time-budget=25000 --dump-dom "$SITE" > /tmp/site.html
+          python - <<'PY'
+          from pathlib import Path
+          s=Path('/tmp/site.html').read_text('utf-8',errors='replace')
+          required=['The Low Wall','Historical Literary Fiction','83,723','60']
+          print('DOM bytes',len(s))
+          for x in required:
+              print(x, x in s)
+          if 'The Low Wall' not in s:
+              raise SystemExit('The Low Wall card/title missing from rendered DOM')
+          if 'Historical Literary Fiction' not in s:
+              raise SystemExit('Genre missing from rendered DOM')
+          if not any(x in s for x in ['83,723','83723','83.723']):
+              raise SystemExit('Word count missing from rendered DOM')
+          PY
+          curl -L --fail --silent --show-error "$COVER" -o /tmp/cover.jpg
+          python - <<'PY'
+          from PIL import Image
+          im=Image.open('/tmp/cover.jpg')
+          print('cover',im.format,im.size)
+          assert im.format=='JPEG'
+          PY
+          curl -L --fail --silent --show-error "$EPUB" -o /tmp/book.epub
+          python - <<'PY'
+          import zipfile,os
+          print('epub bytes',os.path.getsize('/tmp/book.epub'))
+          assert zipfile.is_zipfile('/tmp/book.epub')
+          with zipfile.ZipFile('/tmp/book.epub') as z:
+              assert z.read('mimetype')==b'application/epub+zip'
+          print('EPUB OK')
+          PY
+          echo 'THE LOW WALL LIVE SMOKE PASS'
