@@ -13,7 +13,7 @@ ASSET|The Weight of the Air|cover|status=200|content-type=image/jpeg|ok=True
 ASSET|The Weight of the Air|epub|status=200|content-type=application/octet-stream|ok=True
 BOOK|The Man the World Forgot|status=Fertig|finished=True
 ASSET|The Man the World Forgot|cover|status=None|content-type=image/jpeg|ok=True
-ASSET|The Man the World Forgot|epub|status=200|content-type=text/html; charset=utf-8|ok=False
+ASSET|The Man the World Forgot|epub|status=200|content-type=application/octet-stream|ok=True
 BOOK|The Second Ledger|status=Fertig|finished=True
 ASSET|The Second Ledger|cover|status=200|content-type=image/jpeg|ok=True
 ASSET|The Second Ledger|epub|status=200|content-type=application/octet-stream|ok=True
@@ -29,5 +29,4 @@ ASSET|The Physician of Ashes|epub|status=200|content-type=application/octet-stre
 BOOK|The Blue Hour|status=Fertig|finished=True
 ASSET|The Blue Hour|cover|status=200|content-type=image/jpeg|ok=True
 ASSET|The Blue Hour|epub|status=200|content-type=application/octet-stream|ok=True
-asset_failure_count=1
-FAIL|The Man the World Forgot: bad epub response status=200 content-type=text/html; charset=utf-8
+asset_failure_count=0
