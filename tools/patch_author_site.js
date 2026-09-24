@@ -169,11 +169,9 @@ if (!s.includes('class=\\\"book-cover-grid-toggle\\\"')) {
   once(listMarker, coverGridMarkup, 'cover grid template');
 }
 if (!s.includes('.cover-grid-hidden{display:none!important}')) {
-  once(
-    '</head>',
-    String.raw`<style>.cover-grid-hidden{display:none!important}@media(max-width:640px){.book-cover-grid{grid-template-columns:repeat(2,minmax(0,1fr))!important;gap:20px 14px!important}}</style>\n</head>`,
-    'cover grid css'
-  );
+  const cssAnchor = '.book-toc-panel.book-toc-open{opacity:1; transform:translateY(0); pointer-events:auto;}';
+  const coverCss = '.cover-grid-hidden{display:none!important}.book-cover-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:24px 16px;padding:24px 0 36px;align-items:start}.book-cover-thumb{display:block;width:100%;padding:0;border:0;background:none;cursor:pointer;text-align:left}.book-cover-thumb-frame{display:block;width:100%;aspect-ratio:2/3;overflow:hidden;border:1px solid var(--rule);box-shadow:0 8px 24px rgba(43,36,28,.08)}.book-cover-thumb-frame img{display:block;width:100%;height:100%;object-fit:cover}.book-cover-thumb-placeholder{box-sizing:border-box;display:flex;align-items:center;justify-content:center;padding:12px;background:var(--bone-deep);font-family:serif;font-size:14px;line-height:1.25;color:var(--ink-3);text-align:center}@media(max-width:640px){.book-cover-grid{grid-template-columns:repeat(2,minmax(0,1fr))!important;gap:20px 14px!important}}';
+  once(cssAnchor, cssAnchor + '\\n    ' + coverCss, 'cover grid css');
 }
 
 for (const marker of [
