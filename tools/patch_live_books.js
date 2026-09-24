@@ -4,12 +4,12 @@ const path = 'index.html';
 let s = fs.readFileSync(path, 'utf8');
 
 // Proven extractor for this repository's bundled index format.
-const templateMatch = s.match(/<script type="__bundler\\/template">([\\s\\S]*?)<\\/script>/);
+const templateMatch = s.match(/<script type="__bundler\/template">([\s\S]*?)<\/script>/);
 if (!templateMatch) throw new Error('Bundler template not found');
 
 let decoded = JSON.parse(templateMatch[1]);
 
-const fetchBooksBlock = /\\n  fetchBooks = \\(attempt = 0\\) => \\{[\\s\\S]*?\\n  \\};/;
+const fetchBooksBlock = /\n  fetchBooks = \(attempt = 0\) => \{[\s\S]*?\n  \};/;
 if (!fetchBooksBlock.test(decoded)) {
   if (decoded.includes('AJK books-live fallback')) {
     console.log('books-live fallback already installed');
@@ -69,7 +69,7 @@ if (!decoded.includes('AJK books-live fallback')) throw new Error('fallback mark
 const newTag = '<script type="__bundler/template">' + JSON.stringify(decoded) + '</script>';
 s = s.slice(0, templateMatch.index) + newTag + s.slice(templateMatch.index + templateMatch[0].length);
 
-const verify = s.match(/<script type="__bundler\\/template">([\\s\\S]*?)<\\/script>/);
+const verify = s.match(/<script type="__bundler\/template">([\s\S]*?)<\/script>/);
 if (!verify) throw new Error('Bundler template missing after patch');
 JSON.parse(verify[1]);
 
