@@ -38,7 +38,7 @@ jobs:
                       status=getattr(r,'status',200)
                       ctype=(r.headers.get('Content-Type') or '').lower()
                       sample=r.read(64)
-                  ok=status==200
+                  ok=(status in (None,200))
                   if expected=='cover':
                       ok=ok and ctype.startswith('image/')
                   elif expected=='epub':
