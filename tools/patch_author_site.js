@@ -165,7 +165,7 @@ if (!s.includes('class=\\\"book-cover-grid-toggle\\\"')) {
     '      </div>',
     '    </sc-if>',
     '    <div class=\\\"{{ bookListWrapClass }}\\\" style=\\\"display:grid; grid-template-columns:repeat(auto-fit,minmax(320px,1fr)); column-gap:64px;\\\">'
-  ].join('\\\\n');
+  ].join('\\n');
   once(listMarker, coverGridMarkup, 'cover grid template');
 }
 if (!s.includes('.cover-grid-hidden{display:none!important}')) {
