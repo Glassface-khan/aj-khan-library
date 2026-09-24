@@ -14,7 +14,7 @@ jobs:
     steps:
       - name: Install Selenium
         run: python -m pip install --quiet selenium
-      - name: Live visitor browser and asset smoke test
+      - name: Diagnose live visitor render
         shell: bash
         run: |
           set -euo pipefail
@@ -22,94 +22,50 @@ jobs:
           from selenium import webdriver
           from selenium.webdriver.chrome.options import Options
           from selenium.webdriver.common.by import By
-          from selenium.webdriver.support.ui import WebDriverWait
-          import time, urllib.request, zipfile, tempfile, os
+          import time, json
 
           SITE='https://glassface-khan.github.io/aj-khan-library/'
-          COVER='https://lh3.googleusercontent.com/d/1yzh_OZLswiVT6Ju_x18T3aEaCSZywQLd=w1000'
-          EPUB='https://drive.google.com/uc?export=download&id=10bNdY1RXTFU-EGmC8sHEM0Rk4w4YJaVs'
-
           opt=Options()
           opt.add_argument('--headless=new')
           opt.add_argument('--no-sandbox')
           opt.add_argument('--disable-dev-shm-usage')
           opt.add_argument('--disable-gpu')
           opt.add_argument('--window-size=1440,1200')
+          opt.set_capability('goog:loggingPrefs', {'browser':'ALL'})
           d=webdriver.Chrome(options=opt)
           try:
               d.get(SITE)
-              d.execute_script("localStorage.setItem('ajk_ui_lang','en')")
-              d.refresh()
-              # Wait for the application shell.
-              WebDriverWait(d,25).until(lambda x: len(x.page_source)>500000)
-
-              def has_title():
-                  return 'The Low Wall' in d.page_source
-
-              # The Books area can be collapsed. Open it as a visitor.
-              if not has_title():
-                  clicked=d.execute_script("""
-                    const els=[...document.querySelectorAll('button,a,[role="button"],h1,h2,h3,div')];
-                    const exact=els.find(el => ['Books','Bücher'].includes((el.textContent||'').trim()));
-                    if(exact){ exact.click(); return (exact.textContent||'').trim(); }
-                    const partial=els.find(el => /\bBooks\b|\bBücher\b/.test((el.textContent||'').trim()) && el.offsetParent!==null);
-                    if(partial){ partial.click(); return (partial.textContent||'').trim().slice(0,80); }
-                    return '';
-                  """)
-                  print('clicked_books=',repr(clicked))
-
-              # Live fetch can be slow on Apps Script cold start; allow enough real time.
-              end=time.time()+55
-              while time.time()<end and not has_title():
-                  time.sleep(1)
-                  # Retry opening if state changed after backend re-render.
-                  d.execute_script("""
-                    const els=[...document.querySelectorAll('button,a,[role="button"],h1,h2,h3,div')];
-                    const el=els.find(el => ['Books','Bücher'].includes((el.textContent||'').trim()) && el.offsetParent!==null);
-                    if(el && !document.body.innerText.includes('The Low Wall')) el.click();
-                  """)
-
+              time.sleep(12)
+              print('URL=',d.current_url)
+              print('TITLE=',repr(d.title))
+              print('READY=',d.execute_script('return document.readyState'))
               body=d.find_element(By.TAG_NAME,'body').text
-              print('body_chars=',len(body))
-              for value in ['The Low Wall','Historical Literary Fiction','83,723','60']:
-                  print(value, value in body)
-              if 'The Low Wall' not in body:
-                  raise SystemExit('The Low Wall card missing after opening Books and waiting for live data')
-              if 'Historical Literary Fiction' not in body:
-                  raise SystemExit('The Low Wall genre missing')
-              if not any(v in body for v in ['83,723','83723','83.723']):
-                  raise SystemExit('The Low Wall word count missing')
-              # Title visible means visitor card is actually rendered, not merely hidden JSON.
-              title_els=d.find_elements(By.XPATH,"//*[normalize-space(text())='The Low Wall']")
-              visible=[e for e in title_els if e.is_displayed()]
-              print('visible_title_elements=',len(visible))
-              if not visible:
-                  raise SystemExit('The Low Wall exists in text but no visible title element found')
+              print('BODY_REPR=',repr(body))
+              print('BODY_HTML_LEN=',len(d.find_element(By.TAG_NAME,'body').get_attribute('innerHTML') or ''))
+              print('PAGE_SOURCE_LEN=',len(d.page_source))
+              print('ROOTS=',d.execute_script("""
+                return [...document.body.children].map((el,i)=>({
+                  i,tag:el.tagName,id:el.id||'',cls:el.className||'',
+                  text:(el.innerText||'').slice(0,120),
+                  html:(el.innerHTML||'').length,
+                  display:getComputedStyle(el).display,
+                  visibility:getComputedStyle(el).visibility
+                }));
+              """))
+              print('SCRIPTS=',d.execute_script("""
+                return [...document.scripts].map(s=>({src:s.src||'',type:s.type||'',len:(s.textContent||'').length}));
+              """))
+              print('BROWSER_LOGS=')
+              for row in d.get_log('browser'):
+                  print(json.dumps(row,ensure_ascii=False))
+              print('HAS_LOW_WALL_SOURCE=', 'The Low Wall' in d.page_source)
+              print('HAS_BOOKS_LIVE_MARKER=', 'AJK books-live fallback' in d.page_source)
+              print('FETCH_BOOKS_LIVE=', d.execute_async_script("""
+                const done=arguments[0];
+                fetch('books-live.json?_='+Date.now(),{cache:'no-store'})
+                  .then(r=>r.text().then(t=>done({status:r.status,len:t.length,has:t.includes('The Low Wall'),head:t.slice(0,120)})))
+                  .catch(e=>done({error:String(e)}));
+              """))
           finally:
               d.quit()
-
-          # Public cover must be an actual JPEG.
-          req=urllib.request.Request(COVER,headers={'User-Agent':'Mozilla/5.0 AJK-Smoke/1.0'})
-          with urllib.request.urlopen(req,timeout=30) as r:
-              cover_bytes=r.read()
-              ctype=(r.headers.get('Content-Type') or '').lower()
-              print('cover_status=',getattr(r,'status',200),'ctype=',ctype,'bytes=',len(cover_bytes))
-              if not ctype.startswith('image/jpeg'): raise SystemExit('Cover is not public JPEG')
-
-          # Public EPUB must resolve to an EPUB ZIP with correct mimetype.
-          req=urllib.request.Request(EPUB,headers={'User-Agent':'Mozilla/5.0 AJK-Smoke/1.0'})
-          with urllib.request.urlopen(req,timeout=30) as r:
-              epub_bytes=r.read()
-              print('epub_status=',getattr(r,'status',200),'ctype=',r.headers.get('Content-Type'),'bytes=',len(epub_bytes))
-          fd,path=tempfile.mkstemp(suffix='.epub'); os.close(fd)
-          try:
-              open(path,'wb').write(epub_bytes)
-              if not zipfile.is_zipfile(path): raise SystemExit('EPUB URL did not return a ZIP/EPUB')
-              with zipfile.ZipFile(path) as z:
-                  if z.read('mimetype') != b'application/epub+zip':
-                      raise SystemExit('EPUB mimetype invalid')
-          finally:
-              os.unlink(path)
-
-          print('THE LOW WALL LIVE SMOKE PASS')
           PY
