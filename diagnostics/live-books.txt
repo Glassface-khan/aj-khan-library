@@ -1,7 +1,7 @@
 index_size=9637636
 script_urls=["https://script.google.com/macros/s/AKfycbwcbRDaWkM1wf3MV_dj4RPw9jQl2Fgc4YfGcmFrGU1S243yvh8WGW7mbyXLbSeVJKI/exec"]
 backend=https://script.google.com/macros/s/AKfycbwcbRDaWkM1wf3MV_dj4RPw9jQl2Fgc4YfGcmFrGU1S243yvh8WGW7mbyXLbSeVJKI/exec
-book_count=25
+book_count=32
 BOOK|The Road it came by|status=Fertig|finished=True
 ASSET|The Road it came by|cover|status=None|content-type=image/jpeg|ok=True
 ASSET|The Road it came by|epub|status=200|content-type=application/octet-stream|ok=True
@@ -77,4 +77,25 @@ ASSET|The Glass Ladder|epub|status=200|content-type=application/octet-stream|ok=
 BOOK|The Missing Cover|status=Fertig|finished=True
 ASSET|The Missing Cover|cover|status=200|content-type=image/jpeg|ok=True
 ASSET|The Missing Cover|epub|status=200|content-type=application/octet-stream|ok=True
+BOOK|The Covenant of Light — The Forgetting|status=Fertig|finished=True
+ASSET|The Covenant of Light — The Forgetting|cover|status=200|content-type=image/jpeg|ok=True
+ASSET|The Covenant of Light — The Forgetting|epub|status=200|content-type=application/octet-stream|ok=True
+BOOK|The Covenant of Light — The Search|status=Fertig|finished=True
+ASSET|The Covenant of Light — The Search|cover|status=200|content-type=image/jpeg|ok=True
+ASSET|The Covenant of Light — The Search|epub|status=200|content-type=application/octet-stream|ok=True
+BOOK|The Covenant of Light — The Return|status=Fertig|finished=True
+ASSET|The Covenant of Light — The Return|cover|status=200|content-type=image/jpeg|ok=True
+ASSET|The Covenant of Light — The Return|epub|status=200|content-type=application/octet-stream|ok=True
+BOOK|The Optimization|status=Fertig|finished=True
+ASSET|The Optimization|cover|status=200|content-type=image/jpeg|ok=True
+ASSET|The Optimization|epub|status=200|content-type=application/octet-stream|ok=True
+BOOK|The False Dawn|status=Fertig|finished=True
+ASSET|The False Dawn|cover|status=200|content-type=image/jpeg|ok=True
+ASSET|The False Dawn|epub|status=200|content-type=application/octet-stream|ok=True
+BOOK|The Breaking|status=Fertig|finished=True
+ASSET|The Breaking|cover|status=200|content-type=image/jpeg|ok=True
+ASSET|The Breaking|epub|status=200|content-type=application/octet-stream|ok=True
+BOOK|The Door in the West|status=Fertig|finished=True
+ASSET|The Door in the West|cover|status=200|content-type=image/jpeg|ok=True
+ASSET|The Door in the West|epub|status=200|content-type=application/octet-stream|ok=True
 asset_failure_count=0
