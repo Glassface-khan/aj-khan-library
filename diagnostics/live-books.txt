@@ -1,5 +1,107 @@
 index_size=9637636
 script_urls=["https://script.google.com/macros/s/AKfycbwcbRDaWkM1wf3MV_dj4RPw9jQl2Fgc4YfGcmFrGU1S243yvh8WGW7mbyXLbSeVJKI/exec"]
-backend_error=https://script.google.com/macros/s/AKfycbwcbRDaWkM1wf3MV_dj4RPw9jQl2Fgc4YfGcmFrGU1S243yvh8WGW7mbyXLbSeVJKI/exec|<HTTPError 404: 'Not Found'>
-asset_failure_count=1
-FAIL|backend_error=https://script.google.com/macros/s/AKfycbwcbRDaWkM1wf3MV_dj4RPw9jQl2Fgc4YfGcmFrGU1S243yvh8WGW7mbyXLbSeVJKI/exec|<HTTPError 404: 'Not Found'>
+backend=https://script.google.com/macros/s/AKfycbwcbRDaWkM1wf3MV_dj4RPw9jQl2Fgc4YfGcmFrGU1S243yvh8WGW7mbyXLbSeVJKI/exec
+book_count=34
+BOOK|The Road it came by|status=Fertig|finished=True
+ASSET|The Road it came by|cover|status=None|content-type=image/jpeg|ok=True
+ASSET|The Road it came by|epub|status=200|content-type=application/octet-stream|ok=True
+BOOK|The Mountain That Doesn't Answer|status=Fertig|finished=True
+ASSET|The Mountain That Doesn't Answer|cover|status=200|content-type=image/jpeg|ok=True
+ASSET|The Mountain That Doesn't Answer|epub|status=200|content-type=application/octet-stream|ok=True
+BOOK|The Weight of the Air|status=Fertig|finished=True
+ASSET|The Weight of the Air|cover|status=200|content-type=image/jpeg|ok=True
+ASSET|The Weight of the Air|epub|status=200|content-type=application/octet-stream|ok=True
+BOOK|The Man the World Forgot|status=Fertig|finished=True
+ASSET|The Man the World Forgot|cover|status=None|content-type=image/jpeg|ok=True
+ASSET|The Man the World Forgot|epub|status=200|content-type=application/octet-stream|ok=True
+BOOK|The Second Ledger|status=Fertig|finished=True
+ASSET|The Second Ledger|cover|status=200|content-type=image/jpeg|ok=True
+ASSET|The Second Ledger|epub|status=200|content-type=application/octet-stream|ok=True
+BOOK|The Pen Was Still Warm|status=Fertig|finished=True
+ASSET|The Pen Was Still Warm|cover|status=200|content-type=image/jpeg|ok=True
+ASSET|The Pen Was Still Warm|epub|status=200|content-type=application/octet-stream|ok=True
+BOOK|The Book of Seven Thieves|status=Fertig|finished=True
+ASSET|The Book of Seven Thieves|cover|status=200|content-type=image/jpeg|ok=True
+ASSET|The Book of Seven Thieves|epub|status=200|content-type=application/octet-stream|ok=True
+BOOK|The Physician of Ashes|status=Fertig|finished=True
+ASSET|The Physician of Ashes|cover|status=200|content-type=image/png|ok=True
+ASSET|The Physician of Ashes|epub|status=200|content-type=application/octet-stream|ok=True
+BOOK|The Blue Hour|status=Fertig|finished=True
+ASSET|The Blue Hour|cover|status=200|content-type=image/jpeg|ok=True
+ASSET|The Blue Hour|epub|status=200|content-type=application/octet-stream|ok=True
+BOOK|The Low Wall|status=Fertig|finished=True
+ASSET|The Low Wall|cover|status=200|content-type=image/jpeg|ok=True
+ASSET|The Low Wall|epub|status=200|content-type=application/octet-stream|ok=True
+BOOK|DIE RÜCKFÜHRUNG|status=Fertig|finished=True
+ASSET|DIE RÜCKFÜHRUNG|cover|status=200|content-type=image/jpeg|ok=True
+ASSET|DIE RÜCKFÜHRUNG|epub|status=200|content-type=application/octet-stream|ok=True
+BOOK|The Erasure Broker|status=Fertig|finished=True
+ASSET|The Erasure Broker|cover|status=200|content-type=image/jpeg|ok=True
+ASSET|The Erasure Broker|epub|status=200|content-type=application/octet-stream|ok=True
+BOOK|The Treasury of Unanswered Prayers|status=Fertig|finished=True
+ASSET|The Treasury of Unanswered Prayers|cover|status=200|content-type=image/jpeg|ok=True
+ASSET|The Treasury of Unanswered Prayers|epub|status=200|content-type=application/octet-stream|ok=True
+BOOK|Begin With Water|status=Fertig|finished=True
+ASSET|Begin With Water|cover|status=200|content-type=image/jpeg|ok=True
+ASSET|Begin With Water|epub|status=200|content-type=application/octet-stream|ok=True
+BOOK|The Niche of Light|status=Fertig|finished=True
+ASSET|The Niche of Light|cover|status=200|content-type=image/jpeg|ok=True
+ASSET|The Niche of Light|epub|status=200|content-type=application/octet-stream|ok=True
+BOOK|Die Form des Lichts|status=Fertig|finished=True
+ASSET|Die Form des Lichts|cover|status=200|content-type=image/jpeg|ok=True
+ASSET|Die Form des Lichts|epub|status=200|content-type=application/octet-stream|ok=True
+BOOK|What the Clockmaker Kept|status=Fertig|finished=True
+ASSET|What the Clockmaker Kept|cover|status=200|content-type=image/jpeg|ok=True
+ASSET|What the Clockmaker Kept|epub|status=200|content-type=application/octet-stream|ok=True
+BOOK|What the Ash Remembers|status=Fertig|finished=True
+ASSET|What the Ash Remembers|cover|status=200|content-type=image/jpeg|ok=True
+ASSET|What the Ash Remembers|epub|status=200|content-type=application/octet-stream|ok=True
+BOOK|The Lamp Keeper|status=Fertig|finished=True
+ASSET|The Lamp Keeper|cover|status=200|content-type=image/jpeg|ok=True
+ASSET|The Lamp Keeper|epub|status=200|content-type=application/octet-stream|ok=True
+BOOK|The Drop|status=Fertig|finished=True
+ASSET|The Drop|cover|status=200|content-type=image/jpeg|ok=True
+ASSET|The Drop|epub|status=200|content-type=application/octet-stream|ok=True
+BOOK|Written in Water|status=Fertig|finished=True
+ASSET|Written in Water|cover|status=200|content-type=image/jpeg|ok=True
+ASSET|Written in Water|epub|status=200|content-type=application/octet-stream|ok=True
+BOOK|The Proof|status=Fertig|finished=True
+ASSET|The Proof|cover|status=200|content-type=image/jpeg|ok=True
+ASSET|The Proof|epub|status=200|content-type=application/octet-stream|ok=True
+BOOK|ARCHE|status=Fertig|finished=True
+ASSET|ARCHE|cover|status=200|content-type=image/jpeg|ok=True
+ASSET|ARCHE|epub|status=200|content-type=application/octet-stream|ok=True
+BOOK|The Glass Ladder|status=Fertig|finished=True
+ASSET|The Glass Ladder|cover|status=200|content-type=image/jpeg|ok=True
+ASSET|The Glass Ladder|epub|status=200|content-type=application/octet-stream|ok=True
+BOOK|The Missing Cover|status=Fertig|finished=True
+ASSET|The Missing Cover|cover|status=200|content-type=image/jpeg|ok=True
+ASSET|The Missing Cover|epub|status=200|content-type=application/octet-stream|ok=True
+BOOK|The Covenant of Light — The Forgetting|status=Fertig|finished=True
+ASSET|The Covenant of Light — The Forgetting|cover|status=200|content-type=image/jpeg|ok=True
+ASSET|The Covenant of Light — The Forgetting|epub|status=200|content-type=application/octet-stream|ok=True
+BOOK|The Covenant of Light — The Search|status=Fertig|finished=True
+ASSET|The Covenant of Light — The Search|cover|status=200|content-type=image/jpeg|ok=True
+ASSET|The Covenant of Light — The Search|epub|status=200|content-type=application/octet-stream|ok=True
+BOOK|The Covenant of Light — The Return|status=Fertig|finished=True
+ASSET|The Covenant of Light — The Return|cover|status=200|content-type=image/jpeg|ok=True
+ASSET|The Covenant of Light — The Return|epub|status=200|content-type=application/octet-stream|ok=True
+BOOK|The Optimization|status=Fertig|finished=True
+ASSET|The Optimization|cover|status=200|content-type=image/jpeg|ok=True
+ASSET|The Optimization|epub|status=200|content-type=application/octet-stream|ok=True
+BOOK|The False Dawn|status=Fertig|finished=True
+ASSET|The False Dawn|cover|status=200|content-type=image/jpeg|ok=True
+ASSET|The False Dawn|epub|status=200|content-type=application/octet-stream|ok=True
+BOOK|The Breaking|status=Fertig|finished=True
+ASSET|The Breaking|cover|status=200|content-type=image/jpeg|ok=True
+ASSET|The Breaking|epub|status=200|content-type=application/octet-stream|ok=True
+BOOK|The Door in the West|status=Fertig|finished=True
+ASSET|The Door in the West|cover|status=200|content-type=image/jpeg|ok=True
+ASSET|The Door in the West|epub|status=200|content-type=application/octet-stream|ok=True
+BOOK|BARZAKH|status=Fertig|finished=True
+ASSET|BARZAKH|cover|status=200|content-type=image/jpeg|ok=True
+ASSET|BARZAKH|epub|status=200|content-type=application/octet-stream|ok=True
+BOOK|CARAVANSERAI|status=Fertig|finished=True
+ASSET|CARAVANSERAI|cover|status=200|content-type=image/jpeg|ok=True
+ASSET|CARAVANSERAI|epub|status=200|content-type=application/octet-stream|ok=True
+asset_failure_count=0
