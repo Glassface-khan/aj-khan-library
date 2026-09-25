@@ -36,9 +36,9 @@
 // payloads in IndexedDB for fast reopening; force clients to fetch the new JS.
 // v26 -> v27 (24.09.2026): books-live.json is the immediate catalog fallback;
 // BooksData remains canonical and replaces it whenever the live request succeeds.
-const SHELL_CACHE = 'ajk-shell-v30';
-const DATA_CACHE = 'ajk-data-v30';
-const SHELL_FILES = ['./', './index.html', './books-live.json', './audio-library.js', './manifest.webmanifest', './icons/icon-192.png', './icons/icon-512.png'];
+const SHELL_CACHE = 'ajk-shell-v31';
+const DATA_CACHE = 'ajk-data-v31';
+const SHELL_FILES = ['./', './index.html', './books-live.json', './manifest.webmanifest', './icons/icon-192.png', './icons/icon-512.png'];
 
 // Aktionen, deren Antwort für Offline-Nutzung zwischengespeichert werden
 // darf. Alles andere (insbesondere alle schreibenden Aktionen) läuft immer
@@ -118,6 +118,14 @@ self.addEventListener('fetch', (event) => {
   }
 
   if (req.method === 'GET') {
+    // Reader compatibility code must never come from a stale shell/browser
+    // cache. This is deliberately network-only after the 25.09.2026 iOS
+    // rollback: an old audio-library.js can otherwise keep the removed global
+    // fetch wrapper alive even though GitHub already serves the corrected file.
+    if (url.pathname.endsWith('/audio-library.js')) {
+      event.respondWith(fetch(req, { cache: 'no-store' }));
+      return;
+    }
     const action = url.searchParams.get('action');
     if (CACHEABLE_GET_ACTIONS.has(action)) {
       event.respondWith((async () => {
