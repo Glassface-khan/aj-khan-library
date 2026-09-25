@@ -82,24 +82,49 @@
     } catch (_) {}
   }
 
-  async function ajkCachedPermissionStillValid_(params) {
+  async function ajkCachedPermissionStatus_(params) {
     const code = (params.get('code') || '').trim();
-    if (!code) return false; // admin-token path uses memory cache only
+    if (!code) return 'unknown'; // admin-token path uses memory cache only
     try {
       const body = new URLSearchParams({ action: 'checkAccess', code });
       const res = await ajkNativeFetch_(GAS_URL, { method: 'POST', body, cache: 'no-store' });
-      if (!res || !res.ok) return false;
+      if (!res || !res.ok) return 'unknown';
       const access = await res.json();
-      if (!access || !access.ok) return false;
+      if (!access || !access.ok) return 'denied';
 
       const title = params.get('bookTitle') || '';
       if (Array.isArray(access.visibleBooks) && access.visibleBooks.length && !access.visibleBooks.includes(title)) {
-        return false;
+        return 'denied';
       }
-      if (access.canDownload) return true;
+      if (access.canDownload) return 'allowed';
       const perm = access.epubAccess && access.epubAccess[title] || {};
-      return params.get('intent') === 'download' ? !!perm.download : !!perm.read;
-    } catch (_) { return false; }
+      const allowed = params.get('intent') === 'download' ? !!perm.download : !!perm.read;
+      return allowed ? 'allowed' : 'denied';
+    } catch (_) {
+      // A transient mobile/network failure is not the same thing as revoked
+      // permission. Keep a recently authorised cache usable instead of
+      // deleting it and forcing another multi-megabyte transfer.
+      return 'unknown';
+    }
+  }
+
+  const ajkSleep_ = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+
+  async function ajkFetchEpubWithRetry_(input, init) {
+    let lastError = null;
+    for (let attempt = 0; attempt < 3; attempt++) {
+      try {
+        const res = await ajkNativeFetch_(input, init);
+        // Retry only transient HTTP failures. Permission/client errors are
+        // returned immediately so access control remains authoritative.
+        if (res && (res.ok || ![429, 500, 502, 503, 504].includes(res.status))) return res;
+        lastError = new Error('epub_http_' + (res ? res.status : 'no_response'));
+      } catch (err) {
+        lastError = err;
+      }
+      if (attempt < 2) await ajkSleep_(attempt === 0 ? 700 : 1700);
+    }
+    throw lastError || new Error('epub_network_failed');
   }
 
   function ajkResponseFromCachedText_(text) {
@@ -126,18 +151,41 @@
     if (memory) return ajkResponseFromCachedText_(memory);
 
     const code = (params.get('code') || '').trim();
+    let cached = null;
     if (code) {
-      const cached = await ajkReadEpubCache_(key);
+      cached = await ajkReadEpubCache_(key);
       if (cached && cached.text) {
-        if (await ajkCachedPermissionStillValid_(params)) {
+        const permission = await ajkCachedPermissionStatus_(params);
+        if (permission === 'allowed') {
           ajkEpubMemoryCache_.set(key, cached.text);
           return ajkResponseFromCachedText_(cached.text);
         }
-        await ajkDeleteEpubCache_(key);
+        if (permission === 'denied') {
+          await ajkDeleteEpubCache_(key);
+          cached = null;
+        } else if (Date.now() - Number(cached.savedAt || 0) < 30 * 60 * 1000) {
+          // Brief connection drops on iPhone/5G must not strand a reader that
+          // was authorised moments ago. Revocation is still enforced as soon
+          // as checkAccess can be reached again; this grace window is 30 min.
+          ajkEpubMemoryCache_.set(key, cached.text);
+          return ajkResponseFromCachedText_(cached.text);
+        }
       }
     }
 
-    const res = await ajkNativeFetch_(input, init);
+    let res;
+    try {
+      res = await ajkFetchEpubWithRetry_(input, init);
+    } catch (networkErr) {
+      // If all retries fail, an already-authorised cached copy is preferable
+      // to the generic "Verbindung fehlgeschlagen" screen. Only visitor-code
+      // caches can reach this branch; admin data is never persisted.
+      if (cached && cached.text) {
+        ajkEpubMemoryCache_.set(key, cached.text);
+        return ajkResponseFromCachedText_(cached.text);
+      }
+      throw networkErr;
+    }
     if (!res || !res.ok) return res;
 
     try {
