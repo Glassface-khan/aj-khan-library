@@ -1,7 +1,7 @@
 index_size=9637636
 script_urls=["https://script.google.com/macros/s/AKfycbwcbRDaWkM1wf3MV_dj4RPw9jQl2Fgc4YfGcmFrGU1S243yvh8WGW7mbyXLbSeVJKI/exec"]
 backend=https://script.google.com/macros/s/AKfycbwcbRDaWkM1wf3MV_dj4RPw9jQl2Fgc4YfGcmFrGU1S243yvh8WGW7mbyXLbSeVJKI/exec
-book_count=36
+book_count=37
 BOOK|The Road it came by|status=Fertig|finished=True
 ASSET|The Road it came by|cover|status=None|content-type=image/jpeg|ok=True
 ASSET|The Road it came by|epub|status=200|content-type=application/octet-stream|ok=True
@@ -110,4 +110,7 @@ ASSET|DIE ORDNUNG|epub|status=200|content-type=application/octet-stream|ok=True
 BOOK|DAS VERLASSEN|status=Fertig|finished=True
 ASSET|DAS VERLASSEN|cover|status=200|content-type=image/jpeg|ok=True
 ASSET|DAS VERLASSEN|epub|status=200|content-type=application/octet-stream|ok=True
+BOOK|A Thousand Unwritten Names|status=Fertig|finished=True
+ASSET|A Thousand Unwritten Names|cover|status=200|content-type=image/jpeg|ok=True
+ASSET|A Thousand Unwritten Names|epub|status=200|content-type=application/octet-stream|ok=True
 asset_failure_count=0
