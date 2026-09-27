@@ -121,12 +121,11 @@ ASSET|DIE WERKSTATT DER VERLORENEN DINGE|cover|status=200|content-type=image/png
 ASSET|DIE WERKSTATT DER VERLORENEN DINGE|epub|status=200|content-type=application/octet-stream|ok=True
 BOOK|THE HAND THAT SEES|status=Fertig|finished=True
 ASSET|THE HAND THAT SEES|cover|status=200|content-type=image/jpeg|ok=True
-ASSET|THE HAND THAT SEES|epub|MISSING
+ASSET|THE HAND THAT SEES|epub|status=200|content-type=application/octet-stream|ok=True
 BOOK|DIE FRAU, DIE DAS MEER AUSWENDIG KANNTE|status=Fertig|finished=True
 ASSET|DIE FRAU, DIE DAS MEER AUSWENDIG KANNTE|cover|status=200|content-type=image/jpeg|ok=True
 ASSET|DIE FRAU, DIE DAS MEER AUSWENDIG KANNTE|epub|status=200|content-type=application/octet-stream|ok=True
 BOOK|THE FOURTH SENTENCE|status=Fertig|finished=True
 ASSET|THE FOURTH SENTENCE|cover|status=200|content-type=image/jpeg|ok=True
 ASSET|THE FOURTH SENTENCE|epub|status=200|content-type=application/octet-stream|ok=True
-asset_failure_count=1
-FAIL|THE HAND THAT SEES: missing epub URL
+asset_failure_count=0
