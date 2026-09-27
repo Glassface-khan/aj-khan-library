@@ -1,7 +1,7 @@
 index_size=9637636
 script_urls=["https://script.google.com/macros/s/AKfycbwcbRDaWkM1wf3MV_dj4RPw9jQl2Fgc4YfGcmFrGU1S243yvh8WGW7mbyXLbSeVJKI/exec"]
 backend=https://script.google.com/macros/s/AKfycbwcbRDaWkM1wf3MV_dj4RPw9jQl2Fgc4YfGcmFrGU1S243yvh8WGW7mbyXLbSeVJKI/exec
-book_count=39
+book_count=41
 BOOK|The Road it came by|status=Fertig|finished=True
 ASSET|The Road it came by|cover|status=None|content-type=image/jpeg|ok=True
 ASSET|The Road it came by|epub|status=200|content-type=application/octet-stream|ok=True
@@ -119,4 +119,10 @@ ASSET|THE SENTENCE|epub|status=200|content-type=application/octet-stream|ok=True
 BOOK|DIE WERKSTATT DER VERLORENEN DINGE|status=Fertig|finished=True
 ASSET|DIE WERKSTATT DER VERLORENEN DINGE|cover|status=200|content-type=image/png|ok=True
 ASSET|DIE WERKSTATT DER VERLORENEN DINGE|epub|status=200|content-type=application/octet-stream|ok=True
+BOOK|THE THREAD|status=Fertig|finished=True
+ASSET|THE THREAD|cover|status=200|content-type=image/jpeg|ok=True
+ASSET|THE THREAD|epub|status=200|content-type=application/octet-stream|ok=True
+BOOK|DIE FRAU, DIE DAS MEER AUSWENDIG KANNTE|status=Fertig|finished=True
+ASSET|DIE FRAU, DIE DAS MEER AUSWENDIG KANNTE|cover|status=200|content-type=image/jpeg|ok=True
+ASSET|DIE FRAU, DIE DAS MEER AUSWENDIG KANNTE|epub|status=200|content-type=application/octet-stream|ok=True
 asset_failure_count=0
