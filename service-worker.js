@@ -32,7 +32,7 @@
 // einen frischen Bücher-/Shell-Stand und verwirft veraltete getBooks-Caches.
 // v25 -> v26 (23.09.2026): force the validated paginated EPUB rendering mode\n// on desktop as well as iOS to prevent blank reader viewports.\n// v23 -> v25 (23.09.2026): current three-book catalog is a safe local fallback;
 // getBooks itself is never served from the service-worker data cache.
-// v31 -> v32 (27.09.2026): refresh the shell/catalog fallback after adding DIE FRAU, DIE DAS MEER AUSWENDIG KANNTE.\n// v28 -> v29 (25.09.2026): EPUB loader retries transient mobile/5G failures and falls back to a previously authorised local copy.\n// v27 -> v28 (24.09.2026): audio-library.js now keeps permission-checked EPUB
+// v32 -> v33 (27.09.2026): refresh the shell/catalog after replacing the temporary cover with the author-approved final cover.\n// v31 -> v32 (27.09.2026): refresh the shell/catalog fallback after adding DIE FRAU, DIE DAS MEER AUSWENDIG KANNTE.\n// v28 -> v29 (25.09.2026): EPUB loader retries transient mobile/5G failures and falls back to a previously authorised local copy.\n// v27 -> v28 (24.09.2026): audio-library.js now keeps permission-checked EPUB
 // payloads in IndexedDB for fast reopening; force clients to fetch the new JS.
 // v26 -> v27 (24.09.2026): books-live.json is the immediate catalog fallback;
 // BooksData remains canonical and replaces it whenever the live request succeeds.
