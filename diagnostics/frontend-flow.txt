@@ -54,20 +54,22 @@ g/Regelwerke) ---
     this.fetchBooks();
     this.fetchSettings();
     this.fetchPoems();
+    // AJK refresh stored visitor access permissions: keep long-lived browser/PWA
+    // sessions in sync with the current Access sheet so newly published books
+    // are not hidden by an old cached visibleBooks list.
+    if (access && access.code) {
+      const accessParams = new URLSearchParams({ action: 'checkAccess', code: access.code });
+      fetch(this.SCRIPT_URL, { method: 'POST', body: accessParams })
+        .then(r => r.json())
+        .then(data => {
+          if (!data || !data.ok) return;
+          const freshAccess = {
+            name: data.name || access.name || '',
+            canDownload: !!data.canDownload,
+            canCopy: !!data.canCopy,
+          
 
-    // Tippen/Klicken irgendwo außerhalb einer offenen Part-Liste schließt
-    // sie — ohne das gibt es keine Möglichkeit, ein versehentlich
-    // geöffnetes Panel wieder loszuwerden, außer explizit ein Gedicht
-    // darin auszuwählen. Reines Vanilla-JS über componentDidMount, nicht
-    // über die Template-Bindings (die kennen kein "Klick außerhalb").
-    document.addEventListener('click', (e) => {
-      if (this.state.openTocPart === -1) return;
-      if (!e.target.closest('.poem-toc-wrap')) this.setState({ openTocPart: -1 });
-    });
-    // Analog fuer die Buecher-Sprungliste (siehe toggleBookToc/jumpToBook) --
-    // gleiches Klick-ausserhalb-schliesst-Muster wie bei
-
-=== ajk_author_books_draft #2 @ 221478 ===
+=== ajk_author_books_draft #2 @ 222986 ===
 reibt automatisch die komplette Liste ins Sheet.
   fetchPoems = () => {
     fetch(this.SCRIPT_URL + '?action=getPoems')
@@ -159,7 +161,7 @@ reibt automatisch die komplette Liste ins Sheet.
     const url = this.normalizeDriveImageUrl(e.target.value);
     this.setState(s => ({ settings: {
 
-=== ajk_author_books_draft #3 @ 222170 ===
+=== ajk_author_books_draft #3 @ 223678 ===
   return fetch(url, { cache: 'no-store' })
       .then(r => {
         if (!r.ok) throw new Error('books_live_http_' + r.status);
@@ -246,7 +248,7 @@ reibt automatisch die komplette Liste ins Sheet.
     if (!this.state.settingsLoaded) {
       // Schutz gegen Überschreiben: die vorher gespeicherten Werte sin
 
-=== ajk_author_books_draft #4 @ 259093 ===
+=== ajk_author_books_draft #4 @ 260601 ===
  () => {
     localStorage.removeItem('ajk_author_unlocked');
     localStorage.removeItem('ajk_visitor_access');
@@ -309,7 +311,7 @@ reibt automatisch die komplette Liste ins Sheet.
     return new Promise((resolve, reject) => {
       const reader = new 
 
-=== ?action=getBooks #1 @ 221708 ===
+=== ?action=getBooks #1 @ 223216 ===
  if (Array.isArray(poems) && poems.length) {
           this.setState({ poems });
           localStorage.setItem('ajk_author_poems_draft', JSON.stringify({ poems }));
@@ -484,6 +486,76 @@ ends DCLogic {
     this.fetchBooks();
     this.fetchSettings();
     this.fetchPoems();
+    // AJK refresh stored visitor access permissions: keep long-lived browser/PWA
+    // sessions in sync with the current Access sheet so newly published books
+    // are not hidden by an old cached visibleBooks list.
+    if (access && access.code) {
+      const accessParams = new URLSearchParams({ action: 'checkAccess', code: access.code });
+      fetch(this.SCRIPT_URL, { method: 'POST', body: accessParams })
+        .then(r => r.json())
+        .then(data => {
+          if (!data || !data.ok) return;
+          const freshAccess = {
+            name: data.name || access.name || '',
+            canDownload: !!data.canDownload,
+            canCopy: !!data.canCopy,
+            visibleBooks: Array.isArray(data.visibleBooks) ? data.visibleBooks : null,
+            showPoems: data.showPoems !== false,
+            code: access.code,
+            epubAccess: (data.epubAccess && typeof data.epubAccess === 'object') ? data.epubAccess : {}
+          };
+          try { localStorage.setItem('ajk_visitor_access', JSON.stringify(freshAccess)); } catch (e) {}
+          this.setState({
+            visitorName: freshAccess.name,
+            visitorCanDownload: freshAccess.canDownload,
+            visitorCanCopy: freshAccess.canCopy,
+            visitorVisibleBooks: freshAccess.visibleBooks,
+            visitorShowPoems: freshAccess.showPoems,
+            visitorAccessCode: freshAccess.code,
+            visitorEpubAccess: freshAccess.epubAccess
+          });
+        })
+        .catch(() => {});
+    }
+
+    // Tippen/Klicken irgendwo außerhalb einer offenen Part-Liste schließt
+    // sie — ohne das gibt es keine Möglichkeit, ein versehentlich
+    // geöffnetes Panel wieder loszuwerden, außer explizit ein Gedicht
+    // darin auszuwählen. Reines Vanilla-JS über componentDidMount, nicht
+    // über die Template-Bindings (die kennen kein "Klick außerh
+
+=== visitorVisibleBooks #3 @ 220242 ===
+ions: keep long-lived browser/PWA
+    // sessions in sync with the current Access sheet so newly published books
+    // are not hidden by an old cached visibleBooks list.
+    if (access && access.code) {
+      const accessParams = new URLSearchParams({ action: 'checkAccess', code: access.code });
+      fetch(this.SCRIPT_URL, { method: 'POST', body: accessParams })
+        .then(r => r.json())
+        .then(data => {
+          if (!data || !data.ok) return;
+          const freshAccess = {
+            name: data.name || access.name || '',
+            canDownload: !!data.canDownload,
+            canCopy: !!data.canCopy,
+            visibleBooks: Array.isArray(data.visibleBooks) ? data.visibleBooks : null,
+            showPoems: data.showPoems !== false,
+            code: access.code,
+            epubAccess: (data.epubAccess && typeof data.epubAccess === 'object') ? data.epubAccess : {}
+          };
+          try { localStorage.setItem('ajk_visitor_access', JSON.stringify(freshAccess)); } catch (e) {}
+          this.setState({
+            visitorName: freshAccess.name,
+            visitorCanDownload: freshAccess.canDownload,
+            visitorCanCopy: freshAccess.canCopy,
+            visitorVisibleBooks: freshAccess.visibleBooks,
+            visitorShowPoems: freshAccess.showPoems,
+            visitorAccessCode: freshAccess.code,
+            visitorEpubAccess: freshAccess.epubAccess
+          });
+        })
+        .catch(() => {});
+    }
 
     // Tippen/Klicken irgendwo außerhalb einer offenen Part-Liste schließt
     // sie — ohne das gibt es keine Möglichkeit, ein versehentlich
@@ -523,9 +595,19 @@ ends DCLogic {
 
   fetchBooksLiveFallback = () => {
     // AJK books-live fallback: same-origin, fast and deploy-coupled.
-    // BooksData remains c
+    // BooksData remains canonical; this prevents stale bundled/localStorage catalogues.
+    const url = 'books-live.json?_=' + Date.now();
+    return fetch(url, { cache: 'no-store' })
+      .then(r => {
+        if (!r.ok) throw new Error('books_live_http_' + r.status);
+        return r.json();
+      })
+      .then(data => {
+        const raw = data && data.books;
+        const books = (typeof raw === 'string') ? JSON.parse(raw || '[]') : raw;
+        if (!Array.isArray(books) || !books.length) throw 
 
-=== visitorVisibleBooks #3 @ 253234 ===
+=== visitorVisibleBooks #4 @ 254742 ===
 chRatings();
       })
       .catch(() => {});
@@ -595,67 +677,7 @@ chRatings();
       .then(data => {
         if (!data.ok) window.alert('Speichern auf dem Server fehlgeschlagen — die Änderung ist NUR lokal in diesem Browser sichtbar, NICHT fuer andere! Grund: ' + (data.error || 'unbekannt') + '. Bitte einmal aus- und wieder als Admin einloggen und danach erneut speichern.'); else thi
 
-=== visitorVisibleBooks #4 @ 285743 ===
-g: 'Fehler: ' + data.error });
-          return;
-        }
-        this.setState({ revisionBusy: false, revisionUploadRawText: '', revisionUploadFilename: '', revisionSplitSections: [], revisionMsg: 'Manuskript gespeichert.' });
-        this.fetchRevisionManuscripts(this.state.revisionSelectedNovelId);
-      })
-      .catch(() => this.setState({ revisionBusy: false, revisionMsg: 'Verbindung fehlgeschlagen.' }));
-  };
-  toggleRevisionManuscript = (id) => {
-    const willOpen = this.state.revisionOpenManuscriptId !== id;
-    this.setState({ revisionOpenManuscriptId: willOpen ? id : '' });
-    if (willOpen && !this.state.revisionManuscriptDetails[id]) {
-      const params = new URLSearchParams({ action: 'revisionGetManuscript', adminToken: this.state.adminToken, id });
-      fetch(this.SCRIPT_URL + '?' + params.toString())
-        .then(r => r.json())
-        .then(data => {
-          this.setState(s => ({ revisionManuscriptDetails: { ...s.revisionManuscriptDetails, [id]: data } }));
-        })
-        .catch(() => {});
-    }
-  };
-
-  renderVals() {
-    const s = this.state;
-    const muted = 'var(--ink-3)';
-    // Manche Zugangscodes dürfen nur eine Teilmenge der Bücher sehen
-    // (visitorVisibleBooks = null heißt: alle sichtbar). Admin sieht beim
-    // Verwalten der Seite immer alles, unabhängig von einem evtl. selbst
-    // eingegebenen Gast-Zugangscode.
-    const visibleBooksSourceRaw = (s.isAdmin || !s.visitorVisibleBooks)
-      ? s.books
-      : s.books.filter(b => s.visitorVisibleBooks.includes(b.title));
-    // Einfache Client-seitige Titel-/Genre-/Klappentext-Suche — bei wachsender
-    // Buchanzahl findet man so schneller das gesuchte Buch, ohne zu scrollen.
-    const bookSearchQueryNorm = (s.bookSearchQuery || '').trim().toLowerCase();
-    const visibleBooksSource = bookSearchQueryNorm
-      ? visibleBooksSourceRaw.filter(b => [b.title, b.kind, b.hook].join(' ').toLowerCase().includes(bookSearchQueryNorm))
-      : visibleBooksSourceRaw;
-    const bookSearchHasNoResults = !!bookSearchQueryNorm && visibleBooksSource.length === 0;
-    // Sprung-Liste (analog zum Gedichte-TOC): zeigt IMMER alle sichtbaren Buchtitel,
-    // unabhaengig von der aktuellen Such-Eingabe -- dient als schnelle Navigation
-    // bei vielen Buechern, ergaenzend zur Suche.
-    const bookTocEntries = visibleBooksSourceRaw.map(function(b) {
-      const anchorId = 'book-card-' + encodeURIComponent(b.title || '');
-      return { title: b.title, jump: () => this.jumpToBook(anchorId) };
-    }, this);
-    const bookTocOpenClass = s.bookTocOpen ? 'book-toc-open' : '';
-    // Manueller Umschalter zwischen Karussell (Mobile-Default, siehe §46
-    // ARCHITECTURE.md) und klassischer Liste -- manche Leser wollen lieber
-    // scrollen statt swipen. Wirkt sich nur unterhalb von 640px aus (siehe
-    // .book-list-wrap.list-mode im CSS), auf dem Desktop ist die Liste ohnehin
-    // immer im Grid-Layout.
-    const bookListWrapClass = 'book-list-wrap' + (s.bookMobileListMode ? ' list-mode' : '');
-    // Übersetzungstabelle für die wenigen bisher deutschen Leser-UI-Texte
-    // (der Rest der öffentlichen Seite war schon auf Englisch).
-    const uiStrings = {
-      de: { accessCodePlaceholder: 'Zugangscode', submit: 'Absenden', series: 'Buchreihe', close: 'Schließen', back: '‹ Zurück', next: 'Weiter ›', contents: 'Inhalt', loading: 'Lädt…', searchPlaceholder: 'Buch suchen (Titel, Genre, Klappentext) …', noResults: 'Keine Bücher gefunden für', jumpTo: 'Sprung-Liste', viewAsList: 'Als Liste', viewAsCarousel: 'Als Karussell' },
-      en: { accessCodePlaceholder: 'Access code', submit: 'Submit', series: 'Book series', close: 'Close', back: '‹ Back', next: 'Next ›', contents: 'Contents', loading: 'Loading…', searchPlaceholder: 'Search books (title, genre, blurb) …', noResult
-
-=== visibleBooksSourceRaw #1 @ 285932 ===
+=== visibleBooksSourceRaw #1 @ 287440 ===
 isionMsg: 'Manuskript gespeichert.' });
         this.fetchRevisionManuscripts(this.state.revisionSelectedNovelId);
       })
@@ -715,7 +737,7 @@ isionMsg: 'Manuskript gespeichert.' });
     const ui = uiStrings[s.uiLang] || uiStrings.de;
     const bookViewToggleLabel =
 
-=== visibleBooksSourceRaw #2 @ 286378 ===
+=== visibleBooksSourceRaw #2 @ 287886 ===
 anuscriptDetails[id]) {
       const params = new URLSearchParams({ action: 'revisionGetManuscript', adminToken: this.state.adminToken, id });
       fetch(this.SCRIPT_URL + '?' + params.toString())
@@ -775,7 +797,7 @@ anuscriptDetails[id]) {
       const myStars = draft.stars || 0;
       // Mehrsprachige Bücher (book.l
 
-=== visibleBooksSourceRaw #3 @ 286501 ===
+=== visibleBooksSourceRaw #3 @ 288009 ===
 adminToken, id });
       fetch(this.SCRIPT_URL + '?' + params.toString())
         .then(r => r.json())
@@ -835,7 +857,7 @@ adminToken, id });
       // Mehrsprachige Bücher (book.langs = { EN: {coverUrl,hook,pdfUrl,wordCount}, DE: {...} }):
       // aktive Sprache bestimmt Cover/Klappentext/Read-Link/W
 
-=== visibleBooksSourceRaw #4 @ 286863 ===
+=== visibleBooksSourceRaw #4 @ 288371 ===
 ;
     // Manche Zugangscodes dürfen nur eine Teilmenge der Bücher sehen
     // (visitorVisibleBooks = null heißt: alle sichtbar). Admin sieht beim
@@ -1028,23 +1050,28 @@ derToc: [], readerTocOpen: false, readerProgress: 0, readerSpeaking: false, rati
     this.fetchSettings();
    
 
-=== componentDidMount #3 @ 219257 ===
-k_author_unlocked') === '1',
-      visitorName: (access && access.name) || '',
-      visitorCanDownload: !!(access && access.canDownload),
-      visitorCanCopy: !!(access && access.canCopy),
-      visitorVisibleBooks: (access && Array.isArray(access.visibleBooks)) ? access.visibleBooks : null,
-      visitorShowPoems: !(access && access.showPoems === false),
-      visitorAccessCode: (access && access.code) || '',
-      visitorEpubAccess: (access && access.epubAccess && typeof access.epubAccess === 'object') ? access.epubAccess : {}
-    });
-    if (localStorage.getItem('ajk_author_unlocked') === '1') this.fetchRatings();
-    // Token explizit übergeben statt this.state.adminToken zu lesen — das
-    // setState oben ist evtl. noch nicht angewendet, wenn dieser Aufruf läuft.
-    if (isAdmin) { this.fetchAccessList(adminToken); this.fetchRevisionNovels(); }
-    this.fetchBooks();
-    this.fetchSettings();
-    this.fetchPoems();
+=== componentDidMount #3 @ 220765 ===
+ access.name || '',
+            canDownload: !!data.canDownload,
+            canCopy: !!data.canCopy,
+            visibleBooks: Array.isArray(data.visibleBooks) ? data.visibleBooks : null,
+            showPoems: data.showPoems !== false,
+            code: access.code,
+            epubAccess: (data.epubAccess && typeof data.epubAccess === 'object') ? data.epubAccess : {}
+          };
+          try { localStorage.setItem('ajk_visitor_access', JSON.stringify(freshAccess)); } catch (e) {}
+          this.setState({
+            visitorName: freshAccess.name,
+            visitorCanDownload: freshAccess.canDownload,
+            visitorCanCopy: freshAccess.canCopy,
+            visitorVisibleBooks: freshAccess.visibleBooks,
+            visitorShowPoems: freshAccess.showPoems,
+            visitorAccessCode: freshAccess.code,
+            visitorEpubAccess: freshAccess.epubAccess
+          });
+        })
+        .catch(() => {});
+    }
 
     // Tippen/Klicken irgendwo außerhalb einer offenen Part-Liste schließt
     // sie — ohne das gibt es keine Möglichkeit, ein versehentlich
@@ -1109,7 +1136,7 @@ k_author_unlocked') === '1',
       .then(r => {
         if (!r.ok) throw new Error('getBooks_http_' + r.s
 
-=== persistBooks #1 @ 253840 ===
+=== persistBooks #1 @ 255348 ===
 ta.visibleBooks) ? data.visibleBooks : null,
             showPoems: data.showPoems !== false,
             code: this.state.viewerCodeInput,
@@ -1172,7 +1199,7 @@ ta.visibleBooks) ? data.visibleBooks : null,
   openPartAndJumpToFirst = (i, firstIdx) => this.setState({ poemIndex: firstIdx, openTocPart: i });
   jumpToPoem = (idx) => this.setState({ poemIndex: idx, openTocPart: -1
 
-=== persistBooks #2 @ 255387 ===
+=== persistBooks #2 @ 256895 ===
 SavedToast = (msg) => {
     clearTimeout(this._savedToastTimer);
     this.setState({ savedToast: msg || 'Gespeichert ✓' });
@@ -1235,7 +1262,7 @@ SavedToast = (msg) => {
     localStorage.removeItem('ajk_author_unlocked');
     localStorage.removeItem('ajk_
 
-=== persistBooks #3 @ 259044 ===
+=== persistBooks #3 @ 260552 ===
 ken: '', editingIndex: null });
   };
   lockPage = () => {
@@ -1299,7 +1326,7 @@ ken: '', editingIndex: null });
   readFileAsBase64_(file) {
     return new Promise
 
-=== persistBooks #4 @ 266196 ===
+=== persistBooks #4 @ 267704 ===
  ihn ins Buch (State + Formular)
   // und speichert, bevor der eigentliche Upload wie gewohnt weiterlaeuft.
   // Findet die EPUB keinen Titel, bleibt alles unveraendert und der
