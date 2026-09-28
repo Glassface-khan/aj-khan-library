@@ -43,8 +43,8 @@
 // payloads in IndexedDB for fast reopening; force clients to fetch the new JS.
 // v26 -> v27 (24.09.2026): books-live.json is the immediate catalog fallback;
 // BooksData remains canonical and replaces it whenever the live request succeeds.
-// v37 -> v38 (28.09.2026): force iOS to reload the exact-order cover grid.\n// v39 -> v40 (28.09.2026): deploy THE GUEST catalog entry, cover and EPUB; force clients to refresh the catalog fallback.\n// v40 -> v41 (28.09.2026): deploy THE NIGHT SIDE catalog entry, cover and EPUB; force clients to refresh the catalog fallback.\nconst SHELL_CACHE = 'ajk-shell-v46';
-const DATA_CACHE = 'ajk-data-v46';
+// v37 -> v38 (28.09.2026): force iOS to reload the exact-order cover grid.\n// v39 -> v40 (28.09.2026): deploy THE GUEST catalog entry, cover and EPUB; force clients to refresh the catalog fallback.\n// v40 -> v41 (28.09.2026): deploy THE NIGHT SIDE catalog entry, cover and EPUB; force clients to refresh the catalog fallback.\nconst SHELL_CACHE = 'ajk-shell-v47';
+const DATA_CACHE = 'ajk-data-v47';
 const SHELL_FILES = ['./', './index.html', './books-live.json', './cover-grid-v2.js', './manifest.webmanifest', './icons/icon-192.png', './icons/icon-512.png'];
 
 // Aktionen, deren Antwort für Offline-Nutzung zwischengespeichert werden
@@ -190,6 +190,14 @@ self.addEventListener('fetch', (event) => {
     // rollback: an old audio-library.js can otherwise keep the removed global
     // fetch wrapper alive even though GitHub already serves the corrected file.
     if (url.pathname.endsWith('/audio-library.js')) {
+      event.respondWith(fetch(req, { cache: 'no-store' }));
+      return;
+    }
+
+    // Safari/iOS kept serving an older cover-grid runtime even after GitHub
+    // deploys and cache-version bumps. Always fetch every cover-grid runtime
+    // from the network so thumbnail order/identity fixes take effect immediately.
+    if (/\/cover-grid(?:-v[23])?\.js$/.test(url.pathname)) {
       event.respondWith(fetch(req, { cache: 'no-store' }));
       return;
     }
