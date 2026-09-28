@@ -86,15 +86,40 @@
   }
 
   function titleOf(card) {
-    var h = card.querySelector('h3,h2,h4');
-    if (h && h.textContent.trim()) return h.textContent.trim();
-    var raw = card.id.replace(/^book-card-/, '');
-    try { return decodeURIComponent(raw); } catch (_) { return raw; }
+    // The anchor id is generated directly from the canonical book title and is
+    // therefore safer than reading the first heading inside a grouped/updated
+    // card. Mobile DOM reconciliation can temporarily leave a neighbouring
+    // heading/image inside a card while ids already point at the new book.
+    var raw = (card && card.id ? card.id : '').replace(/^book-card-/, '');
+    if (raw) {
+      try { return decodeURIComponent(raw); } catch (_) { return raw; }
+    }
+    var h = card && card.querySelector ? card.querySelector('h3,h2,h4') : null;
+    return h && h.textContent.trim() ? h.textContent.trim() : '';
   }
 
-  function dataFor(card) {
-    var titleNode = card.querySelector('h3,h2,h4');
-    var img = card.querySelector('img');
+  function exactCoverImage_(wrap, title, card) {
+    var wanted = (title + ' cover').replace(/\s+/g, ' ').trim().toLocaleLowerCase();
+    var all = wrap ? wrap.querySelectorAll('img[alt]') : [];
+    for (var i = 0; i < all.length; i++) {
+      var alt = (all[i].getAttribute('alt') || '').replace(/\s+/g, ' ').trim().toLocaleLowerCase();
+      if (alt === wanted) return all[i];
+    }
+    return card && card.querySelector ? card.querySelector('img') : null;
+  }
+
+  function dataFor(card, wrap) {
+    var title = titleOf(card);
+    var titleNodes = card.querySelectorAll('h3,h2,h4');
+    var titleNode = null;
+    for (var ti = 0; ti < titleNodes.length; ti++) {
+      if ((titleNodes[ti].textContent || '').replace(/\s+/g, ' ').trim().toLocaleLowerCase() === title.replace(/\s+/g, ' ').trim().toLocaleLowerCase()) {
+        titleNode = titleNodes[ti];
+        break;
+      }
+    }
+    if (!titleNode) titleNode = card.querySelector('h3,h2,h4');
+    var img = exactCoverImage_(wrap, title, card);
     var hook = '';
     if (titleNode) {
       var n = titleNode.nextElementSibling;
@@ -110,7 +135,7 @@
     var actions = Array.prototype.slice.call(card.querySelectorAll('a')).filter(function (a) {
       return /^(Read|EPUB|Background|Video|Alt\. covers)$/i.test(a.textContent.trim());
     });
-    return { card: card, id: card.id, title: titleOf(card), src: img ? img.src : '', hook: hook, meta: meta, actions: actions };
+    return { card: card, id: card.id, title: title, src: img ? img.src : '', hook: hook, meta: meta, actions: actions };
   }
 
   function closeDetail() {
@@ -179,7 +204,13 @@
       grid.id = GRID_ID;
       wrap.parentNode.insertBefore(grid, wrap);
     }
-    var books = bookNodes(wrap).map(dataFor);
+    var seenTitles = {};
+    var books = bookNodes(wrap).map(function (node) { return dataFor(node, wrap); }).filter(function (book) {
+      var key = (book.title || '').replace(/\s+/g, ' ').trim().toLocaleLowerCase();
+      if (!key || seenTitles[key]) return false;
+      seenTitles[key] = true;
+      return true;
+    });
     var signature = books.map(function (b) { return b.id + '|' + b.src + '|' + b.title; }).join('\n');
     if (grid.dataset.signature === signature) return grid;
     grid.dataset.signature = signature;
