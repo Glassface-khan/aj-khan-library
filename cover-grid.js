@@ -48,7 +48,7 @@
       '#'+MODAL_ID+' .ajk-cover-detail-actions{display:flex;flex-wrap:wrap;gap:10px}' +
       '#'+MODAL_ID+' .ajk-cover-detail-action,#'+MODAL_ID+' .ajk-cover-detail-close{background:none;border:1px solid var(--gold);color:var(--gold);font-family:"Archivo",sans-serif;font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;padding:9px 14px;cursor:pointer}' +
       '#'+MODAL_ID+' .ajk-cover-detail-close{border-color:var(--rule);color:var(--ink-2)}' +
-      '@media(max-width:640px){#'+GRID_ID+'{gap:16px 10px;padding-top:18px}#'+COLS_ID+'{margin-left:0;width:auto;max-width:100%;gap:10px}#'+COLS_ID+' .ajk-cover-cols-label{margin-right:2px;font-size:10px}#'+COLS_ID+' button{display:none}#'+COLS_ID+' .ajk-cover-cols-select{display:block}#'+MODAL_ID+'{padding:12px}#'+MODAL_ID+' .ajk-cover-detail{padding:18px}#'+MODAL_ID+' .ajk-cover-detail-body{grid-template-columns:105px minmax(0,1fr);gap:16px}#'+MODAL_ID+' .ajk-cover-detail-hook{font-size:15px}}' +
+      '@media(max-width:640px){#'+GRID_ID+'{gap:16px 10px;padding-top:10px}#'+COLS_ID+'{margin:8px 0 2px;width:100%;max-width:none;gap:10px;box-sizing:border-box;justify-content:flex-end;align-items:center}#'+COLS_ID+'.is-open{display:flex}#'+COLS_ID+' .ajk-cover-cols-label{margin-right:2px;font-size:10px}#'+COLS_ID+' button{display:none}#'+COLS_ID+' .ajk-cover-cols-select{display:block;min-width:104px;height:46px}#'+MODAL_ID+'{padding:12px}#'+MODAL_ID+' .ajk-cover-detail{padding:18px}#'+MODAL_ID+' .ajk-cover-detail-body{grid-template-columns:105px minmax(0,1fr);gap:16px}#'+MODAL_ID+' .ajk-cover-detail-hook{font-size:15px}}' +
       '@media(max-width:380px){#'+MODAL_ID+' .ajk-cover-detail-body{grid-template-columns:1fr}#'+MODAL_ID+' .ajk-cover-detail-img{max-width:150px}}' +
       '@media(min-width:900px){#'+GRID_ID+'{gap:30px 24px}}';
     document.head.appendChild(style);
@@ -203,9 +203,36 @@
     try { localStorage.setItem('ajk_book_cover_columns', String(columnCount)); } catch (_) {}
   }
 
+  function placeColumnChooser_(chooser, toggleButton) {
+    if (!chooser) return;
+    var mobile = false;
+    try { mobile = !!(window.matchMedia && window.matchMedia('(max-width:640px)').matches); } catch (_) {}
+    var grid = document.getElementById(GRID_ID);
+
+    // On phones the view buttons live in a single non-wrapping toolbar. Putting
+    // the column selector beside "Nur Cover" pushes it beyond the right edge.
+    // Give it its own row directly above the cover grid instead.
+    if (mobile && grid && grid.parentNode) {
+      if (chooser.nextSibling !== grid || chooser.parentNode !== grid.parentNode) {
+        grid.parentNode.insertBefore(chooser, grid);
+      }
+      return;
+    }
+
+    // Desktop keeps the compact selector next to the view controls.
+    if (toggleButton && toggleButton.parentNode) {
+      if (chooser.parentNode !== toggleButton.parentNode || toggleButton.nextSibling !== chooser) {
+        toggleButton.parentNode.insertBefore(chooser, toggleButton.nextSibling);
+      }
+    }
+  }
+
   function ensureColumnChooser(toggleButton) {
     var chooser = document.getElementById(COLS_ID);
-    if (chooser) return chooser;
+    if (chooser) {
+      placeColumnChooser_(chooser, toggleButton);
+      return chooser;
+    }
     chooser = document.createElement('div');
     chooser.id = COLS_ID;
     chooser.setAttribute('role', 'group');
@@ -243,7 +270,7 @@
     select.addEventListener('change', function () { setColumnCount(select.value); });
     chooser.appendChild(select);
 
-    if (toggleButton && toggleButton.parentNode) toggleButton.parentNode.insertBefore(chooser, toggleButton.nextSibling);
+    placeColumnChooser_(chooser, toggleButton);
     columnCount = readColumnCount();
     setColumnCount(columnCount);
     return chooser;
