@@ -63,6 +63,20 @@ if (!s.includes('else this.downloadEpub(b.title, effEpubUrl);')) {
   s = s.slice(0, handlerStart) + handler + s.slice(handlerEnd);
 }
 
+
+// AJK refresh stored visitor access permissions on every page load.
+// Older sessions cached visibleBooks in localStorage, so a code that now has
+// access to all books could keep hiding newly published titles indefinitely.
+// Re-check the same stored access code server-side and refresh only the
+// permission snapshot; no code is exposed or changed.
+if (!s.includes('AJK refresh stored visitor access permissions')) {
+  once(
+    String.raw`    this.fetchBooks();\n    this.fetchSettings();\n    this.fetchPoems();\n`,
+    String.raw`    this.fetchBooks();\n    this.fetchSettings();\n    this.fetchPoems();\n    // AJK refresh stored visitor access permissions: keep long-lived browser/PWA\n    // sessions in sync with the current Access sheet so newly published books\n    // are not hidden by an old cached visibleBooks list.\n    if (access && access.code) {\n      const accessParams = new URLSearchParams({ action: 'checkAccess', code: access.code });\n      fetch(this.SCRIPT_URL, { method: 'POST', body: accessParams })\n        .then(r => r.json())\n        .then(data => {\n          if (!data || !data.ok) return;\n          const freshAccess = {\n            name: data.name || access.name || '',\n            canDownload: !!data.canDownload,\n            canCopy: !!data.canCopy,\n            visibleBooks: Array.isArray(data.visibleBooks) ? data.visibleBooks : null,\n            showPoems: data.showPoems !== false,\n            code: access.code,\n            epubAccess: (data.epubAccess && typeof data.epubAccess === 'object') ? data.epubAccess : {}\n          };\n          try { localStorage.setItem('ajk_visitor_access', JSON.stringify(freshAccess)); } catch (e) {}\n          this.setState({\n            visitorName: freshAccess.name,\n            visitorCanDownload: freshAccess.canDownload,\n            visitorCanCopy: freshAccess.canCopy,\n            visitorVisibleBooks: freshAccess.visibleBooks,\n            visitorShowPoems: freshAccess.showPoems,\n            visitorAccessCode: freshAccess.code,\n            visitorEpubAccess: freshAccess.epubAccess\n          });\n        })\n        .catch(() => {});\n    }\n`,
+    'visitor access refresh'
+  );
+}
+
 // iOS/Safari premium-EPUB black-screen fix.
 // Premium files may contain their own prefers-color-scheme dark CSS and a
 // black cover page. The inline reader should remain readable regardless of
