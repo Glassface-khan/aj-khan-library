@@ -55,10 +55,15 @@
   }
 
   function bookNodes(wrap) {
-    var seen = {};
-    return Array.prototype.slice.call(wrap.querySelectorAll('[id^="book-card-"]')).filter(function (node) {
-      if (!node.id || seen[node.id]) return false;
-      seen[node.id] = true;
+    // Use only the real book cards from the existing list. The previous
+    // [id^="book-card-"] selector also picked up alternate/duplicate card
+    // instances created by the page's other book views, which caused covers
+    // to repeat and displaced other titles in the cover-only grid.
+    var seenTitles = {};
+    return Array.prototype.slice.call(wrap.querySelectorAll('.book-card')).filter(function (node) {
+      var title = titleOf(node).replace(/\s+/g, ' ').trim().toLocaleLowerCase();
+      if (!title || seenTitles[title]) return false;
+      seenTitles[title] = true;
       return true;
     });
   }
