@@ -394,6 +394,9 @@
       .ajka-round{width:43px; height:43px; border-radius:50%; border:1px solid var(--ink,#16140F); background:transparent; color:var(--ink,#16140F); cursor:pointer; font-size:14px}
       .ajka-round.play{width:54px; height:54px; background:var(--ink,#16140F); color:var(--bone,#E6E2D7); font-size:20px}
       .ajka-seek{width:100%; accent-color:var(--gold,#9F7A34)}
+      .ajka-speed-control{display:grid; grid-template-columns:auto minmax(120px,1fr) 58px; align-items:center; gap:10px; margin:10px 0 14px; font-size:13px}
+      .ajka-speed-slider{width:100%; accent-color:var(--gold,#9F7A34)}
+      .ajka-speed-value{text-align:right; font-variant-numeric:tabular-nums; font-weight:600}
       .ajka-time{display:flex; justify-content:space-between; font-family:'Archivo',sans-serif; font-size:10px; color:var(--ink-3,#7A7263); margin-top:4px}
       .ajka-select{width:100%; margin-top:14px; padding:10px; background:transparent; border:1px solid var(--rule,#CBC1A6); color:var(--ink,#16140F); font:14px 'Newsreader',serif}
       .ajka-admin-person{border-top:1px solid var(--rule,#CBC1A6); padding:15px 0}
@@ -560,7 +563,11 @@
         '<button class="ajka-round" id="ajka-back" aria-label="-15 Sekunden">−15</button>' +
         '<button class="ajka-round play" id="ajka-play" aria-label="' + esc(tr('Wiedergabe', 'Play')) + '">▶</button>' +
         '<button class="ajka-round" id="ajka-forward" aria-label="+15 Sekunden">+15</button>' +
-        '<button class="ajka-round" id="ajka-speed" aria-label="' + esc(tr('Geschwindigkeit', 'Speed')) + '">1×</button>' +
+      '</div>' +
+      '<div class="ajka-speed-control">' +
+        '<label for="ajka-speed">' + esc(tr('Tempo', 'Speed')) + '</label>' +
+        '<input class="ajka-speed-slider" id="ajka-speed" type="range" min="50" max="200" step="5" value="100" aria-label="' + esc(tr('Wiedergabegeschwindigkeit', 'Playback speed')) + '">' +
+        '<span class="ajka-speed-value" id="ajka-speed-value">100%</span>' +
       '</div>' +
       '<select class="ajka-select" id="ajka-chapter-select" aria-label="' + esc(tr('Kapitel', 'Chapter')) + '">' + opts + '</select>' +
       '</section>';
@@ -590,7 +597,15 @@
     panel.querySelector('#ajka-forward').addEventListener('click', () => {
       if (state.audio) state.audio.currentTime = Math.min(state.audio.duration || Infinity, state.audio.currentTime + 15);
     });
-    panel.querySelector('#ajka-speed').addEventListener('click', cycleSpeed);
+    const speed = panel.querySelector('#ajka-speed');
+    if (speed) {
+      speed.addEventListener('input', () => {
+        const audio = ensureAudio();
+        audio.playbackRate = Math.min(2, Math.max(.5, Number(speed.value) / 100 || 1));
+        updatePlayerUi();
+      });
+      speed.addEventListener('change', () => saveProgress(false, false, true));
+    }
 
     seek.addEventListener('input', () => {
       if (!state.audio || !Number.isFinite(state.audio.duration) || state.audio.duration <= 0) return;
@@ -675,21 +690,14 @@
     const now = root.querySelector('#ajka-now');
     const duration = root.querySelector('#ajka-duration');
     const speed = root.querySelector('#ajka-speed');
+    const speedValue = root.querySelector('#ajka-speed-value');
     if (play) play.textContent = audio && !audio.paused ? '❚❚' : '▶';
     if (audio && seek && Number.isFinite(audio.duration) && audio.duration > 0) seek.value = String(Math.round((audio.currentTime / audio.duration) * 1000));
     if (now) now.textContent = formatTime(audio ? audio.currentTime : 0);
     if (duration) duration.textContent = formatTime(audio && Number.isFinite(audio.duration) ? audio.duration : (state.activeChapter && state.activeChapter.duration_seconds || 0));
-    if (speed) speed.textContent = (audio ? audio.playbackRate : 1).toFixed((audio && audio.playbackRate % 1) ? 2 : 0).replace(/0$/, '') + '×';
-  }
-
-  function cycleSpeed() {
-    const audio = ensureAudio();
-    const speeds = [.75, .85, 1, 1.25, 1.5, 1.75, 2];
-    let idx = speeds.findIndex((x) => Math.abs(x - audio.playbackRate) < .01);
-    idx = (idx + 1) % speeds.length;
-    audio.playbackRate = speeds[idx];
-    updatePlayerUi();
-    saveProgress(false, false);
+    const rate = audio ? audio.playbackRate : Number(state.activeBook && state.activeBook.progress && state.activeBook.progress.playback_rate || 1);
+    if (speed) speed.value = String(Math.round(rate * 100));
+    if (speedValue) speedValue.textContent = Math.round(rate * 100) + '%';
   }
 
   async function onEnded() {
@@ -705,10 +713,10 @@
     }
   }
 
-  async function saveProgress(completed = false, keepalive = false) {
+  async function saveProgress(completed = false, keepalive = false, force = false) {
     if (!state.activeBook || !state.activeChapter || !state.audio) return;
     const pos = Math.max(0, Number(state.audio.currentTime) || 0);
-    if (!completed && Math.abs(pos - state.lastSavedPosition) < 1 && Date.now() - state.lastSavedAt < 30000) return;
+    if (!force && !completed && Math.abs(pos - state.lastSavedPosition) < 1 && Date.now() - state.lastSavedAt < 30000) return;
     state.lastSavedAt = Date.now();
     state.lastSavedPosition = pos;
     try {
