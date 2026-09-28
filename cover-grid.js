@@ -48,22 +48,39 @@
       '#'+MODAL_ID+' .ajk-cover-detail-actions{display:flex;flex-wrap:wrap;gap:10px}' +
       '#'+MODAL_ID+' .ajk-cover-detail-action,#'+MODAL_ID+' .ajk-cover-detail-close{background:none;border:1px solid var(--gold);color:var(--gold);font-family:"Archivo",sans-serif;font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;padding:9px 14px;cursor:pointer}' +
       '#'+MODAL_ID+' .ajk-cover-detail-close{border-color:var(--rule);color:var(--ink-2)}' +
-      '@media(max-width:640px){#'+GRID_ID+'{gap:16px 10px;padding-top:10px}#'+COLS_ID+'{margin:8px 0 2px;width:100%;max-width:none;gap:10px;box-sizing:border-box;justify-content:flex-end;align-items:center}#'+COLS_ID+'.is-open{display:flex}#'+COLS_ID+' .ajk-cover-cols-label{margin-right:2px;font-size:10px}#'+COLS_ID+' button{display:none}#'+COLS_ID+' .ajk-cover-cols-select{display:block;min-width:104px;height:46px}#'+MODAL_ID+'{padding:12px}#'+MODAL_ID+' .ajk-cover-detail{padding:18px}#'+MODAL_ID+' .ajk-cover-detail-body{grid-template-columns:105px minmax(0,1fr);gap:16px}#'+MODAL_ID+' .ajk-cover-detail-hook{font-size:15px}}' +
+      '@media(max-width:640px){.book-toc-wrap{position:static!important}.book-toc-panel{position:fixed!important;left:16px!important;right:16px!important;top:18vh!important;width:auto!important;max-height:64vh!important;z-index:120!important;box-sizing:border-box}#'+GRID_ID+'{gap:16px 10px;padding-top:10px}#'+COLS_ID+'{margin:8px 0 2px;width:100%;max-width:none;gap:10px;box-sizing:border-box;justify-content:flex-end;align-items:center}#'+COLS_ID+'.is-open{display:flex}#'+COLS_ID+' .ajk-cover-cols-label{margin-right:2px;font-size:10px}#'+COLS_ID+' button{display:none}#'+COLS_ID+' .ajk-cover-cols-select{display:block;min-width:104px;height:46px}#'+MODAL_ID+'{padding:12px}#'+MODAL_ID+' .ajk-cover-detail{padding:18px}#'+MODAL_ID+' .ajk-cover-detail-body{grid-template-columns:105px minmax(0,1fr);gap:16px}#'+MODAL_ID+' .ajk-cover-detail-hook{font-size:15px}}' +
       '@media(max-width:380px){#'+MODAL_ID+' .ajk-cover-detail-body{grid-template-columns:1fr}#'+MODAL_ID+' .ajk-cover-detail-img{max-width:150px}}' +
       '@media(min-width:900px){#'+GRID_ID+'{gap:30px 24px}}';
     document.head.appendChild(style);
   }
 
   function bookNodes(wrap) {
-    // Use only the real book cards from the existing list. The previous
-    // [id^="book-card-"] selector also picked up alternate/duplicate card
-    // instances created by the page's other book views, which caused covers
-    // to repeat and displaced other titles in the cover-only grid.
-    var seenTitles = {};
-    return Array.prototype.slice.call(wrap.querySelectorAll('.book-card')).filter(function (node) {
-      var title = titleOf(node).replace(/\s+/g, ' ').trim().toLocaleLowerCase();
-      if (!title || seenTitles[title]) return false;
-      seenTitles[title] = true;
+    // The page may group series volumes inside one .book-card, so selecting
+    // .book-card itself loses volumes and can repeat the first cover of a
+    // series. The existing jump list is built from visibleBooksSourceRaw and
+    // therefore is the authoritative visible-book order for the current user.
+    // Resolve those titles back to their unique book anchor elements.
+    var ordered = [];
+    var seen = {};
+    var panel = document.querySelector('.book-toc-panel');
+    if (panel) {
+      Array.prototype.forEach.call(panel.querySelectorAll('button'), function (button) {
+        var title = (button.textContent || '').replace(/\s+/g, ' ').trim();
+        if (!title) return;
+        var id = 'book-card-' + encodeURIComponent(title);
+        var node = document.getElementById(id);
+        if (node && wrap.contains(node) && !seen[id]) {
+          seen[id] = true;
+          ordered.push(node);
+        }
+      });
+    }
+    if (ordered.length) return ordered;
+
+    // Safe fallback when the jump list has not rendered yet.
+    return Array.prototype.slice.call(wrap.querySelectorAll('[id^="book-card-"]')).filter(function (node) {
+      if (!node.id || seen[node.id]) return false;
+      seen[node.id] = true;
       return true;
     });
   }
