@@ -36,8 +36,8 @@
 // payloads in IndexedDB for fast reopening; force clients to fetch the new JS.
 // v26 -> v27 (24.09.2026): books-live.json is the immediate catalog fallback;
 // BooksData remains canonical and replaces it whenever the live request succeeds.
-const SHELL_CACHE = 'ajk-shell-v34';
-const DATA_CACHE = 'ajk-data-v34';
+const SHELL_CACHE = 'ajk-shell-v35';
+const DATA_CACHE = 'ajk-data-v35';
 const SHELL_FILES = ['./', './index.html', './books-live.json', './cover-grid.js', './manifest.webmanifest', './icons/icon-192.png', './icons/icon-512.png'];
 
 // Aktionen, deren Antwort für Offline-Nutzung zwischengespeichert werden
