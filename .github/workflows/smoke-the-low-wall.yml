@@ -1,4 +1,4 @@
-name: Smoke The Low Wall live card
+name: Smoke The Testimony of Sand live card
 
 on:
   push:
@@ -22,51 +22,65 @@ jobs:
           from selenium import webdriver
           from selenium.webdriver.chrome.options import Options
           from selenium.webdriver.common.by import By
-          import time, json
+          import time, json, sys
 
           SITE='https://glassface-khan.github.io/aj-khan-library/'
+          TARGET='The Testimony of Sand'
           opt=Options()
           opt.add_argument('--headless=new')
           opt.add_argument('--no-sandbox')
           opt.add_argument('--disable-dev-shm-usage')
           opt.add_argument('--disable-gpu')
-          opt.add_argument('--window-size=1440,1200')
+          opt.add_argument('--window-size=1440,1400')
           opt.set_capability('goog:loggingPrefs', {'browser':'ALL'})
           d=webdriver.Chrome(options=opt)
           try:
               d.get(SITE)
-              time.sleep(12)
+              time.sleep(15)
+              body=d.find_element(By.TAG_NAME,'body').text
+              source=d.page_source
               print('URL=',d.current_url)
               print('TITLE=',repr(d.title))
               print('READY=',d.execute_script('return document.readyState'))
-              body=d.find_element(By.TAG_NAME,'body').text
-              print('BODY_REPR=',repr(body))
-              print('BODY_HTML_LEN=',len(d.find_element(By.TAG_NAME,'body').get_attribute('innerHTML') or ''))
-              print('PAGE_SOURCE_LEN=',len(d.page_source))
-              print('ROOTS=',d.execute_script("""
-                return [...document.body.children].map((el,i)=>({
-                  i,tag:el.tagName,id:el.id||'',cls:el.className||'',
-                  text:(el.innerText||'').slice(0,120),
-                  html:(el.innerHTML||'').length,
-                  display:getComputedStyle(el).display,
-                  visibility:getComputedStyle(el).visibility
-                }));
+              print('BODY_HAS_TARGET=',TARGET in body)
+              print('SOURCE_HAS_TARGET=',TARGET in source)
+              print('BODY_LEN=',len(body))
+              print('PAGE_SOURCE_LEN=',len(source))
+              print('BOOK_CARD_COUNT=',d.execute_script("return document.querySelectorAll('[id^=book-card-]').length"))
+              print('TARGET_ELEMENT_IDS=',d.execute_script("""
+                const t=arguments[0];
+                return [...document.querySelectorAll('[id^="book-card-"]')]
+                  .filter(el => (el.innerText||'').includes(t))
+                  .map(el => el.id);
+              """, TARGET))
+              print('LOCAL_BOOKS_HAS_TARGET=',d.execute_script("""
+                try {
+                  const x=JSON.parse(localStorage.getItem('ajk_author_books_draft')||'{}');
+                  return Array.isArray(x.books) && x.books.some(b=>b && b.title===arguments[0]);
+                } catch(e) { return String(e); }
+              """, TARGET))
+              print('VISITOR_ACCESS=',d.execute_script("""
+                try {
+                  const x=JSON.parse(localStorage.getItem('ajk_visitor_access')||'null');
+                  if (!x) return null;
+                  return {hasVisibleBooks:Array.isArray(x.visibleBooks), visibleBookCount:Array.isArray(x.visibleBooks)?x.visibleBooks.length:null};
+                } catch(e) { return String(e); }
               """))
-              print('SCRIPTS=',d.execute_script("""
-                return [...document.scripts].map(s=>({src:s.src||'',type:s.type||'',len:(s.textContent||'').length}));
-              """))
+              print('FETCH_BOOKS_LIVE=', d.execute_async_script("""
+                const target=arguments[0], done=arguments[1];
+                fetch('books-live.json?_='+Date.now(),{cache:'no-store'})
+                  .then(r=>r.json().then(j=>{
+                    const raw=j.books;
+                    const books=(typeof raw==='string')?JSON.parse(raw):raw;
+                    done({status:r.status,count:Array.isArray(books)?books.length:null,has:Array.isArray(books)&&books.some(b=>b&&b.title===target)});
+                  }))
+                  .catch(e=>done({error:String(e)}));
+              """, TARGET))
               print('BROWSER_LOGS=')
               for row in d.get_log('browser'):
                   print(json.dumps(row,ensure_ascii=False))
-              print('HAS_LOW_WALL_SOURCE=', 'The Low Wall' in d.page_source)
-              print('HAS_BOOKS_LIVE_MARKER=', 'AJK books-live fallback' in d.page_source)
-              print('FETCH_BOOKS_LIVE=', d.execute_async_script("""
-                const done=arguments[0];
-                fetch('books-live.json?_='+Date.now(),{cache:'no-store'})
-                  .then(r=>r.text().then(t=>done({status:r.status,len:t.length,has:t.includes('The Low Wall'),head:t.slice(0,120)})))
-                  .catch(e=>done({error:String(e)}));
-              """))
+              if TARGET not in body:
+                  sys.exit('TARGET_CARD_NOT_VISIBLE')
           finally:
               d.quit()
           PY
-
