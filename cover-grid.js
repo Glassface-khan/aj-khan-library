@@ -206,46 +206,80 @@
     close.focus();
   }
 
-  function booksForGrid_(wrap) {
-    var nodes = bookNodes(wrap);
-    var nodeByTitle = {};
-    nodes.forEach(function (node) {
-      var key = normTitle_(titleOf(node));
-      if (key && !nodeByTitle[key]) nodeByTitle[key] = node;
+  function tocTitles_() {
+    // The existing jump list is generated directly from s.books in
+    // renderVals(), so its button order is the exact current library order
+    // after admin reordering and access filtering. Use ONLY the title text as
+    // the ordering source; do not use its layout/position.
+    var panel = document.querySelector('.book-toc-panel');
+    if (!panel) return [];
+    var titles = [];
+    var seen = {};
+    Array.prototype.forEach.call(panel.querySelectorAll('button'), function (button) {
+      var title = String(button.textContent || '').replace(/\s+/g, ' ').trim();
+      var key = normTitle_(title);
+      if (!key || seen[key]) return;
+      seen[key] = true;
+      titles.push(title);
     });
+    return titles;
+  }
 
-    var out = [];
-    var used = {};
+  function nodeForTitle_(wrap, title) {
+    var id = 'book-card-' + encodeURIComponent(title || '');
+    var byId = document.getElementById(id);
+    if (byId && wrap.contains(byId)) return byId;
 
-    // Canonical catalogue controls BOTH order and cover image. This avoids the
-    // grouped/carousel DOM accidentally pairing the right title with a
-    // neighbouring cover, which looked like duplicates/missing books.
-    if (canonicalCatalogLoaded_ && canonicalCatalog_.length) {
-      canonicalCatalog_.forEach(function (entry) {
-        var key = normTitle_(entry.title);
-        var node = nodeByTitle[key];
-        if (!node || used[key]) return; // also respects the currently rendered/allowed books
-        used[key] = true;
-        var book = dataFor(node, wrap);
-        book.title = entry.title;
-        book.id = entry.id || book.id;
-        book.src = entry.coverUrl || book.src;
-        book.hook = entry.hook || book.hook;
-        book.meta = entry.kind || book.meta;
-        out.push(book);
-      });
+    // Fallback for any future template that changes id encoding.
+    var wanted = normTitle_(title);
+    var nodes = wrap.querySelectorAll('[id^="book-card-"]');
+    for (var i = 0; i < nodes.length; i++) {
+      if (normTitle_(titleOf(nodes[i])) === wanted) return nodes[i];
+    }
+    return null;
+  }
+
+  function dataForTitle_(title, wrap) {
+    var card = nodeForTitle_(wrap, title);
+    var book = card ? dataFor(card, wrap) : {
+      card: null,
+      id: 'book-card-' + encodeURIComponent(title || ''),
+      title: title,
+      src: '',
+      hook: '',
+      meta: '',
+      actions: []
+    };
+
+    // Title and cover must be bound explicitly. Grouped series cards can
+    // contain several covers/headings, and using the first descendant is what
+    // previously made one cover appear under several different titles.
+    book.title = title;
+    book.id = 'book-card-' + encodeURIComponent(title || '');
+    var exactImg = exactCoverImage_(wrap, title, card);
+    if (exactImg) book.src = exactImg.src;
+    return book;
+  }
+
+  function booksForGrid_(wrap) {
+    var titles = tocTitles_();
+
+    // Normal path: one title from the current app state -> one thumbnail,
+    // preserving exactly the same order as the admin-managed book array.
+    if (titles.length) {
+      return titles.map(function (title) { return dataForTitle_(title, wrap); });
     }
 
-    // Fallback/forward compatibility: if a just-added live title has not yet
-    // reached books-live.json, append it once rather than hiding it.
-    nodes.forEach(function (node) {
-      var key = normTitle_(titleOf(node));
-      if (!key || used[key]) return;
-      used[key] = true;
-      out.push(dataFor(node, wrap));
-    });
-
-    return out;
+    // Very early-render fallback only. MutationObserver rebuilds as soon as
+    // the jump list has rendered, so this cannot become the lasting order.
+    var seen = {};
+    return bookNodes(wrap).map(function (node) {
+      var title = titleOf(node);
+      var key = normTitle_(title);
+      if (!key || seen[key]) return null;
+      seen[key] = true;
+      return dataForTitle_(title, wrap);
+    }).filter(Boolean);
   }
 
   function buildGrid(wrap) {
