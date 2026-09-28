@@ -55,34 +55,34 @@
   }
 
   function bookNodes(wrap) {
-    // The page may group series volumes inside one .book-card, so selecting
-    // .book-card itself loses volumes and can repeat the first cover of a
-    // series. The existing jump list is built from visibleBooksSourceRaw and
-    // therefore is the authoritative visible-book order for the current user.
-    // Resolve those titles back to their unique book anchor elements.
+    // Build the cover grid from the ACTUAL rendered book list, not from the
+    // jump-list and not from a broad document.getElementById lookup. Singles
+    // are .book-card elements with their own id; series are one .book-card
+    // container whose individual volumes carry the book-card-* ids inside it.
+    // Flatten those two shapes in DOM order and de-duplicate by anchor id.
     var ordered = [];
     var seen = {};
-    var panel = document.querySelector('.book-toc-panel');
-    if (panel) {
-      Array.prototype.forEach.call(panel.querySelectorAll('button'), function (button) {
-        var title = (button.textContent || '').replace(/\s+/g, ' ').trim();
-        if (!title) return;
-        var id = 'book-card-' + encodeURIComponent(title);
-        var node = document.getElementById(id);
-        if (node && wrap.contains(node) && !seen[id]) {
-          seen[id] = true;
-          ordered.push(node);
-        }
-      });
-    }
-    if (ordered.length) return ordered;
 
-    // Safe fallback when the jump list has not rendered yet.
-    return Array.prototype.slice.call(wrap.querySelectorAll('[id^="book-card-"]')).filter(function (node) {
-      if (!node.id || seen[node.id]) return false;
+    function add(node) {
+      if (!node || !node.id || node.id.indexOf('book-card-') !== 0 || seen[node.id]) return;
       seen[node.id] = true;
-      return true;
+      ordered.push(node);
+    }
+
+    Array.prototype.forEach.call(wrap.children || [], function (card) {
+      if (!card.classList || !card.classList.contains('book-card')) return;
+      if (card.id && card.id.indexOf('book-card-') === 0) {
+        add(card);
+        return;
+      }
+      Array.prototype.forEach.call(card.querySelectorAll('[id^="book-card-"]'), add);
     });
+
+    // Fallback for any future template shape that is not a direct child.
+    if (!ordered.length) {
+      Array.prototype.forEach.call(wrap.querySelectorAll('[id^="book-card-"]'), add);
+    }
+    return ordered;
   }
 
   function titleOf(card) {
