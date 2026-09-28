@@ -35,44 +35,44 @@ jobs:
           opt.set_capability('goog:loggingPrefs', {'browser':'ALL'})
           d=webdriver.Chrome(options=opt)
           try:
+              # Seed an unrestricted visitor session before application startup,
+              # without using any real access code.
+              d.execute_cdp_cmd('Page.addScriptToEvaluateOnNewDocument', {'source': """
+                try {
+                  localStorage.setItem('ajk_author_unlocked','1');
+                  localStorage.setItem('ajk_visitor_access', JSON.stringify({
+                    name:'Smoke Test',
+                    canDownload:false,
+                    canCopy:false,
+                    visibleBooks:null,
+                    showPoems:true,
+                    code:'',
+                    epubAccess:{}
+                  }));
+                } catch(e) {}
+              """})
               d.get(SITE)
-              time.sleep(3)
-              # Smoke-test the unrestricted visitor state without using or exposing
-              # any real access code. The production UI reads these localStorage keys
-              # after a successful ENTER.
-              d.execute_script("""
-                localStorage.setItem('ajk_author_unlocked','1');
-                localStorage.setItem('ajk_visitor_access', JSON.stringify({
-                  name:'Smoke Test',
-                  canDownload:false,
-                  canCopy:false,
-                  visibleBooks:null,
-                  showPoems:true,
-                  code:'',
-                  epubAccess:{}
-                }));
-              """)
-              d.refresh()
-              time.sleep(12)
+              time.sleep(15)
 
               body0=d.find_element(By.TAG_NAME,'body').text
-              print('UNLOCKED_BODY_HEAD=',repr(body0[:1200]))
+              print('UNLOCKED_BODY_HEAD=',repr(body0[:1800]))
               print('BUTTONS=',d.execute_script("""
                 return [...document.querySelectorAll('button,a,[role="button"]')]
                   .map((el,i)=>({i,tag:el.tagName,text:(el.innerText||'').trim(),cls:el.className||'',id:el.id||''}))
-                  .filter(x=>x.text).slice(0,160);
+                  .filter(x=>x.text).slice(0,200);
               """))
 
               clicked=d.execute_script("""
                 const els=[...document.querySelectorAll('button,a,[role="button"]')];
-                const el=els.find(e=>/^(books|bücher)$/i.test((e.innerText||'').trim()))
-                  || els.find(e=>/(books|bücher)/i.test((e.innerText||'').trim()));
+                const exact=els.find(e=>/^(books|bücher)$/i.test((e.innerText||'').trim()));
+                const loose=els.find(e=>/(books|bücher)/i.test((e.innerText||'').trim()));
+                const el=exact||loose;
                 if(!el) return null;
                 el.click();
                 return {tag:el.tagName,text:(el.innerText||'').trim(),id:el.id||'',cls:el.className||''};
               """)
               print('CLICKED=',clicked)
-              time.sleep(5)
+              time.sleep(4)
 
               body=d.find_element(By.TAG_NAME,'body').text
               print('BODY_HAS_TARGET=',TARGET in body)
