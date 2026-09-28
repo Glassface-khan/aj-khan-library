@@ -1,3 +1,5 @@
+// v43 -> v44 (28.09.2026): switch thumbnail view to a new
+// cover-grid-v2.js URL so iOS cannot reuse the stale duplicate-producing runtime.
 // v40 -> v41 (28.09.2026): merge live BooksData with books-live.json so a newly deployed title cannot be hidden by backend lag.
 // Service Worker für die Autorenseite — macht die Seite installierbar
 // (PWA) und erlaubt Offline-Zugriff auf bereits geöffnete EPUBs sowie auf
@@ -41,9 +43,9 @@
 // payloads in IndexedDB for fast reopening; force clients to fetch the new JS.
 // v26 -> v27 (24.09.2026): books-live.json is the immediate catalog fallback;
 // BooksData remains canonical and replaces it whenever the live request succeeds.
-// v37 -> v38 (28.09.2026): force iOS to reload the exact-order cover grid.\n// v39 -> v40 (28.09.2026): deploy THE GUEST catalog entry, cover and EPUB; force clients to refresh the catalog fallback.\n// v40 -> v41 (28.09.2026): deploy THE NIGHT SIDE catalog entry, cover and EPUB; force clients to refresh the catalog fallback.\nconst SHELL_CACHE = 'ajk-shell-v43';
-const DATA_CACHE = 'ajk-data-v43';
-const SHELL_FILES = ['./', './index.html', './books-live.json', './cover-grid.js', './manifest.webmanifest', './icons/icon-192.png', './icons/icon-512.png'];
+// v37 -> v38 (28.09.2026): force iOS to reload the exact-order cover grid.\n// v39 -> v40 (28.09.2026): deploy THE GUEST catalog entry, cover and EPUB; force clients to refresh the catalog fallback.\n// v40 -> v41 (28.09.2026): deploy THE NIGHT SIDE catalog entry, cover and EPUB; force clients to refresh the catalog fallback.\nconst SHELL_CACHE = 'ajk-shell-v44';
+const DATA_CACHE = 'ajk-data-v44';
+const SHELL_FILES = ['./', './index.html', './books-live.json', './cover-grid-v2.js', './manifest.webmanifest', './icons/icon-192.png', './icons/icon-512.png'];
 
 // Aktionen, deren Antwort für Offline-Nutzung zwischengespeichert werden
 // darf. Alles andere (insbesondere alle schreibenden Aktionen) läuft immer
