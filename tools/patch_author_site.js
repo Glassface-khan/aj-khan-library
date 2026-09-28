@@ -105,6 +105,17 @@ if (!s.includes('src="cover-grid.js"')) {
   s = s.slice(0, bodyEnd) + '<script src="cover-grid.js"></script>\\n' + s.slice(bodyEnd);
 }
 
+
+// COMPACT POETRY SHELF PATCH
+// The original poems section stays intact in the bundled template. A small
+// standalone script only changes its presentation: compact shelf by default,
+// with the full legacy poem reader available through "Alle Gedichte".
+if (!s.includes('src="poetry-shelf.js"')) {
+  const bodyEnd = s.lastIndexOf('</body>');
+  if (bodyEnd < 0) throw new Error('poetry shelf script: closing body not found');
+  s = s.slice(0, bodyEnd) + '<script src="poetry-shelf.js"></script>\\n' + s.slice(bodyEnd);
+}
+
 for (const marker of [
   'const effChapterCount =',
   "wordCountLabel: statParts.join(' · ')",
@@ -112,7 +123,8 @@ for (const marker of [
   'else this.downloadEpub(b.title, effEpubUrl);',
   "themes.register('ajk-reader'",
   'Alte Bookmarks aus frueheren Reader-Fehlern',
-  'const firstReadable = spineItems.find'
+  'const firstReadable = spineItems.find',
+  'src="poetry-shelf.js"'
 ]) {
   if (!s.includes(marker)) throw new Error('Post-patch marker missing: ' + marker);
 }
