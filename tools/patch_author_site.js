@@ -100,7 +100,7 @@ if (!s.includes('const firstReadable = spineItems.find')) {
 // a JSON-encoded component source, so a standalone progressive-enhancement
 // script is safer and leaves the existing carousel/list/detail logic untouched.
 // Version the URL so iOS/Safari cannot keep an older mobile layout in HTTP cache.
-const coverGridSrc = 'cover-grid.js?v=20260928d';
+const coverGridSrc = 'cover-grid.js?v=20260928e';
 s = s.replace(/src="cover-grid\.js(?:\?[^"]*)?"/g, 'src="' + coverGridSrc + '"');
 if (!s.includes('src="' + coverGridSrc + '"')) {
   const bodyEnd = s.lastIndexOf('</body>');
