@@ -79,75 +79,123 @@
     document.head.appendChild(style);
   }
 
-  function bookNodes(wrap) {
-    // Return one DOM anchor per rendered title. The DOM may contain several
-    // view-specific copies of the same book; title is the stable identity.
-    var ordered = [];
+  function visibleTitlesInOrder_(wrap) {
+    // The native jump list is rendered from visibleBooksSourceRaw, i.e. the
+    // exact current s.books order after access filtering. It is therefore the
+    // safest single source for BOTH order and visibility in the cover-only view.
+    var titles = [];
     var seen = {};
+    var panel = document.querySelector('.book-toc-panel');
+    if (panel) {
+      Array.prototype.forEach.call(panel.querySelectorAll('button'), function (button) {
+        var title = String(button.textContent || '').replace(/\s+/g, ' ').trim();
+        var key = normTitle_(title);
+        if (!key || seen[key]) return;
+        seen[key] = true;
+        titles.push(title);
+      });
+    }
+    if (titles.length) return titles;
+
+    // Conservative fallback while React is still mounting: use only rendered
+    // book anchors inside the current list. Never append a second source later;
+    // that was the cause of duplicate/misordered thumbnails.
     Array.prototype.forEach.call(wrap.querySelectorAll('[id^="book-card-"]'), function (node) {
-      var title = titleOf(node);
+      var raw = String(node.id || '').replace(/^book-card-/, '');
+      var title = raw;
+      try { title = decodeURIComponent(raw); } catch (_) {}
       var key = normTitle_(title);
       if (!key || seen[key]) return;
       seen[key] = true;
-      ordered.push(node);
+      titles.push(title);
     });
-    return ordered;
+    return titles;
   }
 
-  function titleOf(card) {
-    // The anchor id is generated directly from the canonical book title and is
-    // therefore safer than reading the first heading inside a grouped/updated
-    // card. Mobile DOM reconciliation can temporarily leave a neighbouring
-    // heading/image inside a card while ids already point at the new book.
-    var raw = (card && card.id ? card.id : '').replace(/^book-card-/, '');
-    if (raw) {
-      try { return decodeURIComponent(raw); } catch (_) { return raw; }
+  function catalogEntryForTitle_(title) {
+    var key = normTitle_(title);
+    for (var i = 0; i < canonicalCatalog_.length; i++) {
+      if (normTitle_(canonicalCatalog_[i] && canonicalCatalog_[i].title) === key) {
+        return canonicalCatalog_[i];
+      }
     }
-    var h = card && card.querySelector ? card.querySelector('h3,h2,h4') : null;
-    return h && h.textContent.trim() ? h.textContent.trim() : '';
+    return null;
   }
 
-  function exactCoverImage_(wrap, title, card) {
-    var wanted = (title + ' cover').replace(/\s+/g, ' ').trim().toLocaleLowerCase();
-    var all = wrap ? wrap.querySelectorAll('img[alt]') : [];
-    for (var i = 0; i < all.length; i++) {
-      var alt = (all[i].getAttribute('alt') || '').replace(/\s+/g, ' ').trim().toLocaleLowerCase();
-      if (alt === wanted) return all[i];
+  function cardForTitle_(wrap, title) {
+    var id = 'book-card-' + encodeURIComponent(title || '');
+    var node = document.getElementById(id);
+    if (node && wrap.contains(node)) return node;
+
+    // Fallback for harmless Unicode/casing differences in an older rendered
+    // anchor. Compare decoded ids instead of taking a neighbouring card.
+    var wanted = normTitle_(title);
+    var nodes = wrap.querySelectorAll('[id^="book-card-"]');
+    for (var i = 0; i < nodes.length; i++) {
+      var raw = String(nodes[i].id || '').replace(/^book-card-/, '');
+      var decoded = raw;
+      try { decoded = decodeURIComponent(raw); } catch (_) {}
+      if (normTitle_(decoded) === wanted) return nodes[i];
     }
-    return card && card.querySelector ? card.querySelector('img') : null;
+    return null;
   }
 
-  function dataFor(card, wrap) {
-    var title = titleOf(card);
-    var titleNodes = card.querySelectorAll('h3,h2,h4');
+  function domDetailsForTitle_(wrap, title, card) {
+    var result = { hook: '', meta: '', actions: [], src: '' };
+    if (!card) return result;
+
+    var headings = card.querySelectorAll('h3,h2,h4');
     var titleNode = null;
-    for (var ti = 0; ti < titleNodes.length; ti++) {
-      if ((titleNodes[ti].textContent || '').replace(/\s+/g, ' ').trim().toLocaleLowerCase() === title.replace(/\s+/g, ' ').trim().toLocaleLowerCase()) {
-        titleNode = titleNodes[ti];
+    var wanted = normTitle_(title);
+    for (var i = 0; i < headings.length; i++) {
+      if (normTitle_(headings[i].textContent) === wanted) {
+        titleNode = headings[i];
         break;
       }
     }
-    if (!titleNode) titleNode = card.querySelector('h3,h2,h4');
-    var img = exactCoverImage_(wrap, title, card);
-    var hook = '';
+
     if (titleNode) {
       var n = titleNode.nextElementSibling;
-      while (n && !hook) {
-        if (n.tagName === 'P' && n.textContent.trim()) hook = n.textContent.trim();
+      while (n && !result.hook) {
+        if (n.tagName === 'P' && n.textContent.trim()) result.hook = n.textContent.trim();
         n = n.nextElementSibling;
       }
+      if (titleNode.previousElementSibling && titleNode.previousElementSibling.tagName === 'SPAN') {
+        result.meta = titleNode.previousElementSibling.textContent.trim();
+      }
     }
-    var meta = '';
-    if (titleNode && titleNode.previousElementSibling && titleNode.previousElementSibling.tagName === 'SPAN') {
-      meta = titleNode.previousElementSibling.textContent.trim();
+
+    var wantedAlt = normTitle_(title + ' cover');
+    var imgs = card.querySelectorAll('img[alt]');
+    for (var j = 0; j < imgs.length; j++) {
+      if (normTitle_(imgs[j].getAttribute('alt')) === wantedAlt) {
+        result.src = imgs[j].src || '';
+        break;
+      }
     }
-    var actions = Array.prototype.slice.call(card.querySelectorAll('a')).filter(function (a) {
+
+    result.actions = Array.prototype.slice.call(card.querySelectorAll('a')).filter(function (a) {
       return /^(Read|EPUB|Background|Video|Alt\. covers)$/i.test(a.textContent.trim());
     });
-    return { card: card, id: card.id, title: title, src: img ? img.src : '', hook: hook, meta: meta, actions: actions };
+    return result;
   }
 
-  function closeDetail() {
+  function dataForTitle_(title, wrap) {
+    var entry = catalogEntryForTitle_(title) || {};
+    var card = cardForTitle_(wrap, title);
+    var dom = domDetailsForTitle_(wrap, title, card);
+    return {
+      card: card,
+      id: entry.id || (card && card.id) || ('book-card-' + encodeURIComponent(title || '')),
+      title: entry.title || title,
+      src: entry.coverUrl || dom.src || '',
+      hook: entry.hook || dom.hook || '',
+      meta: entry.kind || dom.meta || '',
+      actions: dom.actions || []
+    };
+  }
+
+    function closeDetail() {
     var modal = document.getElementById(MODAL_ID);
     if (modal) modal.remove();
   }
@@ -262,24 +310,12 @@
   }
 
   function booksForGrid_(wrap) {
-    var titles = tocTitles_();
-
-    // Normal path: one title from the current app state -> one thumbnail,
-    // preserving exactly the same order as the admin-managed book array.
-    if (titles.length) {
-      return titles.map(function (title) { return dataForTitle_(title, wrap); });
-    }
-
-    // Very early-render fallback only. MutationObserver rebuilds as soon as
-    // the jump list has rendered, so this cannot become the lasting order.
-    var seen = {};
-    return bookNodes(wrap).map(function (node) {
-      var title = titleOf(node);
-      var key = normTitle_(title);
-      if (!key || seen[key]) return null;
-      seen[key] = true;
+    // One title in, one thumbnail out. Order comes exclusively from the native
+    // jump list (which itself comes from s.books). Cover/content comes from the
+    // canonical catalogue by title. No second-pass append = no duplicates.
+    return visibleTitlesInOrder_(wrap).map(function (title) {
       return dataForTitle_(title, wrap);
-    }).filter(Boolean);
+    });
   }
 
   function buildGrid(wrap) {
