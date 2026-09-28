@@ -684,7 +684,7 @@
 
   function cycleSpeed() {
     const audio = ensureAudio();
-    const speeds = [.75, 1, 1.25, 1.5, 1.75, 2];
+    const speeds = [.75, .85, 1, 1.25, 1.5, 1.75, 2];
     let idx = speeds.findIndex((x) => Math.abs(x - audio.playbackRate) < .01);
     idx = (idx + 1) % speeds.length;
     audio.playbackRate = speeds[idx];
