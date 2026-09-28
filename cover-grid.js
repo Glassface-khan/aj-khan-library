@@ -254,61 +254,6 @@
     close.focus();
   }
 
-  function tocTitles_() {
-    // The existing jump list is generated directly from s.books in
-    // renderVals(), so its button order is the exact current library order
-    // after admin reordering and access filtering. Use ONLY the title text as
-    // the ordering source; do not use its layout/position.
-    var panel = document.querySelector('.book-toc-panel');
-    if (!panel) return [];
-    var titles = [];
-    var seen = {};
-    Array.prototype.forEach.call(panel.querySelectorAll('button'), function (button) {
-      var title = String(button.textContent || '').replace(/\s+/g, ' ').trim();
-      var key = normTitle_(title);
-      if (!key || seen[key]) return;
-      seen[key] = true;
-      titles.push(title);
-    });
-    return titles;
-  }
-
-  function nodeForTitle_(wrap, title) {
-    var id = 'book-card-' + encodeURIComponent(title || '');
-    var byId = document.getElementById(id);
-    if (byId && wrap.contains(byId)) return byId;
-
-    // Fallback for any future template that changes id encoding.
-    var wanted = normTitle_(title);
-    var nodes = wrap.querySelectorAll('[id^="book-card-"]');
-    for (var i = 0; i < nodes.length; i++) {
-      if (normTitle_(titleOf(nodes[i])) === wanted) return nodes[i];
-    }
-    return null;
-  }
-
-  function dataForTitle_(title, wrap) {
-    var card = nodeForTitle_(wrap, title);
-    var book = card ? dataFor(card, wrap) : {
-      card: null,
-      id: 'book-card-' + encodeURIComponent(title || ''),
-      title: title,
-      src: '',
-      hook: '',
-      meta: '',
-      actions: []
-    };
-
-    // Title and cover must be bound explicitly. Grouped series cards can
-    // contain several covers/headings, and using the first descendant is what
-    // previously made one cover appear under several different titles.
-    book.title = title;
-    book.id = 'book-card-' + encodeURIComponent(title || '');
-    var exactImg = exactCoverImage_(wrap, title, card);
-    if (exactImg) book.src = exactImg.src;
-    return book;
-  }
-
   function booksForGrid_(wrap) {
     // One title in, one thumbnail out. Order comes exclusively from the native
     // jump list (which itself comes from s.books). Cover/content comes from the
