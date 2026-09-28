@@ -100,7 +100,7 @@ if (!s.includes('const firstReadable = spineItems.find')) {
 // a JSON-encoded component source, so a standalone progressive-enhancement
 // script is safer and leaves the existing carousel/list/detail logic untouched.
 // Version the URL so iOS/Safari cannot keep an older mobile layout in HTTP cache.
-const coverGridSrc = 'cover-grid.js?v=20260928c';
+const coverGridSrc = 'cover-grid.js?v=20260928d';
 s = s.replace(/src="cover-grid\.js(?:\?[^"]*)?"/g, 'src="' + coverGridSrc + '"');
 if (!s.includes('src="' + coverGridSrc + '"')) {
   const bodyEnd = s.lastIndexOf('</body>');
@@ -113,7 +113,8 @@ if (!s.includes('src="' + coverGridSrc + '"')) {
 // Restore the original poetry presentation. The compact shelf remains in the
 // repository as an experiment, but is intentionally not loaded because the
 // original four-theme navigation and paper-cut artwork are clearer on mobile.
-s = s.replace(/<script src="poetry-shelf\\.js"><\\/script>\\n?/g, '');
+s = s.split('<script src="poetry-shelf.js"></script>\\n').join('');
+s = s.split('<script src="poetry-shelf.js"></script>').join('');
 
 for (const marker of [
   'const effChapterCount =',
