@@ -99,10 +99,13 @@ if (!s.includes('const firstReadable = spineItems.find')) {
 // Keep this feature outside the bundled template: the generated page contains
 // a JSON-encoded component source, so a standalone progressive-enhancement
 // script is safer and leaves the existing carousel/list/detail logic untouched.
-if (!s.includes('src="cover-grid.js"')) {
+// Version the URL so iOS/Safari cannot keep an older mobile layout in HTTP cache.
+const coverGridSrc = 'cover-grid.js?v=20260928c';
+s = s.replace(/src="cover-grid\.js(?:\?[^"]*)?"/g, 'src="' + coverGridSrc + '"');
+if (!s.includes('src="' + coverGridSrc + '"')) {
   const bodyEnd = s.lastIndexOf('</body>');
   if (bodyEnd < 0) throw new Error('cover grid script: closing body not found');
-  s = s.slice(0, bodyEnd) + '<script src="cover-grid.js"></script>\\n' + s.slice(bodyEnd);
+  s = s.slice(0, bodyEnd) + '<script src="' + coverGridSrc + '"></script>\\n' + s.slice(bodyEnd);
 }
 
 
