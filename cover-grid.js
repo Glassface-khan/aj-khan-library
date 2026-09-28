@@ -9,6 +9,31 @@
   var columnCount = 3;
   var observer = null;
   var scheduled = false;
+  var canonicalCatalog_ = [];
+  var canonicalCatalogLoaded_ = false;
+
+  function normTitle_(value) {
+    return String(value || '').replace(/\s+/g, ' ').trim().toLocaleLowerCase();
+  }
+
+  async function loadCanonicalCatalog_() {
+    try {
+      // books-live.json preserves the exact Admin/BooksData order and has one
+      // authoritative cover URL per title. A cache-buster avoids stale iOS
+      // shell copies after Drive/catalog updates.
+      var res = await fetch('./books-live.json?cover-order=20260928f', { cache: 'no-store' });
+      if (!res || !res.ok) throw new Error('catalog_http');
+      var payload = await res.json();
+      var books = payload && payload.books;
+      if (typeof books === 'string') books = JSON.parse(books);
+      canonicalCatalog_ = Array.isArray(books) ? books.filter(function (b) { return b && b.title; }) : [];
+    } catch (_) {
+      canonicalCatalog_ = [];
+    }
+    canonicalCatalogLoaded_ = true;
+    return canonicalCatalog_;
+  }
+
 
   function lang() {
     try { return (localStorage.getItem('ajk_ui_lang') || 'de').toLowerCase(); }
@@ -55,33 +80,17 @@
   }
 
   function bookNodes(wrap) {
-    // Build the cover grid from the ACTUAL rendered book list, not from the
-    // jump-list and not from a broad document.getElementById lookup. Singles
-    // are .book-card elements with their own id; series are one .book-card
-    // container whose individual volumes carry the book-card-* ids inside it.
-    // Flatten those two shapes in DOM order and de-duplicate by anchor id.
+    // Return one DOM anchor per rendered title. The DOM may contain several
+    // view-specific copies of the same book; title is the stable identity.
     var ordered = [];
     var seen = {};
-
-    function add(node) {
-      if (!node || !node.id || node.id.indexOf('book-card-') !== 0 || seen[node.id]) return;
-      seen[node.id] = true;
+    Array.prototype.forEach.call(wrap.querySelectorAll('[id^="book-card-"]'), function (node) {
+      var title = titleOf(node);
+      var key = normTitle_(title);
+      if (!key || seen[key]) return;
+      seen[key] = true;
       ordered.push(node);
-    }
-
-    Array.prototype.forEach.call(wrap.children || [], function (card) {
-      if (!card.classList || !card.classList.contains('book-card')) return;
-      if (card.id && card.id.indexOf('book-card-') === 0) {
-        add(card);
-        return;
-      }
-      Array.prototype.forEach.call(card.querySelectorAll('[id^="book-card-"]'), add);
     });
-
-    // Fallback for any future template shape that is not a direct child.
-    if (!ordered.length) {
-      Array.prototype.forEach.call(wrap.querySelectorAll('[id^="book-card-"]'), add);
-    }
     return ordered;
   }
 
@@ -197,6 +206,48 @@
     close.focus();
   }
 
+  function booksForGrid_(wrap) {
+    var nodes = bookNodes(wrap);
+    var nodeByTitle = {};
+    nodes.forEach(function (node) {
+      var key = normTitle_(titleOf(node));
+      if (key && !nodeByTitle[key]) nodeByTitle[key] = node;
+    });
+
+    var out = [];
+    var used = {};
+
+    // Canonical catalogue controls BOTH order and cover image. This avoids the
+    // grouped/carousel DOM accidentally pairing the right title with a
+    // neighbouring cover, which looked like duplicates/missing books.
+    if (canonicalCatalogLoaded_ && canonicalCatalog_.length) {
+      canonicalCatalog_.forEach(function (entry) {
+        var key = normTitle_(entry.title);
+        var node = nodeByTitle[key];
+        if (!node || used[key]) return; // also respects the currently rendered/allowed books
+        used[key] = true;
+        var book = dataFor(node, wrap);
+        book.title = entry.title;
+        book.id = entry.id || book.id;
+        book.src = entry.coverUrl || book.src;
+        book.hook = entry.hook || book.hook;
+        book.meta = entry.kind || book.meta;
+        out.push(book);
+      });
+    }
+
+    // Fallback/forward compatibility: if a just-added live title has not yet
+    // reached books-live.json, append it once rather than hiding it.
+    nodes.forEach(function (node) {
+      var key = normTitle_(titleOf(node));
+      if (!key || used[key]) return;
+      used[key] = true;
+      out.push(dataFor(node, wrap));
+    });
+
+    return out;
+  }
+
   function buildGrid(wrap) {
     var grid = document.getElementById(GRID_ID);
     if (!grid) {
@@ -204,13 +255,8 @@
       grid.id = GRID_ID;
       wrap.parentNode.insertBefore(grid, wrap);
     }
-    var seenTitles = {};
-    var books = bookNodes(wrap).map(function (node) { return dataFor(node, wrap); }).filter(function (book) {
-      var key = (book.title || '').replace(/\s+/g, ' ').trim().toLocaleLowerCase();
-      if (!key || seenTitles[key]) return false;
-      seenTitles[key] = true;
-      return true;
-    });
+
+    var books = booksForGrid_(wrap);
     var signature = books.map(function (b) { return b.id + '|' + b.src + '|' + b.title; }).join('\n');
     if (grid.dataset.signature === signature) return grid;
     grid.dataset.signature = signature;
@@ -369,7 +415,7 @@
     return true;
   }
 
-  function start() {
+  function startUi_() {
     ensure();
     observer = new MutationObserver(function () {
       if (scheduled) return;
@@ -381,6 +427,10 @@
     });
     observer.observe(document.body, { childList: true, subtree: true });
     document.addEventListener('keydown', function (e) { if (e.key === 'Escape') closeDetail(); });
+  }
+
+  function start() {
+    loadCanonicalCatalog_().then(startUi_, startUi_);
   }
 
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start, { once: true });
