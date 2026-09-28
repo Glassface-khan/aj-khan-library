@@ -36,6 +36,7 @@
       '#'+COLS_ID+' .ajk-cover-cols-label{font-family:"Archivo",sans-serif;font-size:9.5px;letter-spacing:.10em;text-transform:uppercase;color:var(--ink-3,#777);margin-right:2px}' +
       '#'+COLS_ID+' button{appearance:none;width:30px;height:34px;padding:0;border:1px solid var(--rule,#cfc6b5);background:transparent;color:var(--ink-2,#555);font-family:"Archivo",sans-serif;font-size:11px;cursor:pointer}' +
       '#'+COLS_ID+' button[aria-pressed="true"]{border-color:var(--gold,#b89448);color:var(--gold,#b89448);background:rgba(212,175,55,.08)}' +
+      '#'+COLS_ID+' .ajk-cover-cols-select{display:none;appearance:auto;min-width:86px;height:44px;padding:0 12px;border:1px solid var(--gold,#b89448);background:var(--bone,#f5f0e6);color:var(--ink,#2b2924);font-family:"Archivo",sans-serif;font-size:16px;line-height:44px}' +
       '#'+MODAL_ID+'{position:fixed;inset:0;z-index:80;background:rgba(22,20,15,.88);display:flex;align-items:center;justify-content:center;padding:20px;box-sizing:border-box}' +
       '#'+MODAL_ID+' .ajk-cover-detail{width:min(760px,100%);max-height:90vh;overflow:auto;background:var(--bone,#f5f0e6);padding:24px;box-sizing:border-box;box-shadow:0 24px 70px rgba(0,0,0,.35)}' +
       '#'+MODAL_ID+' .ajk-cover-detail-head{display:flex;justify-content:space-between;align-items:center;gap:16px;margin-bottom:18px}' +
@@ -47,7 +48,7 @@
       '#'+MODAL_ID+' .ajk-cover-detail-actions{display:flex;flex-wrap:wrap;gap:10px}' +
       '#'+MODAL_ID+' .ajk-cover-detail-action,#'+MODAL_ID+' .ajk-cover-detail-close{background:none;border:1px solid var(--gold);color:var(--gold);font-family:"Archivo",sans-serif;font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;padding:9px 14px;cursor:pointer}' +
       '#'+MODAL_ID+' .ajk-cover-detail-close{border-color:var(--rule);color:var(--ink-2)}' +
-      '@media(max-width:640px){#'+GRID_ID+'{gap:16px 10px;padding-top:18px}#'+COLS_ID+'{margin-left:0;width:100%;gap:6px}#'+COLS_ID+' .ajk-cover-cols-label{margin-right:4px}#'+COLS_ID+' button{flex:1;max-width:42px}#'+MODAL_ID+'{padding:12px}#'+MODAL_ID+' .ajk-cover-detail{padding:18px}#'+MODAL_ID+' .ajk-cover-detail-body{grid-template-columns:105px minmax(0,1fr);gap:16px}#'+MODAL_ID+' .ajk-cover-detail-hook{font-size:15px}}' +
+      '@media(max-width:640px){#'+GRID_ID+'{gap:16px 10px;padding-top:18px}#'+COLS_ID+'{margin-left:0;width:auto;max-width:100%;gap:10px}#'+COLS_ID+' .ajk-cover-cols-label{margin-right:2px;font-size:10px}#'+COLS_ID+' button{display:none}#'+COLS_ID+' .ajk-cover-cols-select{display:block}#'+MODAL_ID+'{padding:12px}#'+MODAL_ID+' .ajk-cover-detail{padding:18px}#'+MODAL_ID+' .ajk-cover-detail-body{grid-template-columns:105px minmax(0,1fr);gap:16px}#'+MODAL_ID+' .ajk-cover-detail-hook{font-size:15px}}' +
       '@media(max-width:380px){#'+MODAL_ID+' .ajk-cover-detail-body{grid-template-columns:1fr}#'+MODAL_ID+' .ajk-cover-detail-img{max-width:150px}}' +
       '@media(min-width:900px){#'+GRID_ID+'{gap:30px 24px}}';
     document.head.appendChild(style);
@@ -196,6 +197,8 @@
       Array.prototype.forEach.call(chooser.querySelectorAll('button[data-cols]'), function (button) {
         button.setAttribute('aria-pressed', String(parseInt(button.getAttribute('data-cols'), 10) === columnCount));
       });
+      var select = chooser.querySelector('.ajk-cover-cols-select');
+      if (select) select.value = String(columnCount);
     }
     try { localStorage.setItem('ajk_book_cover_columns', String(columnCount)); } catch (_) {}
   }
@@ -224,6 +227,21 @@
         chooser.appendChild(button);
       })(i);
     }
+
+    // On phones use the native picker instead of six tiny number buttons.
+    // This gives iOS a large, reliable touch target while desktop keeps the
+    // compact 1–6 button row.
+    var select = document.createElement('select');
+    select.className = 'ajk-cover-cols-select';
+    select.setAttribute('aria-label', t('Cover pro Zeile auswählen', 'Choose covers per row'));
+    for (var j = 1; j <= 6; j++) {
+      var option = document.createElement('option');
+      option.value = String(j);
+      option.textContent = String(j);
+      select.appendChild(option);
+    }
+    select.addEventListener('change', function () { setColumnCount(select.value); });
+    chooser.appendChild(select);
 
     if (toggleButton && toggleButton.parentNode) toggleButton.parentNode.insertBefore(chooser, toggleButton.nextSibling);
     columnCount = readColumnCount();
