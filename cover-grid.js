@@ -73,7 +73,7 @@
       '#'+MODAL_ID+' .ajk-cover-detail-actions{display:flex;flex-wrap:wrap;gap:10px}' +
       '#'+MODAL_ID+' .ajk-cover-detail-action,#'+MODAL_ID+' .ajk-cover-detail-close{background:none;border:1px solid var(--gold);color:var(--gold);font-family:"Archivo",sans-serif;font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;padding:9px 14px;cursor:pointer}' +
       '#'+MODAL_ID+' .ajk-cover-detail-close{border-color:var(--rule);color:var(--ink-2)}' +
-      '@media(max-width:640px){.book-toc-wrap{position:static!important}.book-toc-panel{position:fixed!important;left:16px!important;right:16px!important;top:18vh!important;width:auto!important;max-height:64vh!important;z-index:120!important;box-sizing:border-box}#'+GRID_ID+'{gap:16px 10px;padding-top:10px}#'+COLS_ID+'{margin:8px 0 2px;width:100%;max-width:none;gap:10px;box-sizing:border-box;justify-content:flex-end;align-items:center}#'+COLS_ID+'.is-open{display:flex}#'+COLS_ID+' .ajk-cover-cols-label{margin-right:2px;font-size:10px}#'+COLS_ID+' button{display:none}#'+COLS_ID+' .ajk-cover-cols-select{display:block;min-width:104px;height:46px}#'+MODAL_ID+'{padding:12px}#'+MODAL_ID+' .ajk-cover-detail{padding:18px}#'+MODAL_ID+' .ajk-cover-detail-body{grid-template-columns:105px minmax(0,1fr);gap:16px}#'+MODAL_ID+' .ajk-cover-detail-hook{font-size:15px}}' +
+      '@media(max-width:640px){.ajk-book-toolbar{display:grid!important;grid-template-columns:repeat(3,minmax(0,1fr))!important;gap:8px!important;align-items:stretch!important;width:100%!important;box-sizing:border-box!important}.ajk-book-toolbar>.ajk-book-search-cell{grid-column:1/-1!important;min-width:0!important;width:100%!important}.ajk-book-toolbar>.book-toc-wrap{display:block!important;position:static!important;min-width:0!important;width:auto!important;margin:0!important}.ajk-book-toolbar>.book-toc-wrap>button,.ajk-book-toolbar>.book-view-toggle,.ajk-book-toolbar>['+TOGGLE_ATTR+']{display:flex!important;align-items:center!important;justify-content:center!important;width:100%!important;min-width:0!important;height:52px!important;box-sizing:border-box!important;margin:0!important;padding:10px 8px!important;text-align:center!important;white-space:nowrap!important}.book-toc-panel{position:fixed!important;left:16px!important;right:16px!important;top:18vh!important;width:auto!important;max-height:64vh!important;z-index:120!important;box-sizing:border-box}#'+GRID_ID+'{gap:16px 10px;padding-top:10px}#'+COLS_ID+'{margin:8px 0 2px;width:100%;max-width:none;gap:10px;box-sizing:border-box;justify-content:flex-end;align-items:center}#'+COLS_ID+'.is-open{display:flex}#'+COLS_ID+' .ajk-cover-cols-label{margin-right:2px;font-size:10px}#'+COLS_ID+' button{display:none}#'+COLS_ID+' .ajk-cover-cols-select{display:block;min-width:104px;height:46px}#'+MODAL_ID+'{padding:12px}#'+MODAL_ID+' .ajk-cover-detail{padding:18px}#'+MODAL_ID+' .ajk-cover-detail-body{grid-template-columns:105px minmax(0,1fr);gap:16px}#'+MODAL_ID+' .ajk-cover-detail-hook{font-size:15px}}' +
       '@media(max-width:380px){#'+MODAL_ID+' .ajk-cover-detail-body{grid-template-columns:1fr}#'+MODAL_ID+' .ajk-cover-detail-img{max-width:150px}}' +
       '@media(min-width:900px){#'+GRID_ID+'{gap:30px 24px}}';
     document.head.appendChild(style);
@@ -466,6 +466,19 @@
     if (!wrap) return false;
     injectStyles();
     buildGrid(wrap);
+
+    // Mobile-only toolbar normalization. The bundled template has search,
+    // jump-list and list toggle in one flex row; once "Nur Cover" is added,
+    // iPhone can overflow that row and stretch "Sprung-Liste". Mark the
+    // existing elements and let the mobile CSS place search on its own row
+    // and the three view buttons in equal columns.
+    var tocWrap = document.querySelector('.book-toc-wrap');
+    if (tocWrap && tocWrap.parentElement) {
+      var toolbar = tocWrap.parentElement;
+      toolbar.classList.add('ajk-book-toolbar');
+      if (toolbar.firstElementChild) toolbar.firstElementChild.classList.add('ajk-book-search-cell');
+    }
+
     var button = document.querySelector('[' + TOGGLE_ATTR + ']');
     if (!button) {
       button = document.createElement('button');
