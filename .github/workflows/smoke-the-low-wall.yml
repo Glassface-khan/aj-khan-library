@@ -36,16 +36,33 @@ jobs:
           d=webdriver.Chrome(options=opt)
           try:
               d.get(SITE)
-              time.sleep(15)
+              time.sleep(10)
+              print('INITIAL_BODY=',repr(d.find_element(By.TAG_NAME,'body').text))
+              print('BUTTONS=',d.execute_script("""
+                return [...document.querySelectorAll('button,a')]
+                  .map((el,i)=>({i,tag:el.tagName,text:(el.innerText||'').trim(),cls:el.className||'',id:el.id||''}))
+                  .filter(x=>x.text).slice(0,120);
+              """))
+
+              clicked=d.execute_script("""
+                const els=[...document.querySelectorAll('button,a,[role="button"]')];
+                const el=els.find(e=>/^(books|bücher)$/i.test((e.innerText||'').trim()))
+                  || els.find(e=>/(books|bücher)/i.test((e.innerText||'').trim()));
+                if(!el) return null;
+                el.click();
+                return {tag:el.tagName,text:(el.innerText||'').trim(),id:el.id||'',cls:el.className||''};
+              """)
+              print('CLICKED=',clicked)
+              time.sleep(5)
+
               body=d.find_element(By.TAG_NAME,'body').text
               source=d.page_source
               print('URL=',d.current_url)
-              print('TITLE=',repr(d.title))
               print('READY=',d.execute_script('return document.readyState'))
               print('BODY_HAS_TARGET=',TARGET in body)
               print('SOURCE_HAS_TARGET=',TARGET in source)
               print('BODY_LEN=',len(body))
-              print('PAGE_SOURCE_LEN=',len(source))
+              print('BODY_HEAD=',repr(body[:4000]))
               print('BOOK_CARD_COUNT=',d.execute_script("return document.querySelectorAll('[id^=book-card-]').length"))
               print('TARGET_ELEMENT_IDS=',d.execute_script("""
                 const t=arguments[0];
@@ -59,13 +76,6 @@ jobs:
                   return Array.isArray(x.books) && x.books.some(b=>b && b.title===arguments[0]);
                 } catch(e) { return String(e); }
               """, TARGET))
-              print('VISITOR_ACCESS=',d.execute_script("""
-                try {
-                  const x=JSON.parse(localStorage.getItem('ajk_visitor_access')||'null');
-                  if (!x) return null;
-                  return {hasVisibleBooks:Array.isArray(x.visibleBooks), visibleBookCount:Array.isArray(x.visibleBooks)?x.visibleBooks.length:null};
-                } catch(e) { return String(e); }
-              """))
               print('FETCH_BOOKS_LIVE=', d.execute_async_script("""
                 const target=arguments[0], done=arguments[1];
                 fetch('books-live.json?_='+Date.now(),{cache:'no-store'})
@@ -80,7 +90,7 @@ jobs:
               for row in d.get_log('browser'):
                   print(json.dumps(row,ensure_ascii=False))
               if TARGET not in body:
-                  sys.exit('TARGET_CARD_NOT_VISIBLE')
+                  sys.exit('TARGET_CARD_NOT_VISIBLE_AFTER_OPENING_BOOKS')
           finally:
               d.quit()
           PY
