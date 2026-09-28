@@ -272,31 +272,38 @@
   }
 
   function booksForGrid_(wrap) {
-    // One visible title in, one thumbnail out.
-    // ORDER comes from the native jump list (= current s.books order).
-    // COVER comes from the normal rendered card with matching alt text.
-    // This guarantees the thumbnail view uses the same cover the user sees
-    // in the normal book card and prevents visually duplicated/misassigned
-    // covers when books-live.json is temporarily out of sync.
-    var titles = visibleTitlesInOrder_(wrap);
+    // STRICT canonical grid: one catalogue entry = one thumbnail.
+    // Order, identity and cover all come from books-live.json. The rendered
+    // DOM is used only to determine which titles the current user may see.
+    var visibleTitles = visibleTitlesInOrder_(wrap);
+    var visible = {};
+    visibleTitles.forEach(function (title) { visible[normTitle_(title)] = true; });
+    var hasVisibilityFilter = visibleTitles.length > 0;
+
     var out = [];
-    var seen = {};
+    var seenIds = {};
+    var seenTitles = {};
 
-    titles.forEach(function (title) {
-      var key = normTitle_(title);
-      if (!key || seen[key]) return;
-      seen[key] = true;
+    canonicalCatalog_.forEach(function (entry) {
+      if (!entry || !entry.title) return;
 
-      var entry = catalogEntryForTitle_(title) || {};
-      var card = cardForTitle_(wrap, title);
-      var dom = domDetailsForTitle_(wrap, title, card);
-      var renderedImage = imageForTitle_(wrap, title);
+      var titleKey = normTitle_(entry.title);
+      var idKey = String(entry.id || '').trim();
+      if (!titleKey) return;
+      if (hasVisibilityFilter && !visible[titleKey]) return;
+      if ((idKey && seenIds[idKey]) || seenTitles[titleKey]) return;
+
+      if (idKey) seenIds[idKey] = true;
+      seenTitles[titleKey] = true;
+
+      var card = cardForTitle_(wrap, entry.title);
+      var dom = domDetailsForTitle_(wrap, entry.title, card);
 
       out.push({
         card: card,
-        id: entry.id || (card && card.id) || ('book-card-' + encodeURIComponent(title)),
-        title: entry.title || title,
-        src: renderedImage ? renderedImage.src : (dom.src || ''),
+        id: entry.id || (card && card.id) || ('book-card-' + encodeURIComponent(entry.title)),
+        title: entry.title,
+        src: entry.coverUrl || '',
         hook: entry.hook || dom.hook || '',
         meta: entry.kind || dom.meta || '',
         actions: dom.actions || []
