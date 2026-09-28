@@ -40,8 +40,8 @@
 // payloads in IndexedDB for fast reopening; force clients to fetch the new JS.
 // v26 -> v27 (24.09.2026): books-live.json is the immediate catalog fallback;
 // BooksData remains canonical and replaces it whenever the live request succeeds.
-const SHELL_CACHE = 'ajk-shell-v37';
-const DATA_CACHE = 'ajk-data-v37';
+// v37 -> v38 (28.09.2026): force iOS to reload the exact-order cover grid.\nconst SHELL_CACHE = 'ajk-shell-v38';
+const DATA_CACHE = 'ajk-data-v38';
 const SHELL_FILES = ['./', './index.html', './books-live.json', './cover-grid.js', './manifest.webmanifest', './icons/icon-192.png', './icons/icon-512.png'];
 
 // Aktionen, deren Antwort für Offline-Nutzung zwischengespeichert werden
