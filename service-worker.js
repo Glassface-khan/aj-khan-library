@@ -1,3 +1,4 @@
+// v40 -> v41 (28.09.2026): merge live BooksData with books-live.json so a newly deployed title cannot be hidden by backend lag.
 // Service Worker für die Autorenseite — macht die Seite installierbar
 // (PWA) und erlaubt Offline-Zugriff auf bereits geöffnete EPUBs sowie auf
 // die zuletzt geladene Bücher-/Gedichte-/Einstellungsliste.
@@ -122,6 +123,58 @@ self.addEventListener('fetch', (event) => {
   }
 
   if (req.method === 'GET') {
+    // The public catalogue has two sources: Apps Script/BooksData and the
+    // deploy-coupled books-live.json fallback. A just-published book can be
+    // present in GitHub/Drive a few moments before the Apps-Script deployment
+    // catches up. Merge both here so the live backend can never hide a newer
+    // deployed catalogue entry.
+    if (url.searchParams.get('action') === 'getBooks') {
+      event.respondWith((async () => {
+        let liveBooks = [];
+        let fallbackBooks = [];
+
+        try {
+          const liveRes = await fetch(req, { cache: 'no-store' });
+          if (liveRes && liveRes.ok) {
+            const liveData = await liveRes.clone().json();
+            const raw = liveData && liveData.books;
+            const parsed = (typeof raw === 'string') ? JSON.parse(raw || '[]') : raw;
+            if (Array.isArray(parsed)) liveBooks = parsed;
+          }
+        } catch (_) {}
+
+        try {
+          const fallbackUrl = new URL('./books-live.json?sw-catalog=20260928g', self.registration.scope);
+          const fallbackRes = await fetch(fallbackUrl, { cache: 'no-store' });
+          if (fallbackRes && fallbackRes.ok) {
+            const fallbackData = await fallbackRes.json();
+            const raw = fallbackData && fallbackData.books;
+            const parsed = (typeof raw === 'string') ? JSON.parse(raw || '[]') : raw;
+            if (Array.isArray(parsed)) fallbackBooks = parsed;
+          }
+        } catch (_) {}
+
+        const merged = liveBooks.slice();
+        const seen = new Set(merged.map((b) => String((b && b.title) || '').trim().toLocaleLowerCase()));
+        fallbackBooks.forEach((b) => {
+          const key = String((b && b.title) || '').trim().toLocaleLowerCase();
+          if (key && !seen.has(key)) {
+            merged.push(b);
+            seen.add(key);
+          }
+        });
+
+        if (!merged.length) {
+          return fetch(req, { cache: 'no-store' });
+        }
+        return new Response(JSON.stringify({ ok: true, books: JSON.stringify(merged) }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' }
+        });
+      })());
+      return;
+    }
+
     // Reader compatibility code must never come from a stale shell/browser
     // cache. This is deliberately network-only after the 25.09.2026 iOS
     // rollback: an old audio-library.js can otherwise keep the removed global
