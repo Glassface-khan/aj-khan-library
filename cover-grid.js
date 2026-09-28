@@ -489,14 +489,29 @@
       button.setAttribute('aria-pressed', 'false');
       button.textContent = t('Nur Cover', 'Covers only');
       button.addEventListener('click', function () { setMode(!active); });
-      var old = document.querySelector('.book-view-toggle');
-      if (old && old.parentNode) old.parentNode.insertBefore(button, old.nextSibling);
-      else wrap.parentNode.insertBefore(button, wrap);
-      ensureColumnChooser(button);
-      try { if (localStorage.getItem('ajk_book_cover_view') === '1') setMode(true); } catch (_) {}
-    } else {
-      ensureColumnChooser(button);
     }
+
+    // Keep all three view controls in the SAME toolbar. Earlier versions used
+    // the first .book-view-toggle found anywhere in the page, which could put
+    // "Nur Cover" into a different container on mobile and leave only two
+    // buttons visible. The jump/list/cover row is now deterministic.
+    if (toolbar) {
+      var listToggle = toolbar.querySelector('.book-view-toggle');
+      if (listToggle) {
+        if (button.parentNode !== toolbar || listToggle.nextSibling !== button) {
+          toolbar.insertBefore(button, listToggle.nextSibling);
+        }
+      } else if (button.parentNode !== toolbar) {
+        toolbar.appendChild(button);
+      }
+    } else if (!button.parentNode) {
+      wrap.parentNode.insertBefore(button, wrap);
+    }
+
+    ensureColumnChooser(button);
+    try {
+      if (localStorage.getItem('ajk_book_cover_view') === '1' && !active) setMode(true);
+    } catch (_) {}
     return true;
   }
 
