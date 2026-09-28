@@ -43,8 +43,8 @@
 // payloads in IndexedDB for fast reopening; force clients to fetch the new JS.
 // v26 -> v27 (24.09.2026): books-live.json is the immediate catalog fallback;
 // BooksData remains canonical and replaces it whenever the live request succeeds.
-// v37 -> v38 (28.09.2026): force iOS to reload the exact-order cover grid.\n// v39 -> v40 (28.09.2026): deploy THE GUEST catalog entry, cover and EPUB; force clients to refresh the catalog fallback.\n// v40 -> v41 (28.09.2026): deploy THE NIGHT SIDE catalog entry, cover and EPUB; force clients to refresh the catalog fallback.\nconst SHELL_CACHE = 'ajk-shell-v45';
-const DATA_CACHE = 'ajk-data-v45';
+// v37 -> v38 (28.09.2026): force iOS to reload the exact-order cover grid.\n// v39 -> v40 (28.09.2026): deploy THE GUEST catalog entry, cover and EPUB; force clients to refresh the catalog fallback.\n// v40 -> v41 (28.09.2026): deploy THE NIGHT SIDE catalog entry, cover and EPUB; force clients to refresh the catalog fallback.\nconst SHELL_CACHE = 'ajk-shell-v46';
+const DATA_CACHE = 'ajk-data-v46';
 const SHELL_FILES = ['./', './index.html', './books-live.json', './cover-grid-v2.js', './manifest.webmanifest', './icons/icon-192.png', './icons/icon-512.png'];
 
 // Aktionen, deren Antwort für Offline-Nutzung zwischengespeichert werden
@@ -174,6 +174,14 @@ self.addEventListener('fetch', (event) => {
           headers: { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' }
         });
       })());
+      return;
+    }
+
+    // Cover-grid runtimes must never come from a stale service-worker shell.
+    // We now keep both filenames compatible, but always fetch the active code
+    // fresh so an older cached index cannot resurrect the duplicate thumbnail bug.
+    if (url.pathname.endsWith('/cover-grid.js') || url.pathname.endsWith('/cover-grid-v2.js')) {
+      event.respondWith(fetch(req, { cache: 'no-store' }));
       return;
     }
 
