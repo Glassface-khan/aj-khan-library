@@ -254,13 +254,45 @@
     close.focus();
   }
 
-  function booksForGrid_(wrap) {
-    // One title in, one thumbnail out. Order comes exclusively from the native
-    // jump list (which itself comes from s.books). Cover/content comes from the
-    // canonical catalogue by title. No second-pass append = no duplicates.
-    return visibleTitlesInOrder_(wrap).map(function (title) {
-      return dataForTitle_(title, wrap);
+  function visibleTitleSet_(wrap) {
+    var set = {};
+    visibleTitlesInOrder_(wrap).forEach(function (title) {
+      set[normTitle_(title)] = true;
     });
+    return set;
+  }
+
+  function booksForGrid_(wrap) {
+    // STRICT source of truth:
+    // 1) order + cover/title metadata come only from books-live.json
+    // 2) the rendered jump/list DOM is used only as a VISIBILITY filter
+    // This prevents grouped/alternate DOM cards from ever changing cover
+    // order or assigning one book's image to another title.
+    var visible = visibleTitleSet_(wrap);
+    var out = [];
+    var seen = {};
+
+    canonicalCatalog_.forEach(function (entry) {
+      if (!entry || !entry.title) return;
+      var key = normTitle_(entry.title);
+      if (!key || seen[key]) return;
+      if (Object.keys(visible).length && !visible[key]) return;
+      seen[key] = true;
+
+      var card = cardForTitle_(wrap, entry.title);
+      var dom = domDetailsForTitle_(wrap, entry.title, card);
+      out.push({
+        card: card,
+        id: entry.id || (card && card.id) || ('book-card-' + encodeURIComponent(entry.title)),
+        title: entry.title,
+        src: entry.coverUrl || '',
+        hook: entry.hook || dom.hook || '',
+        meta: entry.kind || dom.meta || '',
+        actions: dom.actions || []
+      });
+    });
+
+    return out;
   }
 
   function buildGrid(wrap) {
