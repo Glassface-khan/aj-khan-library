@@ -54,23 +54,13 @@
   function placeControl_(wrap) {
     if (!wrap) return false;
 
-    // On mobile the column chooser is placed on its own row immediately above
-    // the cover grid. Put text contrast directly after it so the control is
-    // visibly located under "Pro Zeile", as intended.
-    var columns = document.getElementById('ajk-cover-grid-columns');
-    if (columns && columns.parentNode) {
-      if (columns.nextSibling !== wrap || wrap.parentNode !== columns.parentNode) {
-        columns.parentNode.insertBefore(wrap, columns.nextSibling);
-      }
-      return true;
-    }
-
+    // Keep this control inside the toolbar only. Moving it beside the separate
+    // "Pro Zeile" chooser made cover-grid-v3 and this script repeatedly move
+    // sibling nodes back and forth, which could leave Covers mode empty.
     var toolbar = document.querySelector('.ajk-book-toolbar') || document.querySelector('.ajk-book-tools');
-    if (toolbar) {
-      if (wrap.parentNode !== toolbar) toolbar.appendChild(wrap);
-      return true;
-    }
-    return false;
+    if (!toolbar) return false;
+    if (wrap.parentNode !== toolbar) toolbar.appendChild(wrap);
+    return true;
   }
 
   function ensureControl_() {
@@ -114,15 +104,14 @@
     injectStyle_();
     applyMode_(readMode_(), false);
 
-    // cover-grid-v3 initializes after DOMContentLoaded and can add/move the
-    // mobile controls a moment later. Retry briefly so this control is never
-    // missed merely because a CSS class was added after our first pass.
-    ensureControl_();
+    if (ensureControl_()) return;
+
+    // Retry only until the books toolbar exists, then stop. Do not continuously
+    // reposition nodes after cover-grid-v3 has finished its own layout.
     var attempts = 0;
     var timer = setInterval(function () {
       attempts += 1;
-      ensureControl_();
-      if (attempts >= 40) clearInterval(timer);
+      if (ensureControl_() || attempts >= 40) clearInterval(timer);
     }, 250);
   }
 
