@@ -409,6 +409,51 @@
     return order;
   }
 
+  async function saveOrderViaLegacy_(order, token) {
+    // Backward-compatible fallback while an older Apps Script deployment is
+    // still live: read the full server list with POST (so the service worker
+    // cannot merge in the static fallback), reorder those exact records, then
+    // use the long-standing saveBooks endpoint.
+    var readParams = new URLSearchParams({ action: 'getBooks' });
+    var readRes = await fetch(GAS_URL, { method: 'POST', body: readParams, cache: 'no-store' });
+    var readData = await readRes.json();
+    var raw = readData && readData.books;
+    if (typeof raw === 'string') raw = JSON.parse(raw || '[]');
+    if (!Array.isArray(raw)) throw new Error('getBooks_failed');
+
+    var byId = {};
+    var byTitle = {};
+    raw.forEach(function (b) {
+      if (b && b.id) byId[String(b.id)] = b;
+      if (b && b.title) byTitle[normTitle_(b.title)] = b;
+    });
+
+    var reordered = [];
+    var used = {};
+    order.forEach(function (item) {
+      var book = (item.id && byId[String(item.id)]) || byTitle[normTitle_(item.title)];
+      if (!book) return;
+      var key = String(book.id || book.title);
+      if (used[key]) return;
+      used[key] = true;
+      reordered.push(book);
+    });
+    raw.forEach(function (book) {
+      var key = String(book.id || book.title);
+      if (!used[key]) reordered.push(book);
+    });
+
+    var saveParams = new URLSearchParams({
+      action: 'saveBooks',
+      adminToken: token,
+      books: JSON.stringify(reordered)
+    });
+    var saveRes = await fetch(GAS_URL, { method: 'POST', body: saveParams, cache: 'no-store' });
+    var saveData = await saveRes.json();
+    if (!saveData || !saveData.ok) throw new Error((saveData && saveData.error) || 'saveBooks_failed');
+    return true;
+  }
+
   async function persistGridOrder_(grid) {
     if (!isAdmin_()) return;
     if (currentSearchQuery_()) {
@@ -430,7 +475,15 @@
       });
       var res = await fetch(GAS_URL, { method: 'POST', body: params, cache: 'no-store' });
       var data = await res.json();
-      if (!data || !data.ok) throw new Error((data && data.error) || 'save_failed');
+
+      if (!data || !data.ok) {
+        var error = (data && data.error) || 'save_failed';
+        if (/unknown action/i.test(error)) {
+          await saveOrderViaLegacy_(order, token);
+        } else {
+          throw new Error(error);
+        }
+      }
       showOrderToast_(t('Reihenfolge gespeichert ✓', 'Order saved ✓'));
     } catch (err) {
       window.alert(t('Reihenfolge konnte nicht zentral gespeichert werden: ', 'Order could not be saved centrally: ') + err.message);
