@@ -145,10 +145,11 @@
       '#'+GRID_ID+'.ajk-admin-reorder .ajk-cover-drag-handle{display:flex}' +
       '.ajk-cover-thumb.is-dragging{z-index:6;opacity:.78;transform:scale(.97)}' +
       '.ajk-cover-thumb.is-dragging .ajk-cover-frame{border-color:var(--gold,#b89448);box-shadow:0 18px 38px rgba(0,0,0,.25)}' +
-      '.ajk-search-hidden{display:none!important}' +
+      '.ajk-search-hidden,.ajk-search-slot-hidden{display:none!important}' +
       '#books.ajk-search-active{min-height:0!important;height:auto!important;padding-bottom:0!important}' +
       '#books .book-list-wrap.ajk-search-active{min-height:0!important;height:auto!important;padding-bottom:0!important;margin-bottom:0!important}' +
-      '#books.ajk-search-active .book-list-wrap [id^="book-card-"]:not(.ajk-search-hidden){min-height:0!important;height:auto!important;margin-bottom:24px!important;padding-bottom:24px!important}' +
+      '#books.ajk-search-active .ajk-search-slot-visible{min-height:0!important;height:auto!important;padding-bottom:0!important;margin-bottom:24px!important}' +
+      '#books.ajk-search-active .book-list-wrap [id^="book-card-"]:not(.ajk-search-hidden){min-height:0!important;height:auto!important;margin-bottom:0!important;padding-bottom:0!important}' +
       '.ajk-book-search-cell{display:grid!important;grid-template-columns:minmax(0,1fr) auto!important;gap:8px!important;align-items:center!important}' +
       '.ajk-book-search-cell input[type=search]{min-width:0!important;width:100%!important}' +
       '#'+SEARCH_SCOPE_ID+'{height:44px;min-width:96px;padding:0 10px;border:1px solid var(--rule,#cfc6b5);background:var(--bone,#f5f0e6);color:var(--ink,#2b2924);font-family:"Archivo",sans-serif;font-size:11px;letter-spacing:.03em}' +
@@ -380,6 +381,23 @@
     return (titleHay + ' ' + contentHay).indexOf(query) !== -1;
   }
 
+  function searchSlotForCard_(card, wrap) {
+    if (!card || !wrap) return card;
+    var slot = card;
+    var parent = slot.parentElement;
+
+    // Climb through wrappers that belong to this single book only. Stop before
+    // the first container that holds multiple books. This collapses any fixed
+    // per-book wrapper height left behind by the bundled layout.
+    while (parent && parent !== wrap) {
+      var count = parent.querySelectorAll('[id^="book-card-"]').length;
+      if (count !== 1) break;
+      slot = parent;
+      parent = slot.parentElement;
+    }
+    return slot;
+  }
+
   function applyListSearch_(wrap) {
     if (!wrap) return;
     var query = currentSearchQuery_();
@@ -388,12 +406,24 @@
     var booksSection = document.getElementById('books');
     if (booksSection) booksSection.classList.toggle('ajk-search-active', !!query);
 
+    // Clear slot state from the previous search first.
+    Array.prototype.forEach.call(wrap.querySelectorAll('.ajk-search-slot-hidden,.ajk-search-slot-visible'), function (slot) {
+      slot.classList.remove('ajk-search-slot-hidden', 'ajk-search-slot-visible');
+    });
+
     Array.prototype.forEach.call(wrap.querySelectorAll('[id^="book-card-"]'), function (node) {
       var raw = String(node.id || '').replace(/^book-card-/, '');
       var title = raw;
       try { title = decodeURIComponent(raw); } catch (_) {}
       var entry = catalogEntryForTitle_(title) || { title: title };
-      node.classList.toggle('ajk-search-hidden', !!query && !matchesSearch_(entry, query, scope));
+      var hidden = !!query && !matchesSearch_(entry, query, scope);
+      node.classList.toggle('ajk-search-hidden', hidden);
+
+      var slot = searchSlotForCard_(node, wrap);
+      if (slot && slot !== wrap) {
+        slot.classList.toggle('ajk-search-slot-hidden', hidden);
+        slot.classList.toggle('ajk-search-slot-visible', !!query && !hidden);
+      }
     });
   }
 
