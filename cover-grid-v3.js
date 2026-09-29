@@ -11,29 +11,71 @@
   var scheduled = false;
   var canonicalCatalog_ = [];
   var canonicalCatalogLoaded_ = false;
+  var GAS_URL = 'https://script.google.com/macros/s/AKfycbwcbRDaWkM1wf3MV_dj4RPw9jQl2Fgc4YfGcmFrGU1S243yvh8WGW7mbyXLbSeVJKI/exec';
+  var dragState_ = null;
+  var suppressCoverClickUntil_ = 0;
+  var searchTimer_ = null;
+
+  function isAdmin_() {
+    try { return localStorage.getItem('ajk_author_admin') === '1' && !!localStorage.getItem('ajk_admin_token'); }
+    catch (_) { return false; }
+  }
+  function adminToken_() {
+    try { return localStorage.getItem('ajk_admin_token') || ''; }
+    catch (_) { return ''; }
+  }
 
   function normTitle_(value) {
     return String(value || '').replace(/\s+/g, ' ').trim().toLocaleLowerCase();
   }
 
   async function loadCanonicalCatalog_() {
+    var liveBooks = [];
+    var fallbackBooks = [];
+
     try {
-      // books-live.json preserves the exact Admin/BooksData order and has one
-      // authoritative cover URL per title. A cache-buster avoids stale iOS
-      // shell copies after Drive/catalog updates.
-      var res = await fetch('./books-live.json?cover-order=20260928f', { cache: 'no-store' });
-      if (!res || !res.ok) throw new Error('catalog_http');
-      var payload = await res.json();
-      var books = payload && payload.books;
-      if (typeof books === 'string') books = JSON.parse(books);
-      canonicalCatalog_ = Array.isArray(books) ? books.filter(function (b) { return b && b.title; }) : [];
-    } catch (_) {
-      canonicalCatalog_ = [];
+      var liveRes = await fetch(GAS_URL + '?action=getBooks&cb=' + Date.now(), { cache: 'no-store' });
+      if (liveRes && liveRes.ok) {
+        var livePayload = await liveRes.json();
+        var liveRaw = livePayload && livePayload.books;
+        if (typeof liveRaw === 'string') liveRaw = JSON.parse(liveRaw || '[]');
+        if (Array.isArray(liveRaw)) liveBooks = liveRaw.filter(function (b) { return b && b.title; });
+      }
+    } catch (_) {}
+
+    try {
+      var fallbackRes = await fetch('./books-live.json?cover-order=20260929a', { cache: 'no-store' });
+      if (fallbackRes && fallbackRes.ok) {
+        var fallbackPayload = await fallbackRes.json();
+        var fallbackRaw = fallbackPayload && fallbackPayload.books;
+        if (typeof fallbackRaw === 'string') fallbackRaw = JSON.parse(fallbackRaw || '[]');
+        if (Array.isArray(fallbackRaw)) fallbackBooks = fallbackRaw.filter(function (b) { return b && b.title; });
+      }
+    } catch (_) {}
+
+    // The live BooksData order wins. The deploy-coupled fallback only fills
+    // titles not yet visible in a temporarily lagging backend.
+    var merged = [];
+    var seen = {};
+    (liveBooks.length ? liveBooks : fallbackBooks).forEach(function (b) {
+      var key = normTitle_(b.title);
+      if (!key || seen[key]) return;
+      seen[key] = true;
+      merged.push(b);
+    });
+    if (liveBooks.length) {
+      fallbackBooks.forEach(function (b) {
+        var key = normTitle_(b.title);
+        if (!key || seen[key]) return;
+        seen[key] = true;
+        merged.push(b);
+      });
     }
+
+    canonicalCatalog_ = merged;
     canonicalCatalogLoaded_ = true;
     return canonicalCatalog_;
   }
-
 
   function lang() {
     try { return (localStorage.getItem('ajk_ui_lang') || 'de').toLowerCase(); }
@@ -78,6 +120,12 @@
       '.book-toc-panel::before,.book-toc-panel::after{content:"";display:block;position:sticky;left:0;right:0;height:34px;z-index:3;pointer-events:none;margin-left:-14px;margin-right:-14px}' +
       '.book-toc-panel::before{top:0;margin-top:-6px;margin-bottom:-34px;background:linear-gradient(to bottom,rgba(245,240,230,1) 0%,rgba(245,240,230,.94) 38%,rgba(245,240,230,0) 100%)}' +
       '.book-toc-panel::after{bottom:0;margin-top:-34px;margin-bottom:-6px;background:linear-gradient(to top,rgba(245,240,230,1) 0%,rgba(245,240,230,.94) 38%,rgba(245,240,230,0) 100%)}' +
+      '#'+GRID_ID+'.ajk-admin-reorder .ajk-cover-thumb{position:relative}' +
+      '.ajk-cover-drag-handle{display:none;position:absolute;right:7px;top:7px;z-index:5;width:36px;height:36px;border-radius:18px;background:rgba(32,28,22,.82);color:#fff;align-items:center;justify-content:center;font-family:"Archivo",sans-serif;font-size:18px;line-height:1;box-shadow:0 3px 12px rgba(0,0,0,.24);touch-action:none;user-select:none;-webkit-user-select:none;cursor:grab}' +
+      '#'+GRID_ID+'.ajk-admin-reorder .ajk-cover-drag-handle{display:flex}' +
+      '.ajk-cover-thumb.is-dragging{z-index:6;opacity:.78;transform:scale(.97)}' +
+      '.ajk-cover-thumb.is-dragging .ajk-cover-frame{border-color:var(--gold,#b89448);box-shadow:0 18px 38px rgba(0,0,0,.25)}' +
+      '#ajk-cover-order-toast{position:fixed;left:50%;bottom:28px;transform:translateX(-50%);z-index:180;background:rgba(38,33,25,.94);color:#fff;padding:10px 15px;border-radius:18px;font-family:"Archivo",sans-serif;font-size:11px;letter-spacing:.04em;box-shadow:0 10px 30px rgba(0,0,0,.22);pointer-events:none}' +
       '@media(max-width:640px){.ajk-book-tools{display:grid!important;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px!important;align-items:stretch!important}.ajk-book-tools>div:first-child{grid-column:1/-1;width:100%!important}.ajk-book-tools>.book-toc-wrap,.ajk-book-tools>.book-view-toggle,.ajk-book-tools>[data-ajk-cover-grid-toggle]{width:100%!important;margin:0!important;box-sizing:border-box}.ajk-book-tools>.book-toc-wrap>button,.ajk-book-tools>.book-view-toggle,.ajk-book-tools>[data-ajk-cover-grid-toggle]{min-height:44px;width:100%!important;box-sizing:border-box;padding:10px 8px!important;font-size:10px!important;letter-spacing:.06em!important;text-align:center}.ajk-book-tools input[type=search]{height:44px}.ajk-book-toolbar{display:grid!important;grid-template-columns:repeat(3,minmax(0,1fr))!important;gap:8px!important;align-items:stretch!important;width:100%!important;box-sizing:border-box!important}.ajk-book-toolbar>.ajk-book-search-cell{grid-column:1/-1!important;min-width:0!important;width:100%!important}.ajk-book-toolbar>.book-toc-wrap{display:block!important;position:static!important;min-width:0!important;width:auto!important;margin:0!important}.ajk-book-toolbar>.book-toc-wrap>button,.ajk-book-toolbar>.book-view-toggle,.ajk-book-toolbar>['+TOGGLE_ATTR+']{display:flex!important;align-items:center!important;justify-content:center!important;width:100%!important;min-width:0!important;height:52px!important;box-sizing:border-box!important;margin:0!important;padding:10px 8px!important;text-align:center!important;white-space:nowrap!important}.book-toc-panel{position:fixed!important;left:16px!important;right:16px!important;top:18vh!important;width:auto!important;max-height:64vh!important;z-index:120!important;box-sizing:border-box}#'+GRID_ID+'{gap:16px 10px;padding-top:10px}#'+COLS_ID+'{margin:8px 0 2px;width:100%;max-width:none;gap:10px;box-sizing:border-box;justify-content:flex-end;align-items:center}#'+COLS_ID+'.is-open{display:flex}#'+COLS_ID+' .ajk-cover-cols-label{margin-right:2px;font-size:10px}#'+COLS_ID+' button{display:none}#'+COLS_ID+' .ajk-cover-cols-select{display:block;min-width:104px;height:46px}#'+MODAL_ID+'{padding:12px}#'+MODAL_ID+' .ajk-cover-detail{padding:18px}#'+MODAL_ID+' .ajk-cover-detail-body{grid-template-columns:105px minmax(0,1fr);gap:16px}#'+MODAL_ID+' .ajk-cover-detail-hook{font-size:15px}}' +
       '@media(max-width:380px){#'+MODAL_ID+' .ajk-cover-detail-body{grid-template-columns:1fr}#'+MODAL_ID+' .ajk-cover-detail-img{max-width:150px}}' +
       '@media(min-width:900px){#'+GRID_ID+'{gap:30px 24px}}';
@@ -276,6 +324,18 @@
     return set;
   }
 
+  function currentSearchQuery_() {
+    var input = document.querySelector('#books input[type="search"]');
+    return normTitle_(input && input.value);
+  }
+
+  function matchesSearch_(entry, query) {
+    if (!query) return true;
+    var hay = [entry && entry.title, entry && entry.kind, entry && entry.hook,
+      entry && entry.blurb, entry && entry.description].join(' ').toLocaleLowerCase();
+    return hay.indexOf(query) !== -1;
+  }
+
   function booksForGrid_(wrap) {
     // STRICT canonical grid: one catalogue entry = one thumbnail.
     // Order, identity and cover all come from books-live.json. The rendered
@@ -294,8 +354,10 @@
 
       var titleKey = normTitle_(entry.title);
       var idKey = String(entry.id || '').trim();
+      var searchQuery = currentSearchQuery_();
       if (!titleKey) return;
       if (hasVisibilityFilter && !visible[titleKey]) return;
+      if (!matchesSearch_(entry, searchQuery)) return;
       if ((idKey && seenIds[idKey]) || seenTitles[titleKey]) return;
 
       if (idKey) seenIds[idKey] = true;
@@ -318,6 +380,120 @@
     return out;
   }
 
+  function showOrderToast_(message) {
+    var old = document.getElementById('ajk-cover-order-toast');
+    if (old) old.remove();
+    var toast = document.createElement('div');
+    toast.id = 'ajk-cover-order-toast';
+    toast.textContent = message;
+    document.body.appendChild(toast);
+    setTimeout(function () { if (toast.parentNode) toast.remove(); }, 2200);
+  }
+
+  function reorderCanonicalFromGrid_(grid) {
+    var order = Array.prototype.map.call(grid.querySelectorAll('.ajk-cover-thumb'), function (node) {
+      return { id: node.dataset.bookId || '', title: node.dataset.bookTitle || '' };
+    });
+    var rank = {};
+    order.forEach(function (item, i) {
+      var key = item.id ? ('id:' + item.id) : ('t:' + normTitle_(item.title));
+      rank[key] = i;
+    });
+    canonicalCatalog_.sort(function (a, b) {
+      var ka = a.id ? ('id:' + a.id) : ('t:' + normTitle_(a.title));
+      var kb = b.id ? ('id:' + b.id) : ('t:' + normTitle_(b.title));
+      var ra = Object.prototype.hasOwnProperty.call(rank, ka) ? rank[ka] : Number.MAX_SAFE_INTEGER;
+      var rb = Object.prototype.hasOwnProperty.call(rank, kb) ? rank[kb] : Number.MAX_SAFE_INTEGER;
+      return ra - rb;
+    });
+    return order;
+  }
+
+  async function persistGridOrder_(grid) {
+    if (!isAdmin_()) return;
+    if (currentSearchQuery_()) {
+      window.alert(t('Bitte die Suche leeren, bevor du Bücher verschiebst.', 'Clear the search before reordering books.'));
+      grid.dataset.signature = '';
+      buildGrid(listWrap());
+      return;
+    }
+    var order = reorderCanonicalFromGrid_(grid);
+    var token = adminToken_();
+    if (!token || !order.length) return;
+
+    try {
+      showOrderToast_(t('Reihenfolge wird gespeichert …', 'Saving order …'));
+      var params = new URLSearchParams({
+        action: 'saveBookOrder',
+        adminToken: token,
+        order: JSON.stringify(order)
+      });
+      var res = await fetch(GAS_URL, { method: 'POST', body: params, cache: 'no-store' });
+      var data = await res.json();
+      if (!data || !data.ok) throw new Error((data && data.error) || 'save_failed');
+      showOrderToast_(t('Reihenfolge gespeichert ✓', 'Order saved ✓'));
+    } catch (err) {
+      window.alert(t('Reihenfolge konnte nicht zentral gespeichert werden: ', 'Order could not be saved centrally: ') + err.message);
+      await loadCanonicalCatalog_();
+      grid.dataset.signature = '';
+      buildGrid(listWrap());
+    }
+  }
+
+  function attachDragHandle_(thumb, grid) {
+    if (!isAdmin_() || currentSearchQuery_()) return;
+    var handle = document.createElement('span');
+    handle.className = 'ajk-cover-drag-handle';
+    handle.textContent = '≡';
+    handle.setAttribute('aria-label', t('Buch verschieben', 'Move book'));
+
+    handle.addEventListener('click', function (e) {
+      e.preventDefault();
+      e.stopPropagation();
+    });
+
+    handle.addEventListener('pointerdown', function (e) {
+      if (e.button !== undefined && e.button !== 0) return;
+      e.preventDefault();
+      e.stopPropagation();
+      dragState_ = { thumb: thumb, grid: grid, pointerId: e.pointerId, moved: false };
+      thumb.classList.add('is-dragging');
+      try { handle.setPointerCapture(e.pointerId); } catch (_) {}
+    });
+
+    handle.addEventListener('pointermove', function (e) {
+      if (!dragState_ || dragState_.pointerId !== e.pointerId) return;
+      e.preventDefault();
+      var el = document.elementFromPoint(e.clientX, e.clientY);
+      var target = el && el.closest ? el.closest('.ajk-cover-thumb') : null;
+      if (!target || target === thumb || target.parentNode !== grid) return;
+      var rect = target.getBoundingClientRect();
+      var before = (e.clientY < rect.top + rect.height / 2) ||
+        (Math.abs(e.clientY - (rect.top + rect.height / 2)) < rect.height * .35 &&
+         e.clientX < rect.left + rect.width / 2);
+      if (before) grid.insertBefore(thumb, target);
+      else grid.insertBefore(thumb, target.nextSibling);
+      dragState_.moved = true;
+    });
+
+    function finish(e) {
+      if (!dragState_ || dragState_.pointerId !== e.pointerId) return;
+      e.preventDefault();
+      e.stopPropagation();
+      var moved = dragState_.moved;
+      dragState_ = null;
+      thumb.classList.remove('is-dragging');
+      try { handle.releasePointerCapture(e.pointerId); } catch (_) {}
+      if (moved) {
+        suppressCoverClickUntil_ = Date.now() + 700;
+        persistGridOrder_(grid);
+      }
+    }
+    handle.addEventListener('pointerup', finish);
+    handle.addEventListener('pointercancel', finish);
+    thumb.appendChild(handle);
+  }
+
   function buildGrid(wrap) {
     var grid = document.getElementById(GRID_ID);
     if (!grid) {
@@ -332,9 +508,14 @@
     grid.dataset.signature = signature;
     grid.textContent = '';
 
+    var allowReorder = isAdmin_() && !currentSearchQuery_();
+    grid.classList.toggle('ajk-admin-reorder', allowReorder);
+
     books.forEach(function (book) {
       var thumb = document.createElement('button');
       thumb.type = 'button'; thumb.className = 'ajk-cover-thumb'; thumb.title = book.title;
+      thumb.dataset.bookId = book.id || '';
+      thumb.dataset.bookTitle = book.title || '';
       thumb.setAttribute('aria-label', book.title + ' — ' + t('Details', 'Details'));
       var frame = document.createElement('span'); frame.className = 'ajk-cover-frame';
       if (book.src) {
@@ -343,8 +524,12 @@
         var fb = document.createElement('span'); fb.className = 'ajk-cover-placeholder'; fb.textContent = book.title; frame.appendChild(fb);
       }
       thumb.appendChild(frame);
-      thumb.addEventListener('click', function () { openDetail(book); });
+      thumb.addEventListener('click', function () {
+        if (Date.now() < suppressCoverClickUntil_) return;
+        openDetail(book);
+      });
       grid.appendChild(thumb);
+      if (allowReorder) attachDragHandle_(thumb, grid);
     });
     return grid;
   }
@@ -461,12 +646,35 @@
     try { localStorage.setItem('ajk_book_cover_view', active ? '1' : '0'); } catch (_) {}
   }
 
+  function bindSearch_() {
+    var input = document.querySelector('#books input[type="search"]');
+    if (!input || input.dataset.ajkSearchBound === '1') return;
+    input.dataset.ajkSearchBound = '1';
+    input.addEventListener('input', function () {
+      clearTimeout(searchTimer_);
+      searchTimer_ = setTimeout(function () {
+        // The bundled component currently listens to change rather than the
+        // browser's live input event. Dispatching change makes list/carousel
+        // update while the standalone cover grid filters immediately as well.
+        try { input.dispatchEvent(new Event('change', { bubbles: true })); } catch (_) {}
+        var grid = document.getElementById(GRID_ID);
+        var wrap = listWrap();
+        if (grid && wrap) {
+          grid.dataset.signature = '';
+          buildGrid(wrap);
+          if (active) grid.classList.add('is-open');
+        }
+      }, 70);
+    });
+  }
+
   function ensure() {
     var wrap = listWrap();
     if (!wrap) return false;
     var tocWrap = document.querySelector('.book-toc-wrap');
     if (tocWrap && tocWrap.parentElement) tocWrap.parentElement.classList.add('ajk-book-tools');
     injectStyles();
+    bindSearch_();
     buildGrid(wrap);
 
     // Mobile-only toolbar normalization. The bundled template has search,
