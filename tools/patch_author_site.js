@@ -147,7 +147,7 @@ s = s.replace(/<script src="cover-grid(?:-v[23])?\.js(?:\?[^"]*)?"><\/script>\s*
 
 // DISPLAY PREFERENCES
 // Per-browser text contrast setting. Kept frontend-only on purpose.
-const displayPreferencesSrc = 'display-preferences.js?v=20260929a';
+const displayPreferencesSrc = 'display-preferences.js?v=20260929b';
 s = s.replace(/<script src="display-preferences\.js(?:\?[^"]*)?"><\/script>\s*/g, '');
 {
   const bodyEnd = s.lastIndexOf('</body>');
