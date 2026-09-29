@@ -15,6 +15,7 @@
   var dragState_ = null;
   var suppressCoverClickUntil_ = 0;
   var searchTimer_ = null;
+  var SEARCH_SCOPE_ID = 'ajk-book-search-scope';
 
   function isAdmin_() {
     try { return localStorage.getItem('ajk_author_admin') === '1' && !!localStorage.getItem('ajk_admin_token'); }
@@ -144,6 +145,11 @@
       '#'+GRID_ID+'.ajk-admin-reorder .ajk-cover-drag-handle{display:flex}' +
       '.ajk-cover-thumb.is-dragging{z-index:6;opacity:.78;transform:scale(.97)}' +
       '.ajk-cover-thumb.is-dragging .ajk-cover-frame{border-color:var(--gold,#b89448);box-shadow:0 18px 38px rgba(0,0,0,.25)}' +
+      '.ajk-search-hidden{display:none!important}' +
+      '#books .book-list-wrap.ajk-search-active{min-height:0!important;height:auto!important;padding-bottom:0!important}' +
+      '.ajk-book-search-cell{display:grid!important;grid-template-columns:minmax(0,1fr) auto!important;gap:8px!important;align-items:center!important}' +
+      '.ajk-book-search-cell input[type=search]{min-width:0!important;width:100%!important}' +
+      '#'+SEARCH_SCOPE_ID+'{height:44px;min-width:96px;padding:0 10px;border:1px solid var(--rule,#cfc6b5);background:var(--bone,#f5f0e6);color:var(--ink,#2b2924);font-family:"Archivo",sans-serif;font-size:11px;letter-spacing:.03em}' +
       '#ajk-cover-order-toast{position:fixed;left:50%;bottom:28px;transform:translateX(-50%);z-index:180;background:rgba(38,33,25,.94);color:#fff;padding:10px 15px;border-radius:18px;font-family:"Archivo",sans-serif;font-size:11px;letter-spacing:.04em;box-shadow:0 10px 30px rgba(0,0,0,.22);pointer-events:none}' +
       '@media(max-width:640px){.ajk-book-tools{display:grid!important;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px!important;align-items:stretch!important}.ajk-book-tools>div:first-child{grid-column:1/-1;width:100%!important}.ajk-book-tools>.book-toc-wrap,.ajk-book-tools>.book-view-toggle,.ajk-book-tools>[data-ajk-cover-grid-toggle]{width:100%!important;margin:0!important;box-sizing:border-box}.ajk-book-tools>.book-toc-wrap>button,.ajk-book-tools>.book-view-toggle,.ajk-book-tools>[data-ajk-cover-grid-toggle]{min-height:44px;width:100%!important;box-sizing:border-box;padding:10px 8px!important;font-size:10px!important;letter-spacing:.06em!important;text-align:center}.ajk-book-tools input[type=search]{height:44px}.ajk-book-toolbar{display:grid!important;grid-template-columns:repeat(3,minmax(0,1fr))!important;gap:8px!important;align-items:stretch!important;width:100%!important;box-sizing:border-box!important}.ajk-book-toolbar>.ajk-book-search-cell{grid-column:1/-1!important;min-width:0!important;width:100%!important}.ajk-book-toolbar>.book-toc-wrap{display:block!important;position:static!important;min-width:0!important;width:auto!important;margin:0!important}.ajk-book-toolbar>.book-toc-wrap>button,.ajk-book-toolbar>.book-view-toggle,.ajk-book-toolbar>['+TOGGLE_ATTR+']{display:flex!important;align-items:center!important;justify-content:center!important;width:100%!important;min-width:0!important;height:52px!important;box-sizing:border-box!important;margin:0!important;padding:10px 8px!important;text-align:center!important;white-space:nowrap!important}.book-toc-panel{position:fixed!important;left:16px!important;right:16px!important;top:18vh!important;width:auto!important;max-height:64vh!important;z-index:120!important;box-sizing:border-box}#'+GRID_ID+'{gap:16px 10px;padding-top:10px}#'+COLS_ID+'{margin:8px 0 2px;width:100%;max-width:none;gap:10px;box-sizing:border-box;justify-content:flex-end;align-items:center}#'+COLS_ID+'.is-open{display:flex}#'+COLS_ID+' .ajk-cover-cols-label{margin-right:2px;font-size:10px}#'+COLS_ID+' button{display:none}#'+COLS_ID+' .ajk-cover-cols-select{display:block;min-width:104px;height:46px}#'+MODAL_ID+'{padding:12px}#'+MODAL_ID+' .ajk-cover-detail{padding:18px}#'+MODAL_ID+' .ajk-cover-detail-body{grid-template-columns:105px minmax(0,1fr);gap:16px}#'+MODAL_ID+' .ajk-cover-detail-hook{font-size:15px}}' +
       '@media(max-width:380px){#'+MODAL_ID+' .ajk-cover-detail-body{grid-template-columns:1fr}#'+MODAL_ID+' .ajk-cover-detail-img{max-width:150px}}' +
@@ -348,11 +354,89 @@
     return normTitle_(input && input.value);
   }
 
-  function matchesSearch_(entry, query) {
+  function currentSearchScope_() {
+    var select = document.getElementById(SEARCH_SCOPE_ID);
+    var value = select && select.value;
+    if (value === 'title' || value === 'content') return value;
+    try {
+      value = localStorage.getItem('ajk_book_search_scope') || 'all';
+      if (value === 'title' || value === 'content') return value;
+    } catch (_) {}
+    return 'all';
+  }
+
+  function matchesSearch_(entry, query, scope) {
     if (!query) return true;
-    var hay = [entry && entry.title, entry && entry.kind, entry && entry.hook,
-      entry && entry.blurb, entry && entry.description].join(' ').toLocaleLowerCase();
-    return hay.indexOf(query) !== -1;
+    scope = scope || currentSearchScope_();
+
+    var titleHay = [entry && entry.title].join(' ').toLocaleLowerCase();
+    var contentHay = [entry && entry.kind, entry && entry.hook, entry && entry.blurb,
+      entry && entry.description].join(' ').toLocaleLowerCase();
+
+    if (scope === 'title') return titleHay.indexOf(query) !== -1;
+    if (scope === 'content') return contentHay.indexOf(query) !== -1;
+    return (titleHay + ' ' + contentHay).indexOf(query) !== -1;
+  }
+
+  function applyListSearch_(wrap) {
+    if (!wrap) return;
+    var query = currentSearchQuery_();
+    var scope = currentSearchScope_();
+    wrap.classList.toggle('ajk-search-active', !!query);
+
+    Array.prototype.forEach.call(wrap.querySelectorAll('[id^="book-card-"]'), function (node) {
+      var raw = String(node.id || '').replace(/^book-card-/, '');
+      var title = raw;
+      try { title = decodeURIComponent(raw); } catch (_) {}
+      var entry = catalogEntryForTitle_(title) || { title: title };
+      node.classList.toggle('ajk-search-hidden', !!query && !matchesSearch_(entry, query, scope));
+    });
+  }
+
+  function ensureSearchScope_() {
+    var input = document.querySelector('#books input[type="search"]');
+    if (!input) return null;
+
+    var host = input.parentElement;
+    if (host) host.classList.add('ajk-book-search-cell');
+
+    var select = document.getElementById(SEARCH_SCOPE_ID);
+    if (!select) {
+      select = document.createElement('select');
+      select.id = SEARCH_SCOPE_ID;
+      select.setAttribute('aria-label', t('Suchbereich', 'Search scope'));
+
+      [
+        ['all', t('Alles', 'All')],
+        ['title', t('Titel', 'Title')],
+        ['content', t('Inhalt', 'Content')]
+      ].forEach(function (pair) {
+        var option = document.createElement('option');
+        option.value = pair[0];
+        option.textContent = pair[1];
+        select.appendChild(option);
+      });
+
+      var saved = 'all';
+      try { saved = localStorage.getItem('ajk_book_search_scope') || 'all'; } catch (_) {}
+      if (saved !== 'title' && saved !== 'content') saved = 'all';
+      select.value = saved;
+
+      select.addEventListener('change', function () {
+        try { localStorage.setItem('ajk_book_search_scope', select.value); } catch (_) {}
+        var wrap = listWrap();
+        applyListSearch_(wrap);
+        var grid = document.getElementById(GRID_ID);
+        if (grid && wrap) {
+          grid.dataset.signature = '';
+          buildGrid(wrap);
+          if (active) grid.classList.add('is-open');
+        }
+      });
+
+      if (host) host.appendChild(select);
+    }
+    return select;
   }
 
   function booksForGrid_(wrap) {
@@ -376,7 +460,7 @@
       var searchQuery = currentSearchQuery_();
       if (!titleKey) return;
       if (hasVisibilityFilter && !visible[titleKey]) return;
-      if (!matchesSearch_(entry, searchQuery)) return;
+      if (!matchesSearch_(entry, searchQuery, currentSearchScope_())) return;
       if ((idKey && seenIds[idKey]) || seenTitles[titleKey]) return;
 
       if (idKey) seenIds[idKey] = true;
@@ -720,17 +804,23 @@
 
   function bindSearch_() {
     var input = document.querySelector('#books input[type="search"]');
-    if (!input || input.dataset.ajkSearchBound === '1') return;
+    if (!input) return;
+    ensureSearchScope_();
+    if (input.dataset.ajkSearchBound === '1') {
+      applyListSearch_(listWrap());
+      return;
+    }
+
     input.dataset.ajkSearchBound = '1';
     input.addEventListener('input', function () {
       clearTimeout(searchTimer_);
       searchTimer_ = setTimeout(function () {
-        // The bundled component currently listens to change rather than the
-        // browser's live input event. Dispatching change makes list/carousel
-        // update while the standalone cover grid filters immediately as well.
+        // Keep the bundled list state in sync, then apply our explicit
+        // card-level filter so hidden results cannot leave empty vertical space.
         try { input.dispatchEvent(new Event('change', { bubbles: true })); } catch (_) {}
         var grid = document.getElementById(GRID_ID);
         var wrap = listWrap();
+        applyListSearch_(wrap);
         if (grid && wrap) {
           grid.dataset.signature = '';
           buildGrid(wrap);
@@ -738,6 +828,8 @@
         }
       }, 70);
     });
+
+    applyListSearch_(listWrap());
   }
 
   function ensure() {
