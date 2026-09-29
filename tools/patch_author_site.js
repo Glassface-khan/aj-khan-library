@@ -145,6 +145,17 @@ s = s.replace(/<script src="cover-grid(?:-v[23])?\.js(?:\?[^"]*)?"><\/script>\s*
 }
 
 
+// DISPLAY PREFERENCES
+// Per-browser text contrast setting. Kept frontend-only on purpose.
+const displayPreferencesSrc = 'display-preferences.js?v=20260929a';
+s = s.replace(/<script src="display-preferences\.js(?:\?[^"]*)?"><\/script>\s*/g, '');
+{
+  const bodyEnd = s.lastIndexOf('</body>');
+  if (bodyEnd < 0) throw new Error('display preferences: closing body not found');
+  s = s.slice(0, bodyEnd) + '<script src="' + displayPreferencesSrc + '"></script>\n' + s.slice(bodyEnd);
+}
+
+
 // POETRY LAYOUT
 // Restore the original poetry presentation. The compact shelf remains in the
 // repository as an experiment, but is intentionally not loaded because the
