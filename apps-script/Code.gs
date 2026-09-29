@@ -1982,6 +1982,66 @@ function handle(e) {
     return jsonOut({ ok: true });
   }
 
+  if (action === 'saveBookOrder') {
+    const admin = checkAdmin(e);
+    if (!admin.ok) return jsonOut({ ok: false, error: 'unauthorized' });
+
+    let order;
+    try {
+      order = JSON.parse(e.parameter.order || '[]');
+    } catch (err) {
+      return jsonOut({ ok: false, error: 'Ungültige Reihenfolge: ' + err.message });
+    }
+    if (!Array.isArray(order) || !order.length) {
+      return jsonOut({ ok: false, error: 'Reihenfolge fehlt.' });
+    }
+
+    // Only reorder existing records; never overwrite metadata while dragging.
+    // IDs are preferred because titles can be renamed. A title fallback keeps
+    // older records without IDs reorderable.
+    const lock = LockService.getScriptLock();
+    try {
+      lock.waitLock(15000);
+      const books = getBooksArray();
+      const byId = {};
+      const byTitle = {};
+      books.forEach(function(b) {
+        if (b && b.id) byId[String(b.id)] = b;
+        if (b && b.title) byTitle[String(b.title).trim().toLocaleLowerCase()] = b;
+      });
+
+      const reordered = [];
+      const used = {};
+      order.forEach(function(item) {
+        const id = item && typeof item === 'object' ? String(item.id || '') : '';
+        const title = item && typeof item === 'object' ? String(item.title || '') : String(item || '');
+        const book = (id && byId[id]) || byTitle[title.trim().toLocaleLowerCase()];
+        if (!book) return;
+        const key = String(book.id || book.title);
+        if (used[key]) return;
+        used[key] = true;
+        reordered.push(book);
+      });
+
+      // Preserve books omitted by an access-filtered/admin client and append
+      // them in their previous relative order rather than deleting them.
+      books.forEach(function(book) {
+        const key = String(book.id || book.title);
+        if (!used[key]) reordered.push(book);
+      });
+
+      if (reordered.length !== books.length) {
+        return jsonOut({ ok: false, error: 'Reihenfolge konnte nicht vollständig aufgelöst werden.' });
+      }
+      setBooksArray(reordered);
+      return jsonOut({ ok: true, count: reordered.length });
+    } catch (err) {
+      return jsonOut({ ok: false, error: 'Reihenfolge konnte nicht gespeichert werden: ' + err.message });
+    } finally {
+      try { lock.releaseLock(); } catch (e2) {}
+    }
+  }
+
   if (action === 'getBooks') {
     return jsonOut({ ok: true, books: JSON.stringify(getBooksArray()) });
   }
