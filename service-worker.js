@@ -1,3 +1,5 @@
+// v48 -> v49 (29.09.2026): harden Chrome/iOS service-worker updates; resilient precache,
+// navigation preload, guaranteed navigation fallback, explicit skip-waiting message support.
 // v43 -> v44 (28.09.2026): switch thumbnail view to a new
 // cover-grid-v2.js URL so iOS cannot reuse the stale duplicate-producing runtime.
 // v40 -> v41 (28.09.2026): merge live BooksData with books-live.json so a newly deployed title cannot be hidden by backend lag.
@@ -43,9 +45,9 @@
 // payloads in IndexedDB for fast reopening; force clients to fetch the new JS.
 // v26 -> v27 (24.09.2026): books-live.json is the immediate catalog fallback;
 // BooksData remains canonical and replaces it whenever the live request succeeds.
-// v37 -> v38 (28.09.2026): force iOS to reload the exact-order cover grid.\n// v39 -> v40 (28.09.2026): deploy THE GUEST catalog entry, cover and EPUB; force clients to refresh the catalog fallback.\n// v40 -> v41 (28.09.2026): deploy THE NIGHT SIDE catalog entry, cover and EPUB; force clients to refresh the catalog fallback.\nconst SHELL_CACHE = 'ajk-shell-v48';
-const DATA_CACHE = 'ajk-data-v48';
-const SHELL_FILES = ['./', './index.html', './books-live.json', './cover-grid-v2.js', './manifest.webmanifest', './icons/icon-192.png', './icons/icon-512.png'];
+// v37 -> v38 (28.09.2026): force iOS to reload the exact-order cover grid.\n// v39 -> v40 (28.09.2026): deploy THE GUEST catalog entry, cover and EPUB; force clients to refresh the catalog fallback.\n// v40 -> v41 (28.09.2026): deploy THE NIGHT SIDE catalog entry, cover and EPUB; force clients to refresh the catalog fallback.\nconst SHELL_CACHE = 'ajk-shell-v49';
+const DATA_CACHE = 'ajk-data-v49';
+const SHELL_FILES = ['./', './index.html', './books-live.json', './cover-grid-v3.js', './manifest.webmanifest', './icons/icon-192.png', './icons/icon-512.png'];
 
 // Aktionen, deren Antwort für Offline-Nutzung zwischengespeichert werden
 // darf. Alles andere (insbesondere alle schreibenden Aktionen) läuft immer
@@ -53,22 +55,40 @@ const SHELL_FILES = ['./', './index.html', './books-live.json', './cover-grid-v2
 const CACHEABLE_GET_ACTIONS = new Set(['getPoems', 'getSettings']);
 const CACHEABLE_POST_ACTIONS = new Set([]);
 
+async function precacheShell_() {
+  const cache = await caches.open(SHELL_CACHE);
+  // Never let one temporarily unavailable asset abort installation of the
+  // whole worker. This was a likely cause of browsers keeping an older worker.
+  await Promise.allSettled(SHELL_FILES.map(async (path) => {
+    try {
+      const req = new Request(path, { cache: 'reload' });
+      const res = await fetch(req);
+      if (res && res.ok) await cache.put(path, res.clone());
+    } catch (_) {}
+  }));
+}
+
 self.addEventListener('install', (event) => {
-  event.waitUntil(
-    caches.open(SHELL_CACHE)
-      .then((cache) => cache.addAll(SHELL_FILES))
-      .then(() => self.skipWaiting())
-  );
+  event.waitUntil(precacheShell_().then(() => self.skipWaiting()));
 });
 
 self.addEventListener('activate', (event) => {
-  event.waitUntil(
-    caches.keys()
-      .then((keys) => Promise.all(
-        keys.filter((k) => k !== SHELL_CACHE && k !== DATA_CACHE).map((k) => caches.delete(k))
-      ))
-      .then(() => self.clients.claim())
-  );
+  event.waitUntil((async () => {
+    if (self.registration.navigationPreload) {
+      try { await self.registration.navigationPreload.enable(); } catch (_) {}
+    }
+    const keys = await caches.keys();
+    await Promise.all(keys
+      .filter((k) => k !== SHELL_CACHE && k !== DATA_CACHE)
+      .map((k) => caches.delete(k)));
+    await self.clients.claim();
+  })());
+});
+
+self.addEventListener('message', (event) => {
+  if (event && event.data && event.data.type === 'SKIP_WAITING') {
+    self.skipWaiting();
+  }
 });
 
 // EPUB- und Bookmark-POSTs gehen bewusst direkt zum Apps-Script-Backend.
@@ -109,18 +129,46 @@ self.addEventListener('fetch', (event) => {
   // Änderungen sofort ankommen, sobald online — mit Fallback auf den
   // zuletzt gecachten Stand, wenn offline.
   if (req.method === 'GET' && req.mode === 'navigate') {
-    event.respondWith(
-      // no-store: umgeht jeden HTTP-Zwischencache (Browser/CDN), damit wir
-      // nie eine unvollständige/veraltete Antwort in den Service-Worker-
-      // Cache übernehmen (siehe Versionskommentar oben, v1 -> v2).
-      fetch(req, { cache: 'no-store' })
-        .then(async (res) => {
-          const withAudio = await injectAudioLibrary_(res);
-          if (withAudio && withAudio.ok) caches.open(SHELL_CACHE).then((c) => c.put('./index.html', withAudio.clone()));
+    event.respondWith((async () => {
+      // Prefer navigation preload/network. If Chrome/iOS has a transient
+      // network failure, ALWAYS return a real Response from the newest shell
+      // cache instead of allowing the fetch handler itself to reject with
+      // ERR_FAILED.
+      try {
+        const preload = await event.preloadResponse;
+        if (preload && preload.ok) {
+          const withAudio = await injectAudioLibrary_(preload);
+          if (withAudio && withAudio.ok) {
+            const cache = await caches.open(SHELL_CACHE);
+            await cache.put('./index.html', withAudio.clone());
+          }
           return withAudio;
-        })
-        .catch(() => caches.match('./index.html'))
-    );
+        }
+      } catch (_) {}
+
+      try {
+        const res = await fetch(req, { cache: 'no-store' });
+        if (res && res.ok) {
+          const withAudio = await injectAudioLibrary_(res);
+          const cache = await caches.open(SHELL_CACHE);
+          await cache.put('./index.html', withAudio.clone());
+          return withAudio;
+        }
+      } catch (_) {}
+
+      const shell = await caches.open(SHELL_CACHE);
+      const cached =
+        await shell.match('./index.html') ||
+        await caches.match('./index.html') ||
+        await shell.match('./') ||
+        await caches.match('./');
+      if (cached) return cached;
+
+      return new Response(
+        '<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>A. J. Khan</title><body style="font-family:system-ui;padding:2rem">Die Seite konnte gerade nicht geladen werden. Bitte erneut versuchen.</body>',
+        { status: 503, headers: { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' } }
+      );
+    })());
     return;
   }
 
