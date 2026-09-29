@@ -109,55 +109,15 @@ if (!s.includes('const firstReadable = spineItems.find')) {
 }
 
 
-// SERVICE WORKER UPDATE HARDENING
-// Re-register with a versioned script URL and bypass the HTTP cache so Chrome/iOS
-// cannot remain controlled by an older worker indefinitely. controllerchange
-// reloads once per session after a new worker takes control.
-{
-  const swRefreshVersion = '49';
-  const swRefreshScript = `<script id="ajk-sw-refresh">
-(function () {
-  if (!('serviceWorker' in navigator)) return;
-  var key = 'ajk_sw_refresh_' + '${swRefreshVersion}';
-  var reloaded = false;
-
-  navigator.serviceWorker.addEventListener('controllerchange', function () {
-    if (reloaded) return;
-    try {
-      if (sessionStorage.getItem(key) === '1') return;
-      sessionStorage.setItem(key, '1');
-    } catch (e) {}
-    reloaded = true;
-    window.location.reload();
-  });
-
-  window.addEventListener('load', function () {
-    navigator.serviceWorker.register('./service-worker.js?v=${swRefreshVersion}', {
-      scope: './',
-      updateViaCache: 'none'
-    }).then(function (reg) {
-      if (reg.waiting) {
-        try { reg.waiting.postMessage({ type: 'SKIP_WAITING' }); } catch (e) {}
-      }
-      reg.addEventListener('updatefound', function () {
-        var worker = reg.installing;
-        if (!worker) return;
-        worker.addEventListener('statechange', function () {
-          if (worker.state === 'installed' && navigator.serviceWorker.controller) {
-            try { worker.postMessage({ type: 'SKIP_WAITING' }); } catch (e) {}
-          }
-        });
-      });
-      try { reg.update(); } catch (e) {}
-    }).catch(function () {});
-  }, { once: true });
-})();
-</script>`;
-
-  s = s.replace(/<script id="ajk-sw-refresh">[\\s\\S]*?<\\/script>\\s*/g, '');
-  const swBodyEnd = s.lastIndexOf('</body>');
-  if (swBodyEnd < 0) throw new Error('service worker refresh: closing body not found');
-  s = s.slice(0, swBodyEnd) + swRefreshScript + '\\n' + s.slice(swBodyEnd);
+// ADMIN BOOK ORDER PERSISTENCE
+// Arrow moves in the Admin panel use a dedicated lightweight endpoint so a
+// reorder cannot accidentally overwrite metadata or trigger Drive cleanup.
+if (!s.includes('persistBookOrder = () => {')) {
+  once(
+    String.raw`moveBookUp = (i) => {\n    if (i <= 0) return;\n    this.setState(s => {\n      const books = s.books.slice();\n      const tmp = books[i - 1]; books[i - 1] = books[i]; books[i] = tmp;\n      return { books };\n    }, () => this.persistBooks());\n  };\n  moveBookDown = (i) => {\n    if (i >= this.state.books.length - 1) return;\n    this.setState(s => {\n      const books = s.books.slice();\n      const tmp = books[i + 1]; books[i + 1] = books[i]; books[i] = tmp;\n      return { books };\n    }, () => this.persistBooks());\n  };`,
+    String.raw`persistBookOrder = () => {\n    const books = this.state.books || [];\n    const order = books.map(b => ({ id: b.id || '', title: b.title || '' }));\n    try { localStorage.setItem('ajk_author_books_draft', JSON.stringify({ books })); } catch (e) {}\n    const params = new URLSearchParams({ action: 'saveBookOrder', order: JSON.stringify(order), adminToken: this.state.adminToken });\n    fetch(this.SCRIPT_URL, { method: 'POST', body: params })\n      .then(r => r.json())\n      .then(data => {\n        if (data && data.ok) {\n          this.showSavedToast('Reihenfolge gespeichert ✓');\n        } else {\n          window.alert('Reihenfolge konnte nicht zentral gespeichert werden: ' + ((data && data.error) || 'unbekannt') + '. Die Server-Reihenfolge wird neu geladen.');\n          this.fetchBooks();\n        }\n      })\n      .catch(err => {\n        window.alert('Verbindung fehlgeschlagen: ' + err.message + '. Die Server-Reihenfolge wird neu geladen.');\n        this.fetchBooks();\n      });\n  };\n  moveBookUp = (i) => {\n    if (i <= 0) return;\n    this.setState(s => {\n      const books = s.books.slice();\n      const tmp = books[i - 1]; books[i - 1] = books[i]; books[i] = tmp;\n      return { books };\n    }, () => this.persistBookOrder());\n  };\n  moveBookDown = (i) => {\n    if (i >= this.state.books.length - 1) return;\n    this.setState(s => {\n      const books = s.books.slice();\n      const tmp = books[i + 1]; books[i + 1] = books[i]; books[i] = tmp;\n      return { books };\n    }, () => this.persistBookOrder());\n  };`,
+    'admin book order persistence'
+  );
 }
 
 
@@ -165,7 +125,7 @@ if (!s.includes('const firstReadable = spineItems.find')) {
 // Use a new runtime filename so Safari/iOS cannot execute an older cached
 // cover-grid implementation. Remove every previous cover-grid script tag
 // before appending exactly one current runtime.
-const coverGridSrc = 'cover-grid-v3.js?v=20260928l';
+const coverGridSrc = 'cover-grid-v3.js?v=20260929b';
 s = s.replace(/<script src="cover-grid(?:-v[23])?\.js(?:\?[^"]*)?"><\/script>\s*/g, '');
 {
   const bodyEnd = s.lastIndexOf('</body>');
@@ -182,6 +142,7 @@ s = s.split('<script src="poetry-shelf.js"></script>\\n').join('');
 s = s.split('<script src="poetry-shelf.js"></script>').join('');
 
 for (const marker of [
+  'persistBookOrder = () => {',
   'const effChapterCount =',
   "wordCountLabel: statParts.join(' · ')",
   "epubHref: '#'",
