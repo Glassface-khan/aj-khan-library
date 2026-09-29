@@ -1,3 +1,5 @@
+// v49 -> v50 (29.09.2026): Safari/WebKit hardening — no-store HTML, pageshow/visibility
+// service-worker refresh, versioned registration and immediate waiting-worker activation.
 // v48 -> v49 (29.09.2026): harden Chrome/iOS service-worker updates; resilient precache,
 // navigation preload, guaranteed navigation fallback, explicit skip-waiting message support.
 // v43 -> v44 (28.09.2026): switch thumbnail view to a new
@@ -45,8 +47,8 @@
 // payloads in IndexedDB for fast reopening; force clients to fetch the new JS.
 // v26 -> v27 (24.09.2026): books-live.json is the immediate catalog fallback;
 // BooksData remains canonical and replaces it whenever the live request succeeds.
-// v37 -> v38 (28.09.2026): force iOS to reload the exact-order cover grid.\n// v39 -> v40 (28.09.2026): deploy THE GUEST catalog entry, cover and EPUB; force clients to refresh the catalog fallback.\n// v40 -> v41 (28.09.2026): deploy THE NIGHT SIDE catalog entry, cover and EPUB; force clients to refresh the catalog fallback.\nconst SHELL_CACHE = 'ajk-shell-v49';
-const DATA_CACHE = 'ajk-data-v49';
+// v37 -> v38 (28.09.2026): force iOS to reload the exact-order cover grid.\n// v39 -> v40 (28.09.2026): deploy THE GUEST catalog entry, cover and EPUB; force clients to refresh the catalog fallback.\n// v40 -> v41 (28.09.2026): deploy THE NIGHT SIDE catalog entry, cover and EPUB; force clients to refresh the catalog fallback.\nconst SHELL_CACHE = 'ajk-shell-v50';
+const DATA_CACHE = 'ajk-data-v50';
 const SHELL_FILES = ['./', './index.html', './books-live.json', './cover-grid-v3.js', './manifest.webmanifest', './icons/icon-192.png', './icons/icon-512.png'];
 
 // Aktionen, deren Antwort für Offline-Nutzung zwischengespeichert werden
@@ -107,17 +109,63 @@ async function injectAudioLibrary_(response) {
   if (!response || !response.ok) return response;
   const type = response.headers.get('content-type') || '';
   if (type.indexOf('text/html') === -1) return response;
-  const text = await response.text();
-  if (text.indexOf('audio-library.js') !== -1) {
-    return new Response(text, { status: response.status, statusText: response.statusText, headers: response.headers });
-  }
+
+  let text = await response.text();
   const pos = text.lastIndexOf('</body>');
-  const injected = pos >= 0
-    ? text.slice(0, pos) + '  <script src="./audio-library.js" defer></script>\\n' + text.slice(pos)
-    : text;
+
+  if (pos >= 0 && text.indexOf('audio-library.js') === -1) {
+    text = text.slice(0, pos) + '  <script src="./audio-library.js" defer></script>\\n' + text.slice(pos);
+  }
+
+  // Safari/WebKit can restore a page from the back-forward cache while keeping
+  // an older service-worker controller. Refresh the registration when Safari
+  // returns to the page and activate a waiting worker immediately. The script
+  // is intentionally tiny and Safari-only.
+  if (text.indexOf('id="ajk-safari-sw-refresh"') === -1) {
+    const safariScript = `<script id="ajk-safari-sw-refresh">
+(function () {
+  var ua = navigator.userAgent || '';
+  var isSafari = /Safari/i.test(ua) && !/(CriOS|FxiOS|EdgiOS|OPiOS|Chrome|Chromium|Edg)/i.test(ua);
+  if (!isSafari || !('serviceWorker' in navigator)) return;
+
+  var lastCheck = 0;
+  function refreshWorker() {
+    var now = Date.now();
+    if (now - lastCheck < 30000) return;
+    lastCheck = now;
+
+    navigator.serviceWorker.register('./service-worker.js?v=50', {
+      scope: './',
+      updateViaCache: 'none'
+    }).then(function (reg) {
+      if (reg.waiting) {
+        try { reg.waiting.postMessage({ type: 'SKIP_WAITING' }); } catch (e) {}
+      }
+      try { reg.update(); } catch (e) {}
+    }).catch(function () {});
+  }
+
+  window.addEventListener('pageshow', function (event) {
+    if (event.persisted) refreshWorker();
+    else setTimeout(refreshWorker, 1200);
+  });
+  document.addEventListener('visibilitychange', function () {
+    if (!document.hidden) refreshWorker();
+  });
+})();
+</script>`;
+    const end = text.lastIndexOf('</body>');
+    if (end >= 0) text = text.slice(0, end) + safariScript + '\\n' + text.slice(end);
+  }
+
   const headers = new Headers(response.headers);
   headers.delete('content-length');
-  return new Response(injected, { status: response.status, statusText: response.statusText, headers });
+  // Prevent Safari from reusing stale HTML after a deploy. The service-worker
+  // shell cache still provides offline fallback when the network is unavailable.
+  headers.set('Cache-Control', 'no-store, max-age=0');
+  headers.set('Pragma', 'no-cache');
+  headers.set('Expires', '0');
+  return new Response(text, { status: response.status, statusText: response.statusText, headers });
 }
 
 self.addEventListener('fetch', (event) => {
