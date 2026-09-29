@@ -677,7 +677,7 @@ chRatings();
       .then(data => {
         if (!data.ok) window.alert('Speichern auf dem Server fehlgeschlagen — die Änderung ist NUR lokal in diesem Browser sichtbar, NICHT fuer andere! Grund: ' + (data.error || 'unbekannt') + '. Bitte einmal aus- und wieder als Admin einloggen und danach erneut speichern.'); else thi
 
-=== visibleBooksSourceRaw #1 @ 287440 ===
+=== visibleBooksSourceRaw #1 @ 288948 ===
 isionMsg: 'Manuskript gespeichert.' });
         this.fetchRevisionManuscripts(this.state.revisionSelectedNovelId);
       })
@@ -737,7 +737,7 @@ isionMsg: 'Manuskript gespeichert.' });
     const ui = uiStrings[s.uiLang] || uiStrings.de;
     const bookViewToggleLabel =
 
-=== visibleBooksSourceRaw #2 @ 287886 ===
+=== visibleBooksSourceRaw #2 @ 289394 ===
 anuscriptDetails[id]) {
       const params = new URLSearchParams({ action: 'revisionGetManuscript', adminToken: this.state.adminToken, id });
       fetch(this.SCRIPT_URL + '?' + params.toString())
@@ -797,7 +797,7 @@ anuscriptDetails[id]) {
       const myStars = draft.stars || 0;
       // Mehrsprachige Bücher (book.l
 
-=== visibleBooksSourceRaw #3 @ 288009 ===
+=== visibleBooksSourceRaw #3 @ 289517 ===
 adminToken, id });
       fetch(this.SCRIPT_URL + '?' + params.toString())
         .then(r => r.json())
@@ -857,7 +857,7 @@ adminToken, id });
       // Mehrsprachige Bücher (book.langs = { EN: {coverUrl,hook,pdfUrl,wordCount}, DE: {...} }):
       // aktive Sprache bestimmt Cover/Klappentext/Read-Link/W
 
-=== visibleBooksSourceRaw #4 @ 288371 ===
+=== visibleBooksSourceRaw #4 @ 289879 ===
 ;
     // Manche Zugangscodes dürfen nur eine Teilmenge der Bücher sehen
     // (visitorVisibleBooks = null heißt: alle sichtbar). Admin sieht beim
