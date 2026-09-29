@@ -36,7 +36,7 @@
       '#' + CONTROL_ID + '{display:flex;align-items:center;justify-content:flex-end;gap:9px;margin:8px 0 0 auto;font-family:"Archivo",sans-serif;}' +
       '#' + CONTROL_ID + ' label{font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-2,#555);}' +
       '#' + CONTROL_ID + ' select{height:38px;min-width:112px;padding:0 10px;border:1px solid var(--rule,#cfc6b5);background:var(--bone,#f5f0e6);color:var(--ink,#2b2924);font:11px "Archivo",sans-serif;}' +
-      '@media(max-width:640px){#' + CONTROL_ID + '{grid-column:1/-1!important;width:100%;margin:2px 0 0!important;justify-content:flex-end;}#' + CONTROL_ID + ' select{height:44px;min-width:122px;}}';
+      '@media(max-width:640px){#' + CONTROL_ID + '{width:100%!important;margin:8px 0 14px!important;justify-content:flex-end!important;box-sizing:border-box!important;}#' + CONTROL_ID + ' select{height:44px;min-width:122px;}}';
     document.head.appendChild(style);
   }
 
@@ -51,10 +51,31 @@
     if (select && select.value !== (dark ? 'dark' : 'soft')) select.value = dark ? 'dark' : 'soft';
   }
 
-  function ensureControl_() {
-    if (document.getElementById(CONTROL_ID)) return true;
+  function placeControl_(wrap) {
+    if (!wrap) return false;
+
+    // On mobile the column chooser is placed on its own row immediately above
+    // the cover grid. Put text contrast directly after it so the control is
+    // visibly located under "Pro Zeile", as intended.
+    var columns = document.getElementById('ajk-cover-grid-columns');
+    if (columns && columns.parentNode) {
+      if (columns.nextSibling !== wrap || wrap.parentNode !== columns.parentNode) {
+        columns.parentNode.insertBefore(wrap, columns.nextSibling);
+      }
+      return true;
+    }
+
     var toolbar = document.querySelector('.ajk-book-toolbar') || document.querySelector('.ajk-book-tools');
-    if (!toolbar) return false;
+    if (toolbar) {
+      if (wrap.parentNode !== toolbar) toolbar.appendChild(wrap);
+      return true;
+    }
+    return false;
+  }
+
+  function ensureControl_() {
+    var existing = document.getElementById(CONTROL_ID);
+    if (existing) return placeControl_(existing);
 
     var wrap = document.createElement('div');
     wrap.id = CONTROL_ID;
@@ -84,7 +105,8 @@
 
     wrap.appendChild(label);
     wrap.appendChild(select);
-    toolbar.appendChild(wrap);
+
+    if (!placeControl_(wrap)) return false;
     return true;
   }
 
@@ -92,16 +114,16 @@
     injectStyle_();
     applyMode_(readMode_(), false);
 
-    if (ensureControl_()) return;
-
-    var observer = new MutationObserver(function () {
-      if (ensureControl_()) observer.disconnect();
-    });
-    observer.observe(document.documentElement, { childList: true, subtree: true });
-
-    setTimeout(function () {
-      try { observer.disconnect(); } catch (_) {}
-    }, 20000);
+    // cover-grid-v3 initializes after DOMContentLoaded and can add/move the
+    // mobile controls a moment later. Retry briefly so this control is never
+    // missed merely because a CSS class was added after our first pass.
+    ensureControl_();
+    var attempts = 0;
+    var timer = setInterval(function () {
+      attempts += 1;
+      ensureControl_();
+      if (attempts >= 40) clearInterval(timer);
+    }, 250);
   }
 
   window.addEventListener('storage', function (event) {
