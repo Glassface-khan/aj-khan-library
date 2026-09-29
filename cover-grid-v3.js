@@ -146,7 +146,9 @@
       '.ajk-cover-thumb.is-dragging{z-index:6;opacity:.78;transform:scale(.97)}' +
       '.ajk-cover-thumb.is-dragging .ajk-cover-frame{border-color:var(--gold,#b89448);box-shadow:0 18px 38px rgba(0,0,0,.25)}' +
       '.ajk-search-hidden{display:none!important}' +
-      '#books .book-list-wrap.ajk-search-active{min-height:0!important;height:auto!important;padding-bottom:0!important}' +
+      '#books.ajk-search-active{min-height:0!important;height:auto!important;padding-bottom:0!important}' +
+      '#books .book-list-wrap.ajk-search-active{min-height:0!important;height:auto!important;padding-bottom:0!important;margin-bottom:0!important}' +
+      '#books.ajk-search-active .book-list-wrap [id^="book-card-"]:not(.ajk-search-hidden){min-height:0!important;height:auto!important;margin-bottom:24px!important;padding-bottom:24px!important}' +
       '.ajk-book-search-cell{display:grid!important;grid-template-columns:minmax(0,1fr) auto!important;gap:8px!important;align-items:center!important}' +
       '.ajk-book-search-cell input[type=search]{min-width:0!important;width:100%!important}' +
       '#'+SEARCH_SCOPE_ID+'{height:44px;min-width:96px;padding:0 10px;border:1px solid var(--rule,#cfc6b5);background:var(--bone,#f5f0e6);color:var(--ink,#2b2924);font-family:"Archivo",sans-serif;font-size:11px;letter-spacing:.03em}' +
@@ -383,6 +385,8 @@
     var query = currentSearchQuery_();
     var scope = currentSearchScope_();
     wrap.classList.toggle('ajk-search-active', !!query);
+    var booksSection = document.getElementById('books');
+    if (booksSection) booksSection.classList.toggle('ajk-search-active', !!query);
 
     Array.prototype.forEach.call(wrap.querySelectorAll('[id^="book-card-"]'), function (node) {
       var raw = String(node.id || '').replace(/^book-card-/, '');
