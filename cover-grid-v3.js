@@ -111,6 +111,8 @@
     style.textContent =
       '#' + GRID_ID + '{display:none;grid-template-columns:repeat(var(--ajk-cover-cols,3),minmax(0,1fr));gap:24px 18px;padding:28px 0 44px;align-items:start}' +
       '#' + GRID_ID + '.is-open{display:grid}' +
+      '#books.ajk-cover-mode .book-list-wrap{display:none!important}' +
+      '#books.ajk-cover-mode .book-card{display:none!important}' +
       '.ajk-cover-thumb{appearance:none;border:0;background:none;padding:0;cursor:pointer;min-width:0;text-align:left}' +
       '.ajk-cover-frame{display:block;width:100%;aspect-ratio:2/3;overflow:hidden;background:var(--bone-deep,#e9e3d7);border:1px solid var(--rule,#cfc6b5);box-shadow:0 8px 22px rgba(0,0,0,.10);transition:transform .18s ease,box-shadow .18s ease,border-color .18s ease}' +
       '.ajk-cover-thumb:hover .ajk-cover-frame,.ajk-cover-thumb:focus-visible .ajk-cover-frame{transform:translateY(-4px);border-color:var(--gold,#b89448);box-shadow:0 14px 30px rgba(0,0,0,.16)}' +
@@ -424,6 +426,20 @@
         slot.classList.toggle('ajk-search-slot-hidden', hidden);
         slot.classList.toggle('ajk-search-slot-visible', !!query && !hidden);
       }
+    });
+
+    // Series shelves are .book-card wrappers without their own id. Their
+    // individual volumes carry the book-card-* ids. If a search hides every
+    // volume in a shelf, hide the shelf itself too; otherwise an empty series
+    // wrapper can reserve a very large blank area on mobile Safari.
+    Array.prototype.forEach.call(wrap.querySelectorAll('.book-card:not([id])'), function (seriesCard) {
+      var volumes = Array.prototype.slice.call(seriesCard.querySelectorAll('[id^="book-card-"]'));
+      if (!volumes.length) return;
+      var hasVisible = !query || volumes.some(function (volume) {
+        return !volume.classList.contains('ajk-search-hidden');
+      });
+      seriesCard.classList.toggle('ajk-search-slot-hidden', !!query && !hasVisible);
+      seriesCard.classList.toggle('ajk-search-slot-visible', !!query && hasVisible);
     });
   }
 
@@ -825,6 +841,8 @@
     var wrap = listWrap();
     if (!wrap) return;
     var grid = buildGrid(wrap);
+    var booksSection = document.getElementById('books');
+    if (booksSection) booksSection.classList.toggle('ajk-cover-mode', active);
     wrap.style.display = active ? 'none' : '';
     grid.classList.toggle('is-open', active);
     var button = document.querySelector('[' + TOGGLE_ATTR + ']');
@@ -935,8 +953,21 @@
     document.addEventListener('keydown', function (e) { if (e.key === 'Escape') closeDetail(); });
   }
 
+  function refreshGridAfterCatalog_() {
+    var wrap = listWrap();
+    if (!wrap) return;
+    var grid = document.getElementById(GRID_ID);
+    if (grid) grid.dataset.signature = '';
+    buildGrid(wrap);
+    if (active) setMode(true);
+  }
+
   function start() {
-    loadCanonicalCatalog_().then(startUi_, startUi_);
+    // Safari Private Browsing can delay/block the cross-origin Apps Script
+    // request. The UI must not wait for that request: show controls now, then
+    // refresh thumbnails once catalogue data is available.
+    startUi_();
+    loadCanonicalCatalog_().then(refreshGridAfterCatalog_, refreshGridAfterCatalog_);
   }
 
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start, { once: true });
