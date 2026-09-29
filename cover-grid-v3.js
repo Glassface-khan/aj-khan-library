@@ -57,13 +57,32 @@
     // titles not yet visible in a temporarily lagging backend.
     var merged = [];
     var seen = {};
-    (liveBooks.length ? liveBooks : fallbackBooks).forEach(function (b) {
+    var fallbackByTitle = {};
+    fallbackBooks.forEach(function (b) {
       var key = normTitle_(b.title);
-      if (!key || seen[key]) return;
-      seen[key] = true;
-      merged.push(b);
+      if (key && !fallbackByTitle[key]) fallbackByTitle[key] = b;
     });
+
     if (liveBooks.length) {
+      liveBooks.forEach(function (live) {
+        var key = normTitle_(live.title);
+        if (!key || seen[key]) return;
+        seen[key] = true;
+        var fallback = fallbackByTitle[key] || {};
+        var entry = Object.assign({}, fallback, live);
+        // Keep the deploy-verified cover binding when available. This prevents
+        // an older/stale BooksData coverUrl from visually duplicating another
+        // title while still letting the live backend control the order.
+        if (fallback.coverUrl) entry.coverUrl = fallback.coverUrl;
+        merged.push(entry);
+      });
+      fallbackBooks.forEach(function (b) {
+        var key = normTitle_(b.title);
+        if (!key || seen[key]) return;
+        seen[key] = true;
+        merged.push(b);
+      });
+    } else {
       fallbackBooks.forEach(function (b) {
         var key = normTitle_(b.title);
         if (!key || seen[key]) return;
