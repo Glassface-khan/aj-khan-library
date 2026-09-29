@@ -109,6 +109,58 @@ if (!s.includes('const firstReadable = spineItems.find')) {
 }
 
 
+// SERVICE WORKER UPDATE HARDENING
+// Re-register with a versioned script URL and bypass the HTTP cache so Chrome/iOS
+// cannot remain controlled by an older worker indefinitely. controllerchange
+// reloads once per session after a new worker takes control.
+{
+  const swRefreshVersion = '49';
+  const swRefreshScript = `<script id="ajk-sw-refresh">
+(function () {
+  if (!('serviceWorker' in navigator)) return;
+  var key = 'ajk_sw_refresh_' + '${swRefreshVersion}';
+  var reloaded = false;
+
+  navigator.serviceWorker.addEventListener('controllerchange', function () {
+    if (reloaded) return;
+    try {
+      if (sessionStorage.getItem(key) === '1') return;
+      sessionStorage.setItem(key, '1');
+    } catch (e) {}
+    reloaded = true;
+    window.location.reload();
+  });
+
+  window.addEventListener('load', function () {
+    navigator.serviceWorker.register('./service-worker.js?v=${swRefreshVersion}', {
+      scope: './',
+      updateViaCache: 'none'
+    }).then(function (reg) {
+      if (reg.waiting) {
+        try { reg.waiting.postMessage({ type: 'SKIP_WAITING' }); } catch (e) {}
+      }
+      reg.addEventListener('updatefound', function () {
+        var worker = reg.installing;
+        if (!worker) return;
+        worker.addEventListener('statechange', function () {
+          if (worker.state === 'installed' && navigator.serviceWorker.controller) {
+            try { worker.postMessage({ type: 'SKIP_WAITING' }); } catch (e) {}
+          }
+        });
+      });
+      try { reg.update(); } catch (e) {}
+    }).catch(function () {});
+  }, { once: true });
+})();
+</script>`;
+
+  s = s.replace(/<script id="ajk-sw-refresh">[\\s\\S]*?<\\/script>\\s*/g, '');
+  const swBodyEnd = s.lastIndexOf('</body>');
+  if (swBodyEnd < 0) throw new Error('service worker refresh: closing body not found');
+  s = s.slice(0, swBodyEnd) + swRefreshScript + '\\n' + s.slice(swBodyEnd);
+}
+
+
 // COVER GRID VIEW PATCH
 // Use a new runtime filename so Safari/iOS cannot execute an older cached
 // cover-grid implementation. Remove every previous cover-grid script tag
