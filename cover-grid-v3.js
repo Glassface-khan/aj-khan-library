@@ -34,18 +34,12 @@
     var liveBooks = [];
     var fallbackBooks = [];
 
+    // Load the same-origin catalogue FIRST. Safari Private Browsing can leave
+    // the cross-origin Apps Script request pending for a long time. Waiting on
+    // that request before reading books-live.json caused Covers mode to hide
+    // the native list while the replacement grid still contained zero books.
     try {
-      var liveRes = await fetch(GAS_URL + '?action=getBooks&cb=' + Date.now(), { cache: 'no-store' });
-      if (liveRes && liveRes.ok) {
-        var livePayload = await liveRes.json();
-        var liveRaw = livePayload && livePayload.books;
-        if (typeof liveRaw === 'string') liveRaw = JSON.parse(liveRaw || '[]');
-        if (Array.isArray(liveRaw)) liveBooks = liveRaw.filter(function (b) { return b && b.title; });
-      }
-    } catch (_) {}
-
-    try {
-      var fallbackRes = await fetch('./books-live.json?cover-order=20260929a', { cache: 'no-store' });
+      var fallbackRes = await fetch('./books-live.json?cover-order=20260929b', { cache: 'no-store' });
       if (fallbackRes && fallbackRes.ok) {
         var fallbackPayload = await fallbackRes.json();
         var fallbackRaw = fallbackPayload && fallbackPayload.books;
@@ -54,8 +48,34 @@
       }
     } catch (_) {}
 
-    // The live BooksData order wins. The deploy-coupled fallback only fills
-    // titles not yet visible in a temporarily lagging backend.
+    // Publish the deploy-coupled catalogue immediately so the cover grid can
+    // never remain blank while the live backend is slow or blocked.
+    if (fallbackBooks.length) {
+      canonicalCatalog_ = fallbackBooks.slice();
+      canonicalCatalogLoaded_ = true;
+      try { refreshGridAfterCatalog_(); } catch (_) {}
+    }
+
+    // The live backend is only an order/metadata enhancement. Give it a short
+    // deadline; the static catalogue remains a complete usable fallback.
+    try {
+      var timeoutPromise = new Promise(function (_, reject) {
+        setTimeout(function () { reject(new Error('live_catalog_timeout')); }, 2500);
+      });
+      var liveRes = await Promise.race([
+        fetch(GAS_URL + '?action=getBooks&cb=' + Date.now(), { cache: 'no-store' }),
+        timeoutPromise
+      ]);
+      if (liveRes && liveRes.ok) {
+        var livePayload = await liveRes.json();
+        var liveRaw = livePayload && livePayload.books;
+        if (typeof liveRaw === 'string') liveRaw = JSON.parse(liveRaw || '[]');
+        if (Array.isArray(liveRaw)) liveBooks = liveRaw.filter(function (b) { return b && b.title; });
+      }
+    } catch (_) {}
+
+    // The live BooksData order wins when available. The verified fallback
+    // continues to own cover bindings and fills any temporarily missing titles.
     var merged = [];
     var seen = {};
     var fallbackByTitle = {};
@@ -71,9 +91,6 @@
         seen[key] = true;
         var fallback = fallbackByTitle[key] || {};
         var entry = Object.assign({}, fallback, live);
-        // Keep the deploy-verified cover binding when available. This prevents
-        // an older/stale BooksData coverUrl from visually duplicating another
-        // title while still letting the live backend control the order.
         if (fallback.coverUrl) entry.coverUrl = fallback.coverUrl;
         merged.push(entry);
       });
@@ -84,15 +101,10 @@
         merged.push(b);
       });
     } else {
-      fallbackBooks.forEach(function (b) {
-        var key = normTitle_(b.title);
-        if (!key || seen[key]) return;
-        seen[key] = true;
-        merged.push(b);
-      });
+      merged = fallbackBooks.slice();
     }
 
-    canonicalCatalog_ = merged;
+    if (merged.length) canonicalCatalog_ = merged;
     canonicalCatalogLoaded_ = true;
     return canonicalCatalog_;
   }
@@ -491,12 +503,21 @@
 
   function booksForGrid_(wrap) {
     // STRICT canonical grid: one catalogue entry = one thumbnail.
-    // Order, identity and cover all come from books-live.json. The rendered
-    // DOM is used only to determine which titles the current user may see.
+    // Order, identity and cover normally come from books-live.json. If that
+    // same-origin file has not arrived yet, use the already rendered cards as
+    // a temporary fail-safe so Covers mode never presents an empty page.
     var visibleTitles = visibleTitlesInOrder_(wrap);
     var visible = {};
     visibleTitles.forEach(function (title) { visible[normTitle_(title)] = true; });
     var hasVisibilityFilter = visibleTitles.length > 0;
+
+    if (!canonicalCatalog_.length && visibleTitles.length) {
+      return visibleTitles.map(function (title) {
+        return dataForTitle_(title, wrap);
+      }).filter(function (book) {
+        return book && book.title && matchesSearch_(book, currentSearchQuery_(), currentSearchScope_());
+      });
+    }
 
     var out = [];
     var seenIds = {};
