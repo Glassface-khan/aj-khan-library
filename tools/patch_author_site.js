@@ -136,7 +136,7 @@ if (!s.includes('AJK saveBookOrder fallback to saveBooks')) {
 // Use a new runtime filename so Safari/iOS cannot execute an older cached
 // cover-grid implementation. Remove every previous cover-grid script tag
 // before appending exactly one current runtime.
-const coverGridSrc = 'cover-grid-v3.js?v=20260929e';
+const coverGridSrc = 'cover-grid-v3.js?v=20260929f';
 s = s.replace(/<script src="cover-grid(?:-v[23])?\.js(?:\?[^"]*)?"><\/script>\s*/g, '');
 {
   const bodyEnd = s.lastIndexOf('</body>');
