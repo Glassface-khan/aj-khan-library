@@ -120,6 +120,146 @@ function parseEpubAccess_(cellValue) {
   }
 }
 
+
+function privateAssetMarker_(kind, book, langCode) {
+  const key = encodeURIComponent(String((book && (book.id || book.title)) || 'book'));
+  const lang = encodeURIComponent(String(langCode || ''));
+  return 'private-' + kind + '://' + key + (lang ? ('?lang=' + lang) : '');
+}
+
+function isGooglePrivateUrl_(value) {
+  return /^https?:\/\/(?:drive|docs)\.google\.com\//i.test(String(value || ''));
+}
+
+function sanitizeBooksForPublic_(books) {
+  return (books || []).map(function(book) {
+    const b = JSON.parse(JSON.stringify(book || {}));
+
+    // Keep feature presence without exposing a Drive file/folder ID.
+    if (b.epubUrl) b.epubUrl = privateAssetMarker_('epub', b, '');
+    if (b.manuscriptDocUrl && isGooglePrivateUrl_(b.manuscriptDocUrl)) delete b.manuscriptDocUrl;
+    if (b.pdfUrl && isGooglePrivateUrl_(b.pdfUrl)) delete b.pdfUrl;
+
+    if (b.bgUrl && isGooglePrivateUrl_(b.bgUrl)) b.bgUrl = privateAssetMarker_('background', b, '');
+    if (b.videoUrl && isGooglePrivateUrl_(b.videoUrl)) b.videoUrl = privateAssetMarker_('video', b, '');
+    if (b.altUrl && isGooglePrivateUrl_(b.altUrl)) b.altUrl = privateAssetMarker_('alt', b, '');
+
+    if (b.langs && typeof b.langs === 'object') {
+      Object.keys(b.langs).forEach(function(code) {
+        const entry = b.langs[code];
+        if (!entry || typeof entry !== 'object') return;
+        if (entry.epubUrl) entry.epubUrl = privateAssetMarker_('epub', b, code);
+        if (entry.manuscriptDocUrl && isGooglePrivateUrl_(entry.manuscriptDocUrl)) delete entry.manuscriptDocUrl;
+        if (entry.pdfUrl && isGooglePrivateUrl_(entry.pdfUrl)) delete entry.pdfUrl;
+      });
+    }
+
+    // Drive-derived alt-cover URLs can contain raw file IDs even when the
+    // underlying files are private. Do not expose them in public data.
+    if (Array.isArray(b.altCovers)) {
+      b.hasPrivateAltCovers = b.altCovers.length > 0;
+      b.altCovers = [];
+    }
+    return b;
+  });
+}
+
+function findBookByTitle_(title) {
+  const wanted = String(title || '').trim().toLocaleLowerCase();
+  if (!wanted) return null;
+  const books = getBooksArray();
+  for (let i = 0; i < books.length; i++) {
+    if (String(books[i] && books[i].title || '').trim().toLocaleLowerCase() === wanted) return books[i];
+  }
+  return null;
+}
+
+function accessForBookAsset_(e, bookTitle, intent, requireFullAccess) {
+  if (checkAdmin(e).ok) return { ok: true, isAdmin: true, fullAccess: true };
+
+  const code = String(e.parameter.code || '').trim();
+  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Access');
+  if (!code || !sheet || sheet.getLastRow() < 2) return { ok: false };
+
+  const rows = sheet.getDataRange().getValues();
+  for (let i = 1; i < rows.length; i++) {
+    if (String(rows[i][1] || '').trim() !== code) continue;
+
+    const canDownload = rows[i][2] === true || String(rows[i][2]).toUpperCase() === 'TRUE';
+    const visibleBooks = parseVisibleBooks_(rows[i][4]);
+    const visible = visibleBooks === null || (Array.isArray(visibleBooks) && visibleBooks.indexOf(bookTitle) >= 0);
+    if (!visible) return { ok: false };
+
+    if (canDownload) return { ok: true, fullAccess: true };
+    if (requireFullAccess) return { ok: false };
+
+    const epubAccess = parseEpubAccess_(rows[i][6]);
+    const perm = epubAccess[bookTitle] || {};
+    const allowed = intent === 'download' ? !!perm.download : !!perm.read;
+    return { ok: allowed, fullAccess: false };
+  }
+  return { ok: false };
+}
+
+function fileIdFromStoredUrl_(url) {
+  const m = String(url || '').match(/[-\w]{25,}/);
+  return m ? m[0] : '';
+}
+
+function resolveEpubForBook_(book, langCode) {
+  if (!book) return null;
+  const code = String(langCode || '').trim().toUpperCase();
+
+  if (code && book.langs && book.langs[code] && book.langs[code].epubUrl) {
+    const id = fileIdFromStoredUrl_(book.langs[code].epubUrl);
+    if (id) return { fileId: id, langCode: code };
+  }
+
+  if (book.epubUrl) {
+    const id = fileIdFromStoredUrl_(book.epubUrl);
+    if (id) return { fileId: id, langCode: code || '' };
+  }
+
+  if (book.langs && typeof book.langs === 'object') {
+    const codes = Object.keys(book.langs);
+    for (let i = 0; i < codes.length; i++) {
+      const entry = book.langs[codes[i]];
+      if (!entry || !entry.epubUrl) continue;
+      const id = fileIdFromStoredUrl_(entry.epubUrl);
+      if (id) return { fileId: id, langCode: codes[i] };
+    }
+  }
+  return null;
+}
+
+function getPrivateEpubByBook_(e) {
+  const title = String(e.parameter.bookTitle || '').trim();
+  const langCode = String(e.parameter.langCode || '').trim().toUpperCase();
+  const intent = e.parameter.intent === 'download' ? 'download' : 'read';
+  const book = findBookByTitle_(title);
+  if (!book) return { ok: false, error: 'Buch nicht gefunden.' };
+
+  const auth = accessForBookAsset_(e, book.title, intent, false);
+  if (!auth.ok) return { ok: false, error: 'Kein Zugriff auf dieses Buch.' };
+
+  const resolved = resolveEpubForBook_(book, langCode);
+  if (!resolved) return { ok: false, error: 'Keine EPUB-Datei für dieses Buch gefunden.' };
+
+  try {
+    const file = DriveApp.getFileById(resolved.fileId);
+    const blob = file.getBlob();
+    return {
+      ok: true,
+      dataBase64: Utilities.base64Encode(blob.getBytes()),
+      mimeType: blob.getContentType() || 'application/epub+zip',
+      fileName: file.getName(),
+      langCode: resolved.langCode || langCode || ''
+    };
+  } catch (err) {
+    return { ok: false, error: String(err && err.message || err) };
+  }
+}
+
 function generateAccessCode() {
   const chars = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
   let code = '';
@@ -2045,7 +2185,17 @@ function handle(e) {
   }
 
   if (action === 'getBooks') {
+    return jsonOut({ ok: true, books: JSON.stringify(sanitizeBooksForPublic_(getBooksArray())) });
+  }
+
+  if (action === 'getBooksAdmin') {
+    const admin = checkAdmin(e);
+    if (!admin.ok) return jsonOut({ ok: false, error: 'unauthorized' });
     return jsonOut({ ok: true, books: JSON.stringify(getBooksArray()) });
+  }
+
+  if (action === 'getPrivateEpub') {
+    return jsonOut(getPrivateEpubByBook_(e));
   }
 
   if (action === 'savePoems') {
@@ -2212,45 +2362,18 @@ function handle(e) {
   // im Prinzip jede beliebige, dem Angreifer bekannte Drive-Datei-ID
   // abrufen, nicht nur EPUBs.
   if (action === 'getEpubData') {
+    // Legacy compatibility only. New clients must use getPrivateEpub so the
+    // browser never needs a Drive URL or file ID.
     const epubUrl = e.parameter.epubUrl || '';
     const idMatch = epubUrl.match(/[-\w]{25,}/);
-    if (!idMatch) return jsonOut({ ok: false, error: 'Keine gültige EPUB-URL.' });
+    if (!idMatch) return jsonOut({ ok: false, error: 'Keine gültige EPUB-Referenz.' });
     const requestedId = idMatch[0];
     const bookTitle = e.parameter.bookTitle || '';
     const intent = e.parameter.intent === 'download' ? 'download' : 'read';
-    const requestCode = (e.parameter.code || '').trim();
 
-    // Zugriffspruefung: voller Lesezugriff (CanDownload) darf immer alles —
-    // unabhaengig vom Buchstatus. Alle anderen brauchen fuer GENAU dieses
-    // Buch und GENAU diese Aktion (lesen/downloaden) eine explizite
-    // Freigabe in EpubAccess; ohne gueltigen Code oder ohne Freigabe: kein
-    // Zugriff. Gleiche Access-Sheet-Logik wie bei 'checkAccess'.
-    // Admin-Login (adminToken) zaehlt ebenfalls als voller Zugriff — analog
-    // zu "Admin sieht immer alle Buecher" bei der Sichtbarkeit, sonst
-    // braeuchte der Autor zusaetzlich zum Admin-Login noch einen separaten
-    // Gast-Zugangscode nur zum Lesen im Inline-Reader.
-    const accessSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Access');
-    let hasFullAccess = checkAdmin(e).ok;
-    let epubAccess = {};
-    if (!hasFullAccess && accessSheet && requestCode) {
-      const accessRows = accessSheet.getDataRange().getValues();
-      for (let i = 1; i < accessRows.length; i++) {
-        if (String(accessRows[i][1]).trim() === requestCode) {
-          hasFullAccess = accessRows[i][2] === true || String(accessRows[i][2]).toUpperCase() === 'TRUE';
-          epubAccess = parseEpubAccess_(accessRows[i][6]);
-          break;
-        }
-      }
-    }
-    if (!hasFullAccess) {
-      const perm = epubAccess[bookTitle] || {};
-      const allowed = intent === 'download' ? !!perm.download : !!perm.read;
-      if (!allowed) return jsonOut({ ok: false, error: 'Kein Zugriff auf dieses Buch.' });
-    }
+    const auth = accessForBookAsset_(e, bookTitle, intent, false);
+    if (!auth.ok) return jsonOut({ ok: false, error: 'Kein Zugriff auf dieses Buch.' });
 
-    // Sicherheits-Check wie bisher: die angefragte Datei-ID muss tatsaechlich
-    // zu einem hinterlegten EPUB gehoeren, sonst waere dieser Endpunkt ein
-    // Oracle fuer beliebige Drive-Datei-IDs.
     const books = getBooksArray();
     let known = false;
     books.forEach(function(b) {
@@ -2263,6 +2386,7 @@ function handle(e) {
       }
     });
     if (!known) return jsonOut({ ok: false, error: 'Unbekannte EPUB-Datei.' });
+
     try {
       const file = DriveApp.getFileById(requestedId);
       const bytes = file.getBlob().getBytes();
