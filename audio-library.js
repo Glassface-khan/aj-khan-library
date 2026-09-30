@@ -284,7 +284,15 @@
     saveTimer: null,
     lastSavedAt: 0,
     lastSavedPosition: -1,
-    audio: null
+    audio: null,
+    playbackRate: (() => {
+      try {
+        const stored = Number(localStorage.getItem('ajk_audio_playback_rate') || 1);
+        return Number.isFinite(stored) ? Math.min(2, Math.max(.5, stored)) : 1;
+      } catch (_) {
+        return 1;
+      }
+    })()
   };
 
   const tr = (de, en) => ((localStorage.getItem('ajk_ui_lang') || 'de') === 'en' ? en : de);
@@ -394,8 +402,13 @@
       .ajka-round{width:43px; height:43px; border-radius:50%; border:1px solid var(--ink,#16140F); background:transparent; color:var(--ink,#16140F); cursor:pointer; font-size:14px}
       .ajka-round.play{width:54px; height:54px; background:var(--ink,#16140F); color:var(--bone,#E6E2D7); font-size:20px}
       .ajka-seek{width:100%; accent-color:var(--gold,#9F7A34)}
-      .ajka-speed-control{display:grid; grid-template-columns:auto minmax(120px,1fr) 58px; align-items:center; gap:10px; margin:10px 0 14px; font-size:13px}
-      .ajka-speed-slider{width:100%; accent-color:var(--gold,#9F7A34)}
+      .ajka-speed-control{display:grid; grid-template-columns:auto minmax(150px,1fr) 58px; align-items:center; gap:12px; margin:12px 0 16px; font-size:13px}
+      .ajka-speed-slider{width:100%; height:36px; margin:0; padding:0; accent-color:var(--gold,#9F7A34); touch-action:pan-y}
+      .ajka-speed-slider::-webkit-slider-runnable-track{height:6px; border-radius:999px; background:rgba(159,122,52,.22)}
+      .ajka-speed-slider::-webkit-slider-thumb{-webkit-appearance:none; width:26px; height:26px; margin-top:-10px; border-radius:50%; background:var(--gold,#9F7A34); border:0; box-shadow:0 2px 8px rgba(0,0,0,.18)}
+      .ajka-speed-slider{-webkit-appearance:none; appearance:none; background:transparent}
+      .ajka-speed-slider::-moz-range-track{height:6px; border-radius:999px; background:rgba(159,122,52,.22)}
+      .ajka-speed-slider::-moz-range-thumb{width:26px; height:26px; border:0; border-radius:50%; background:var(--gold,#9F7A34)}
       .ajka-speed-value{text-align:right; font-variant-numeric:tabular-nums; font-weight:600}
       .ajka-time{display:flex; justify-content:space-between; font-family:'Archivo',sans-serif; font-size:10px; color:var(--ink-3,#7A7263); margin-top:4px}
       .ajka-select{width:100%; margin-top:14px; padding:10px; background:transparent; border:1px solid var(--rule,#CBC1A6); color:var(--ink,#16140F); font:14px 'Newsreader',serif}
@@ -566,8 +579,8 @@
       '</div>' +
       '<div class="ajka-speed-control">' +
         '<label for="ajka-speed">' + esc(tr('Tempo', 'Speed')) + '</label>' +
-        '<input class="ajka-speed-slider" id="ajka-speed" type="range" min="50" max="200" step="5" value="100" aria-label="' + esc(tr('Wiedergabegeschwindigkeit', 'Playback speed')) + '">' +
-        '<span class="ajka-speed-value" id="ajka-speed-value">100%</span>' +
+        '<input class="ajka-speed-slider" id="ajka-speed" type="range" min="50" max="200" step="1" value="' + Math.round(state.playbackRate * 100) + '" aria-label="' + esc(tr('Wiedergabegeschwindigkeit', 'Playback speed')) + '">' +
+        '<span class="ajka-speed-value" id="ajka-speed-value">' + Math.round(state.playbackRate * 100) + '%</span>' +
       '</div>' +
       '<select class="ajka-select" id="ajka-chapter-select" aria-label="' + esc(tr('Kapitel', 'Chapter')) + '">' + opts + '</select>' +
       '</section>';
@@ -601,8 +614,13 @@
     if (speed) {
       speed.addEventListener('input', () => {
         const audio = ensureAudio();
-        audio.playbackRate = Math.min(2, Math.max(.5, Number(speed.value) / 100 || 1));
-        updatePlayerUi();
+        const rate = Math.min(2, Math.max(.5, Number(speed.value) / 100 || 1));
+        state.playbackRate = rate;
+        audio.defaultPlaybackRate = rate;
+        audio.playbackRate = rate;
+        try { localStorage.setItem('ajk_audio_playback_rate', String(rate)); } catch (_) {}
+        const speedValue = panel.querySelector('#ajka-speed-value');
+        if (speedValue) speedValue.textContent = Math.round(rate * 100) + '%';
       });
       speed.addEventListener('change', () => saveProgress(false, false, true));
     }
@@ -614,7 +632,7 @@
 
     select.addEventListener('change', () => {
       const ch = (state.activeBook.chapters || []).find((x) => x.id === select.value);
-      if (ch) loadChapter(state.activeBook, ch, 0, true);
+      if (ch) loadChapter(state.activeBook, ch, 0, true, state.playbackRate);
     });
 
     updatePlayerUi();
@@ -633,13 +651,17 @@
     }
     state.activeChapter = chapter;
     render();
-    await loadChapter(book, chapter, seek, true, Number(book.progress && book.progress.playback_rate || 1));
+    const savedRate = Number(book.progress && book.progress.playback_rate);
+    if (Number.isFinite(savedRate) && savedRate >= .5 && savedRate <= 2) state.playbackRate = savedRate;
+    await loadChapter(book, chapter, seek, true, state.playbackRate);
   }
 
   function ensureAudio() {
     if (state.audio) return state.audio;
     const audio = new Audio();
     audio.preload = 'metadata';
+    audio.defaultPlaybackRate = state.playbackRate;
+    audio.playbackRate = state.playbackRate;
     audio.addEventListener('timeupdate', () => {
       updatePlayerUi();
       if (Date.now() - state.lastSavedAt > 15000) saveProgress(false, false);
@@ -651,6 +673,8 @@
         audio.currentTime = Math.min(state.desiredSeek, Math.max(0, audio.duration - .25));
       }
       state.desiredSeek = 0;
+      audio.defaultPlaybackRate = state.playbackRate;
+      audio.playbackRate = state.playbackRate;
       updatePlayerUi();
     });
     audio.addEventListener('ended', onEnded);
@@ -667,9 +691,17 @@
     try {
       const data = await api({ op: 'chapterUrl', chapterId: chapter.id });
       const audio = ensureAudio();
+      const nextRate = rate != null
+        ? Math.min(2, Math.max(.5, Number(rate) || 1))
+        : state.playbackRate;
+      state.playbackRate = nextRate;
+      try { localStorage.setItem('ajk_audio_playback_rate', String(nextRate)); } catch (_) {}
       audio.src = data.url;
-      if (rate != null) audio.playbackRate = Math.min(3, Math.max(.5, Number(rate) || 1));
+      audio.defaultPlaybackRate = nextRate;
+      audio.playbackRate = nextRate;
       audio.load();
+      audio.defaultPlaybackRate = nextRate;
+      audio.playbackRate = nextRate;
       if (autoplay) {
         try { await audio.play(); } catch (_) {}
       }
@@ -695,7 +727,7 @@
     if (audio && seek && Number.isFinite(audio.duration) && audio.duration > 0) seek.value = String(Math.round((audio.currentTime / audio.duration) * 1000));
     if (now) now.textContent = formatTime(audio ? audio.currentTime : 0);
     if (duration) duration.textContent = formatTime(audio && Number.isFinite(audio.duration) ? audio.duration : (state.activeChapter && state.activeChapter.duration_seconds || 0));
-    const rate = audio ? audio.playbackRate : Number(state.activeBook && state.activeBook.progress && state.activeBook.progress.playback_rate || 1);
+    const rate = audio ? audio.playbackRate : state.playbackRate;
     if (speed) speed.value = String(Math.round(rate * 100));
     if (speedValue) speedValue.textContent = Math.round(rate * 100) + '%';
   }
@@ -707,7 +739,7 @@
     const last = idx < 0 || idx >= chapters.length - 1;
     await saveProgress(last, false);
     if (!last) {
-      await loadChapter(state.activeBook, chapters[idx + 1], 0, true);
+      await loadChapter(state.activeBook, chapters[idx + 1], 0, true, state.playbackRate);
     } else {
       await loadCatalog();
     }
@@ -724,19 +756,19 @@
         op: 'saveProgress',
         chapterId: state.activeChapter.id,
         positionSeconds: pos,
-        playbackRate: state.audio.playbackRate || 1,
+        playbackRate: state.playbackRate || state.audio.playbackRate || 1,
         completed: !!completed
       }, { keepalive });
       if (state.activeBook.progress) {
         state.activeBook.progress.chapter_id = state.activeChapter.id;
         state.activeBook.progress.position_seconds = pos;
-        state.activeBook.progress.playback_rate = state.audio.playbackRate || 1;
+        state.activeBook.progress.playback_rate = state.playbackRate || state.audio.playbackRate || 1;
         state.activeBook.progress.completed = !!completed;
       } else {
         state.activeBook.progress = {
           chapter_id: state.activeChapter.id,
           position_seconds: pos,
-          playback_rate: state.audio.playbackRate || 1,
+          playback_rate: state.playbackRate || state.audio.playbackRate || 1,
           completed: !!completed
         };
       }
