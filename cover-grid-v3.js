@@ -797,38 +797,40 @@
       state.ghost.style.top = (y - state.offsetY) + 'px';
     }
 
-    handle.addEventListener('pointerdown', function (e) {
-      if (e.button !== undefined && e.button !== 0) return;
-      e.preventDefault();
-      e.stopPropagation();
+    function removeWindowListeners_() {
+      window.removeEventListener('pointermove', onMove_, true);
+      window.removeEventListener('pointerup', onFinish_, true);
+      window.removeEventListener('pointercancel', onFinish_, true);
+      window.removeEventListener('blur', onAbort_, true);
+      document.removeEventListener('visibilitychange', onVisibility_, true);
+    }
 
-      var rect = thumb.getBoundingClientRect();
-      var ghost = thumb.cloneNode(true);
-      ghost.classList.remove('is-dragging');
-      ghost.classList.add('ajk-cover-drag-ghost');
-      ghost.style.width = rect.width + 'px';
-      ghost.style.height = rect.height + 'px';
-      ghost.style.left = rect.left + 'px';
-      ghost.style.top = rect.top + 'px';
-      var ghostHandle = ghost.querySelector('.ajk-cover-drag-handle');
-      if (ghostHandle) ghostHandle.remove();
-      document.body.appendChild(ghost);
+    function cleanup_(shouldPersist, pointerId) {
+      var state = dragState_;
+      if (!state || state.thumb !== thumb) {
+        removeWindowListeners_();
+        return;
+      }
+      var moved = state.moved;
+      var ghost = state.ghost;
+      dragState_ = null;
+      thumb.classList.remove('is-dragging');
+      if (ghost && ghost.parentNode) ghost.parentNode.removeChild(ghost);
+      Array.prototype.forEach.call(document.querySelectorAll('.ajk-cover-drag-ghost'), function (node) {
+        if (node.parentNode) node.parentNode.removeChild(node);
+      });
+      if (pointerId != null) {
+        try { handle.releasePointerCapture(pointerId); } catch (_) {}
+      }
+      removeWindowListeners_();
+      if (shouldPersist && moved) {
+        suppressCoverClickUntil_ = Date.now() + 700;
+        persistGridOrder_(grid);
+      }
+    }
 
-      dragState_ = {
-        thumb: thumb,
-        grid: grid,
-        pointerId: e.pointerId,
-        moved: false,
-        ghost: ghost,
-        offsetX: e.clientX - rect.left,
-        offsetY: e.clientY - rect.top
-      };
-      thumb.classList.add('is-dragging');
-      try { handle.setPointerCapture(e.pointerId); } catch (_) {}
-    });
-
-    handle.addEventListener('pointermove', function (e) {
-      if (!dragState_ || dragState_.pointerId !== e.pointerId) return;
+    function onMove_(e) {
+      if (!dragState_ || dragState_.thumb !== thumb || dragState_.pointerId !== e.pointerId) return;
       e.preventDefault();
 
       moveGhost_(dragState_, e.clientX, e.clientY);
@@ -858,25 +860,67 @@
         grid.insertBefore(thumb, target.nextSibling);
         dragState_.moved = true;
       }
-    });
+    }
 
-    function finish(e) {
-      if (!dragState_ || dragState_.pointerId !== e.pointerId) return;
+    function onFinish_(e) {
+      if (!dragState_ || dragState_.thumb !== thumb || dragState_.pointerId !== e.pointerId) return;
       e.preventDefault();
       e.stopPropagation();
-      var moved = dragState_.moved;
-      var ghost = dragState_.ghost;
-      dragState_ = null;
-      thumb.classList.remove('is-dragging');
-      if (ghost && ghost.parentNode) ghost.parentNode.removeChild(ghost);
-      try { handle.releasePointerCapture(e.pointerId); } catch (_) {}
-      if (moved) {
-        suppressCoverClickUntil_ = Date.now() + 700;
-        persistGridOrder_(grid);
-      }
+      cleanup_(true, e.pointerId);
     }
-    handle.addEventListener('pointerup', finish);
-    handle.addEventListener('pointercancel', finish);
+
+    function onAbort_() {
+      cleanup_(false, null);
+    }
+
+    function onVisibility_() {
+      if (document.hidden) cleanup_(false, null);
+    }
+
+    handle.addEventListener('pointerdown', function (e) {
+      if (e.button !== undefined && e.button !== 0) return;
+      e.preventDefault();
+      e.stopPropagation();
+
+      // Safari can lose pointer capture when the dragged element is reinserted
+      // in another grid position. Remove any orphaned preview before starting a
+      // new gesture and listen on window for the complete drag lifecycle.
+      Array.prototype.forEach.call(document.querySelectorAll('.ajk-cover-drag-ghost'), function (node) {
+        if (node.parentNode) node.parentNode.removeChild(node);
+      });
+
+      var rect = thumb.getBoundingClientRect();
+      var ghost = thumb.cloneNode(true);
+      ghost.classList.remove('is-dragging');
+      ghost.classList.add('ajk-cover-drag-ghost');
+      ghost.style.width = rect.width + 'px';
+      ghost.style.height = rect.height + 'px';
+      ghost.style.left = rect.left + 'px';
+      ghost.style.top = rect.top + 'px';
+      var ghostHandle = ghost.querySelector('.ajk-cover-drag-handle');
+      if (ghostHandle) ghostHandle.remove();
+      document.body.appendChild(ghost);
+
+      dragState_ = {
+        thumb: thumb,
+        grid: grid,
+        pointerId: e.pointerId,
+        moved: false,
+        ghost: ghost,
+        offsetX: e.clientX - rect.left,
+        offsetY: e.clientY - rect.top
+      };
+      thumb.classList.add('is-dragging');
+
+      window.addEventListener('pointermove', onMove_, { capture: true, passive: false });
+      window.addEventListener('pointerup', onFinish_, { capture: true, passive: false });
+      window.addEventListener('pointercancel', onFinish_, { capture: true, passive: false });
+      window.addEventListener('blur', onAbort_, true);
+      document.addEventListener('visibilitychange', onVisibility_, true);
+      handle.addEventListener('lostpointercapture', onAbort_, { once: true });
+      try { handle.setPointerCapture(e.pointerId); } catch (_) {}
+    });
+
     thumb.appendChild(handle);
   }
 
