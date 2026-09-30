@@ -1,6 +1,11 @@
 name: Audiobook Cloud Worker
 
 on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/audiobook-cloud-worker.yml"
+      - "audiobook-cloud/**"
   schedule:
     - cron: "*/5 * * * *"
   workflow_dispatch:
