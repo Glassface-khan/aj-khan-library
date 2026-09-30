@@ -192,7 +192,7 @@ for (const marker of [
   'const effChapterCount =',
   "wordCountLabel: statParts.join(' · ')",
   "epubHref: '#'",
-  'else this.downloadEpub(b.title, effEpubUrl);',
+  "action: 'getPrivateEpub'",
   "themes.register('ajk-reader'",
   'Alte Bookmarks aus frueheren Reader-Fehlern',
   'const firstReadable = spineItems.find'
