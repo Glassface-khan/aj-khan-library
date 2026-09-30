@@ -1,0 +1,236 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="robots" content="noindex,nofollow">
+<title>A. J. Khan · Audiobook Factory</title>
+<style>
+:root{--bg:#15130f;--panel:#201d17;--ink:#f0eadb;--muted:#a9a08f;--rule:#4a4235;--gold:#c09a52;--good:#7faa75;--bad:#d77c6c}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
+main{max-width:900px;margin:auto;padding:calc(22px + env(safe-area-inset-top)) 16px 50px}
+h1,h2,h3{font-family:Georgia,serif;font-weight:400}h1{font-size:34px;margin:5px 0}.sub,.muted{color:var(--muted)}
+.card{border:1px solid var(--rule);background:var(--panel);padding:18px;border-radius:15px;margin:14px 0}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}.full{grid-column:1/-1}
+label{display:block;color:var(--muted);font-size:12px;letter-spacing:.08em;text-transform:uppercase;margin:8px 0 6px}
+select,input[type=file],input[type=text],button{font:inherit}
+select,input[type=text],input[type=file]{width:100%;min-height:48px;border:1px solid var(--rule);border-radius:10px;background:#171510;color:var(--ink);padding:10px}
+button{min-height:46px;border:1px solid var(--ink);border-radius:10px;background:transparent;color:var(--ink);padding:10px 14px;font-weight:650;cursor:pointer}
+button.primary{background:var(--ink);color:#171510}button:disabled{opacity:.45;cursor:not-allowed}
+.row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}.grow{flex:1}
+.badge{display:inline-block;border:1px solid var(--rule);border-radius:999px;padding:4px 8px;font-size:11px;margin-right:5px}
+.good{color:var(--good)}.bad{color:var(--bad)}.gold{color:var(--gold)}
+progress{width:100%;height:18px;accent-color:var(--gold)}
+.job{border-top:1px solid var(--rule);padding:16px 0}.job:first-child{border-top:0}
+.job-title{font-family:Georgia,serif;font-size:23px}.job-meta{font-size:12px;color:var(--muted);margin:5px 0 10px}
+pre{white-space:pre-wrap;word-break:break-word;font-size:11px;background:#11100d;padding:10px;border-radius:8px;max-height:220px;overflow:auto}
+#gate{border-left:4px solid var(--gold)}#error{color:var(--bad);min-height:1.2em}
+.hidden{display:none!important}
+@media(max-width:650px){.grid{grid-template-columns:1fr}.full{grid-column:auto}.row>*{width:100%}}
+</style>
+</head>
+<body>
+<main>
+  <div class="row">
+    <div class="grow"><div class="gold">A. J. Khan</div><h1>Audiobook Factory</h1><div class="sub">Cloud-Produktion · kein Notebook erforderlich</div></div>
+    <button id="back">← Bibliothek</button>
+  </div>
+
+  <section class="card" id="authCard">
+    <h2>Admin-Zugang</h2>
+    <p id="authText" class="muted">Prüfe vorhandene Autor-Anmeldung …</p>
+  </section>
+
+  <section class="card hidden" id="newJob">
+    <h2>Neues Hörbuch</h2>
+    <div class="grid">
+      <div class="full">
+        <label>DOCX-Manuskript</label>
+        <input id="source" type="file" accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document">
+        <div class="muted">Auf dem iPhone kannst du hier direkt Google Drive oder iCloud Drive auswählen.</div>
+      </div>
+      <div>
+        <label>Buch auf der Autorenseite</label>
+        <select id="book"></select>
+      </div>
+      <div>
+        <label>Sprache</label>
+        <select id="lang"><option value="EN">English</option><option value="DE">Deutsch</option></select>
+      </div>
+      <div class="full">
+        <label>Stimme</label>
+        <select id="voice"></select>
+        <div id="voiceInfo" class="muted"></div>
+      </div>
+      <div class="full hidden" id="voiceUploadBox">
+        <label>Einmalige Referenzstimme hochladen</label>
+        <input id="voiceFile" type="file" accept=".wav,audio/wav">
+        <label style="text-transform:none;letter-spacing:0"><input id="voiceRights" type="checkbox"> Ich bestätige, dass ich die erforderliche Einwilligung/Rechte zur Nutzung dieser Referenzstimme für Voice Cloning habe.</label>
+        <button id="uploadVoice">Referenzstimme speichern</button>
+      </div>
+      <div class="full" id="gate">
+        <strong>Automatisches Qualitäts-Gate vor der Produktion</strong>
+        <p class="muted">Die Factory prüft zuerst Kapitelstruktur und erzeugt drei Probe-Segmente (Anfang · Mitte · Ende). Sprache wird zurücktranskribiert und gegen den Originaltext geprüft; zusätzlich werden Sprechtempo, Dauer, Stille und Clipping kontrolliert. Nur bei PASS startet das vollständige Hörbuch.</p>
+      </div>
+      <div class="full">
+        <label style="text-transform:none;letter-spacing:0"><input id="autoPublish" type="checkbox" checked> Nach bestandenem End-QC automatisch auf der Autorenseite veröffentlichen</label>
+      </div>
+    </div>
+    <p id="error"></p>
+    <button id="start" class="primary">QUALITÄT PRÜFEN & HÖRBUCH STARTEN</button>
+  </section>
+
+  <section class="card hidden" id="jobsCard">
+    <div class="row"><h2 class="grow">Cloud-Jobs</h2><button id="refresh">Aktualisieren</button></div>
+    <div id="jobs"><p class="muted">Lade …</p></div>
+  </section>
+</main>
+<script>
+const API='https://ipoqyjrojljmbqslmxxf.supabase.co/functions/v1/audiobook-factory';
+const $=s=>document.querySelector(s);
+let books=[],voices=[],token='';
+const norm=s=>String(s||'').toLowerCase().normalize('NFKD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9]+/g,' ').trim();
+const api=async body=>{
+ const r=await fetch(API,{method:'POST',headers:{'Content-Type':'application/json'},cache:'no-store',body:JSON.stringify({...body,adminToken:token})});
+ const d=await r.json().catch(()=>({}));
+ if(!r.ok||!d.ok)throw new Error(d.error||d.detail||('HTTP '+r.status));
+ return d;
+};
+function parseBooksPayload(d){
+ if(Array.isArray(d))return d;
+ if(Array.isArray(d.books))return d.books;
+ if(typeof d.books==='string'){try{return JSON.parse(d.books)}catch(e){}}
+ return [];
+}
+async function loadBooks(){
+ const r=await fetch('./books-live.json?factory='+Date.now(),{cache:'no-store'});
+ books=parseBooksPayload(await r.json());
+ const s=$('#book');s.innerHTML='<option value="">— Buch wählen —</option>';
+ books.filter(b=>b&&b.id&&b.title).sort((a,b)=>a.title.localeCompare(b.title)).forEach(b=>{
+   const o=document.createElement('option');o.value=b.id;o.textContent=b.title;s.appendChild(o);
+ });
+}
+async function loadVoices(){
+ const d=await api({op:'voices'});voices=d.voices||[];renderVoices();
+}
+function renderVoices(){
+ const lang=$('#lang').value,s=$('#voice'),prev=s.value;s.innerHTML='';
+ voices.filter(v=>v.languageCode===lang).forEach(v=>{
+   const o=document.createElement('option');o.value=v.key;o.textContent=v.name+(v.ready?'':' · Referenz fehlt');o.disabled=!v.ready;s.appendChild(o);
+ });
+ if([...s.options].some(o=>o.value===prev&&!o.disabled))s.value=prev;
+ const preferred=localStorage.getItem('ajk_factory_voice_'+lang);
+ if(preferred&&[...s.options].some(o=>o.value===preferred&&!o.disabled))s.value=preferred;
+ if(!s.value){const first=[...s.options].find(o=>!o.disabled);if(first)s.value=first.value}
+ updateVoiceInfo();
+}
+function updateVoiceInfo(){
+ const v=voices.find(x=>x.key===$('#voice').value);
+ $('#voiceInfo').textContent=v?(v.ready?'Bereit · '+v.name:'Referenzstimme fehlt'):'';
+ const missingForLang=voices.filter(v=>v.languageCode===$('#lang').value&&v.sourceType==='asset'&&!v.ready);
+ $('#voiceUploadBox').classList.toggle('hidden',missingForLang.length===0);
+}
+function chooseBookFromFilename(name){
+ const n=norm(name.replace(/\.docx$/i,'').replace(/\b(final|publication|master|candidate|locked|working|complete|v\d+(?:_\d+)*)\b/gi,' '));
+ let best=null,score=0;
+ for(const b of books){
+   const bt=norm(b.title);if(!bt)continue;
+   const a=new Set(n.split(' ')),c=new Set(bt.split(' '));
+   const common=[...c].filter(x=>a.has(x)).length;
+   const sc=common/Math.max(1,c.size);
+   if(sc>score){score=sc;best=b}
+ }
+ if(best&&score>=0.65){$('#book').value=best.id;syncBookLanguage()}
+}
+function syncBookLanguage(){
+ const b=books.find(x=>x.id===$('#book').value);if(!b)return;
+ const langs=Object.keys(b.langs||{});
+ if(langs.length===1&&['EN','DE'].includes(langs[0]))$('#lang').value=langs[0];
+ renderVoices();
+}
+async function uploadMissingVoice(){
+ $('#error').textContent='';
+ try{
+   const file=$('#voiceFile').files[0];if(!file)throw new Error('Bitte WAV-Datei auswählen.');
+   if(!$('#voiceRights').checked)throw new Error('Bitte Nutzungsrechte/Einwilligung bestätigen.');
+   const lang=$('#lang').value;
+   const missing=voices.find(v=>v.languageCode===lang&&v.sourceType==='asset'&&!v.ready);
+   if(!missing)throw new Error('Keine fehlende Referenzstimme für diese Sprache.');
+   const r=await fetch(API,{method:'POST',headers:{
+     'x-ajk-op':'upload-voice','x-admin-token':token,'x-voice-key':missing.key,'Content-Type':'audio/wav'
+   },body:file});
+   const d=await r.json();if(!r.ok||!d.ok)throw new Error(d.error||'Upload fehlgeschlagen');
+   await loadVoices();
+ }catch(e){$('#error').textContent=e.message}
+}
+async function startJob(){
+ $('#error').textContent='';
+ try{
+   const file=$('#source').files[0];if(!file)throw new Error('Bitte DOCX auswählen.');
+   const b=books.find(x=>x.id===$('#book').value);if(!b)throw new Error('Bitte Buch auf der Autorenseite auswählen.');
+   const voice=voices.find(v=>v.key===$('#voice').value);if(!voice||!voice.ready)throw new Error('Bitte verfügbare Stimme auswählen.');
+   localStorage.setItem('ajk_factory_voice_'+$('#lang').value,voice.key);
+   $('#start').disabled=true;$('#start').textContent='JOB WIRD ANGELEGT …';
+   const c=await api({op:'createJob',fileName:file.name,title:b.title,siteBookId:b.id,coverUrl:b.coverUrl||'',languageCode:$('#lang').value,voiceKey:voice.key,publishAutomatically:$('#autoPublish').checked});
+   $('#start').textContent='MANUSKRIPT WIRD IN DIE CLOUD GELADEN …';
+   const r=await fetch(API,{method:'POST',headers:{
+     'x-ajk-op':'upload-source','x-admin-token':token,'x-job-id':c.jobId,
+     'Content-Type':'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+   },body:file});
+   const d=await r.json();if(!r.ok||!d.ok)throw new Error(d.error||'Manuskript-Upload fehlgeschlagen');
+   $('#source').value='';
+   await loadJobs();
+ }catch(e){$('#error').textContent=e.message}
+ finally{$('#start').disabled=false;$('#start').textContent='QUALITÄT PRÜFEN & HÖRBUCH STARTEN'}
+}
+const esc=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+function statusLabel(j){
+ const map={uploading:'Upload',queued:'Wartet auf Cloud-Worker',preflight:'Vorprüfung',qc_running:'Qualitätsprüfung',production:'Produktion',finalizing:'Finalisierung',ready:'Fertig',needs_attention:'Prüfung nötig',failed:'Fehler',cancelled:'Abgebrochen'};
+ return map[j.status]||j.status;
+}
+function renderJob(j){
+ const pct=j.progress_total?Math.round(100*j.progress_done/j.progress_total):0;
+ const q=j.qc_status==='passed'?'<span class="badge good">QC PASS</span>':j.qc_status==='failed'?'<span class="badge bad">QC FAIL</span>':'<span class="badge">QC '+esc(j.qc_status)+'</span>';
+ const actions=(j.status==='needs_attention'||j.status==='failed')?'<button data-retry="'+j.id+'">Automatisch erneut versuchen</button>':'';
+ const cancel=!['ready','failed','cancelled'].includes(j.status)?'<button data-cancel="'+j.id+'">Abbrechen</button>':'';
+ return '<div class="job"><div class="job-title">'+esc(j.detected_title||j.requested_title||j.source_file_name)+'</div>'+
+ '<div class="job-meta">'+esc(j.voice_name)+' · '+esc(j.language_code)+' · '+esc(statusLabel(j))+'</div>'+q+
+ (j.qc_score!=null?'<span class="badge">QC '+Math.round(Number(j.qc_score))+'%</span>':'')+
+ '<progress max="100" value="'+pct+'"></progress><div class="muted">'+j.progress_done+' / '+(j.progress_total||'?')+' Abschnitte · '+pct+'%</div>'+
+ (j.error_detail?'<p class="bad">'+esc(j.error_detail)+'</p>':'')+
+ '<div class="row">'+actions+cancel+'</div></div>';
+}
+async function loadJobs(){
+ try{
+  const d=await api({op:'listJobs'});const js=d.jobs||[];
+  $('#jobs').innerHTML=js.length?js.map(renderJob).join(''):'<p class="muted">Noch keine Cloud-Jobs.</p>';
+  document.querySelectorAll('[data-retry]').forEach(b=>b.onclick=async()=>{await api({op:'retryJob',jobId:b.dataset.retry});loadJobs()});
+  document.querySelectorAll('[data-cancel]').forEach(b=>b.onclick=async()=>{if(confirm('Job wirklich abbrechen?')){await api({op:'cancelJob',jobId:b.dataset.cancel});loadJobs()}});
+ }catch(e){$('#jobs').innerHTML='<p class="bad">'+esc(e.message)+'</p>'}
+}
+async function init(){
+ $('#back').onclick=()=>location.href='./';
+ token=String(localStorage.getItem('ajk_admin_token')||'');
+ const isAdmin=localStorage.getItem('ajk_author_admin')==='1';
+ if(!isAdmin||!token){
+   $('#authText').innerHTML='Bitte zuerst auf der <a href="./" style="color:var(--gold)">Autorenseite als Admin anmelden</a>.';
+   return;
+ }
+ try{
+   await Promise.all([loadBooks(),loadVoices()]);
+   $('#authText').textContent='Admin bestätigt · Cloud Factory bereit.';
+   $('#newJob').classList.remove('hidden');$('#jobsCard').classList.remove('hidden');
+   await loadJobs();
+   setInterval(()=>{if(!document.hidden)loadJobs()},10000);
+ }catch(e){$('#authText').textContent='Admin-Sitzung konnte nicht bestätigt werden: '+e.message}
+}
+$('#source').onchange=()=>{const f=$('#source').files[0];if(f)chooseBookFromFilename(f.name)};
+$('#book').onchange=syncBookLanguage;
+$('#lang').onchange=renderVoices;
+$('#voice').onchange=updateVoiceInfo;
+$('#start').onclick=startJob;
+$('#refresh').onclick=loadJobs;
+$('#uploadVoice').onclick=uploadMissingVoice;
+init();
+</script>
+</body></html>
