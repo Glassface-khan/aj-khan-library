@@ -128,7 +128,8 @@ function privateAssetMarker_(kind, book, langCode) {
 }
 
 function isGooglePrivateUrl_(value) {
-  return /^https?:\/\/(?:drive|docs)\.google\.com\//i.test(String(value || ''));
+  const v = String(value || '');
+  return /^https?:\/\/(?:drive|docs)\.google\.com\//i.test(v) || /^drive-private:\/\//i.test(v);
 }
 
 function sanitizeBooksForPublic_(books) {
