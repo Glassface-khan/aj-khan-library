@@ -64,7 +64,7 @@ pre{white-space:pre-wrap;word-break:break-word;font-size:11px;background:#11100d
       </div>
       <div class="full hidden" id="voiceUploadBox">
         <label>Einmalige Referenzstimme hochladen</label>
-        <input id="voiceFile" type="file" accept=".wav,audio/wav">
+        <input id="voiceFile" type="file" accept=".wav,.mp3,audio/wav,audio/mpeg">
         <label style="text-transform:none;letter-spacing:0"><input id="voiceRights" type="checkbox"> Ich bestätige, dass ich die erforderliche Einwilligung/Rechte zur Nutzung dieser Referenzstimme für Voice Cloning habe.</label>
         <button id="uploadVoice">Referenzstimme speichern</button>
       </div>
@@ -151,13 +151,13 @@ function syncBookLanguage(){
 async function uploadMissingVoice(){
  $('#error').textContent='';
  try{
-   const file=$('#voiceFile').files[0];if(!file)throw new Error('Bitte WAV-Datei auswählen.');
+   const file=$('#voiceFile').files[0];if(!file)throw new Error('Bitte WAV- oder MP3-Datei auswählen.');
    if(!$('#voiceRights').checked)throw new Error('Bitte Nutzungsrechte/Einwilligung bestätigen.');
    const lang=$('#lang').value;
    const missing=voices.find(v=>v.languageCode===lang&&v.sourceType==='asset'&&!v.ready);
    if(!missing)throw new Error('Keine fehlende Referenzstimme für diese Sprache.');
    const r=await fetch(API,{method:'POST',headers:{
-     'x-ajk-op':'upload-voice','x-admin-token':token,'x-voice-key':missing.key,'Content-Type':'audio/wav'
+     'x-ajk-op':'upload-voice','x-admin-token':token,'x-voice-key':missing.key,'x-voice-format':(file.name.toLowerCase().endsWith('.mp3')?'mp3':'wav'),'Content-Type':file.type||'application/octet-stream'
    },body:file});
    const d=await r.json();if(!r.ok||!d.ok)throw new Error(d.error||'Upload fehlgeschlagen');
    await loadVoices();
