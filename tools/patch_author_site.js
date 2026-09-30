@@ -109,6 +109,34 @@ if (!s.includes('const firstReadable = spineItems.find')) {
 }
 
 
+// AJK ADMIN RAW CATALOG
+// Public getBooks is sanitized. Only an authenticated admin may fetch the raw
+// internal catalogue containing private Drive references; never persist public
+// opaque markers back into BooksData.
+if (!s.includes('fetchBooksAdmin = (tokenOverride) => {')) {
+  const fetchAnchor = String.raw`  fetchBooks = (attempt = 0) => {\n`;
+  const pos = s.indexOf(fetchAnchor);
+  if (pos < 0) throw new Error('admin raw catalog: fetchBooks marker not found');
+  const method = String.raw`  fetchBooksAdmin = (tokenOverride) => {\n    const token = tokenOverride || this.state.adminToken || '';\n    if (!token) return Promise.resolve(false);\n    const params = new URLSearchParams({ action: 'getBooksAdmin', adminToken: token });\n    return fetch(this.SCRIPT_URL, { method: 'POST', body: params, cache: 'no-store' })\n      .then(r => r.json())\n      .then(data => {\n        if (!data || !data.ok) throw new Error((data && data.error) || 'getBooksAdmin_failed');\n        const books = JSON.parse(data.books || '[]');\n        if (!Array.isArray(books) || !books.length) throw new Error('getBooksAdmin_empty');\n        this._liveBooksLoaded = true;\n        this.setState({ books });\n        try { localStorage.setItem('ajk_author_books_draft', JSON.stringify({ books })); } catch (e) {}\n        return true;\n      })\n      .catch(() => false);\n  };\n\n`;
+  s = s.slice(0,pos) + method + s.slice(pos);
+
+  // Successful admin login immediately swaps the sanitized visitor catalogue
+  // for the raw token-protected admin catalogue.
+  const loginOld = String.raw`          this.setState({ isAdmin: true, adminToken: data.adminToken, showAdminLogin: false, adminPasswordInput: '' }, () => { this.fetchAccessList(); this.fetchRevisionNovels(); });`;
+  const loginNew = String.raw`          this.setState({ isAdmin: true, adminToken: data.adminToken, showAdminLogin: false, adminPasswordInput: '' }, () => { this.fetchBooksAdmin(data.adminToken); this.fetchAccessList(); this.fetchRevisionNovels(); });`;
+  if (!s.includes(loginOld)) throw new Error('admin raw catalog: login callback marker not found');
+  s = s.replace(loginOld, loginNew);
+
+  // On sign-out remove the raw catalogue from local storage and immediately
+  // reload the public sanitized view.
+  const signOutOld = String.raw`  signOut = () => {\n    localStorage.removeItem('ajk_author_admin');\n    localStorage.removeItem('ajk_admin_token');\n    this.setState({ isAdmin: false, adminToken: '', editingIndex: null });\n  };`;
+  const signOutNew = String.raw`  signOut = () => {\n    localStorage.removeItem('ajk_author_admin');\n    localStorage.removeItem('ajk_admin_token');\n    try { localStorage.removeItem('ajk_author_books_draft'); } catch (e) {}\n    this._liveBooksLoaded = false;\n    this.setState({ isAdmin: false, adminToken: '', editingIndex: null }, () => this.fetchBooks());\n  };`;
+  if (!s.includes(signOutOld)) throw new Error('admin raw catalog: signOut marker not found');
+  s = s.replace(signOutOld, signOutNew);
+}
+
+
+
 // AJK PRIVATE BOOK ASSET PROXY
 // Manuscript/Read, background, video and Drive-based alternate covers never
 // use a raw Drive href. Full-access readers/admin request a server-side
