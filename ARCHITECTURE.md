@@ -2730,3 +2730,79 @@ Der temporaere `reader-test.html`-Harness wurde nach erfolgreicher
 Validierung wieder entfernt. Dieser Stand ist ab jetzt der produktive
 iOS-Referenzstand; weitere Reader-Aenderungen sollen gegen diesen Stand
 getestet werden, bevor sie live gehen.
+
+
+---
+
+## Private content proxy architecture — 30.09.2026
+
+### Security boundary
+
+The public GitHub Pages site and public repository may contain website code, public book metadata,
+blurbs and public cover URLs. They must **not** contain raw Google Drive IDs/URLs for unpublished
+manuscripts, EPUBs, background material, videos or Drive-based alternate covers.
+
+Google Drive's website runtime is kept **Restricted**. Private book assets must never be switched to
+"Anyone with the link" merely to make the site reader work.
+
+The one deliberate exception is the current main cover image for a book: the Drive sync may make the
+cover image itself link-readable because the cover is intentional public website content.
+
+### Public vs. admin catalogue
+
+- `getBooks` returns `sanitizeBooksForPublic_(getBooksArray())`.
+- Private Drive references are replaced by opaque markers such as
+  `private-epub://...`, `private-manuscript://...`, etc.
+- `getBooksAdmin` requires a valid admin token and returns the raw internal catalogue.
+- The browser switches to `getBooksAdmin` after successful admin login.
+- On admin sign-out, the raw local catalogue cache is deleted and the public sanitized catalogue is reloaded.
+- `books-live.json` is a public fallback and is scrubbed of direct `drive.google.com` /
+  `docs.google.com` links by `tools/patch_live_books.js`.
+
+### Private EPUB delivery
+
+The browser never needs an EPUB Drive URL or file ID.
+
+1. Client sends `bookTitle`, optional `langCode`, intent (`read` or `download`),
+   visitor code and/or admin token to `getPrivateEpub`.
+2. Apps Script validates admin / Access-sheet / per-book EPUB permissions.
+3. Apps Script resolves the real private EPUB only on the server.
+4. The EPUB bytes are returned to the authorized browser as Base64 and opened by epub.js.
+5. Bookmark keys use an opaque `private-epub:<title>:<lang>` key, not a Drive URL.
+
+The legacy `getEpubData` route is retained only as a transition fallback. New frontend code uses
+`getPrivateEpub`.
+
+### Other private book assets
+
+Private manuscript previews, Background/Extern files, videos and Drive-based alternate covers use:
+
+- `listPrivateBookAssets`
+- `getPrivateBookAsset`
+
+These routes require admin or full reader access. Raw Drive folder/file URLs are never used as
+browser `href` values. Word manuscripts are temporarily converted server-side to PDF for protected
+browser preview; the temporary Google Doc is immediately trashed.
+
+Video/background/alt-cover sync stores server-internal `drive-private://...` references in BooksData
+without changing Drive sharing. Drive-derived alt-cover files stay private. The public catalogue
+receives only opaque presence markers.
+
+### Drive runtime discovery
+
+The public source does not hard-code the runtime folder ID. `getDriveRootFolder_()` first accepts an
+optional private Script Property `DRIVE_ROOT_FOLDER_ID`; otherwise it resolves the unique exact folder
+name `_WEBSITE_RUNTIME – AUTO (NICHT BEARBEITEN)`.
+
+### Deployment rule
+
+`apps-script/Code.gs` is canonical source, but a GitHub commit is **not** a live Apps Script deploy.
+After backend changes:
+
+1. Run/verify the `Package Code.gs` workflow (it syntax-checks a temporary `.js` copy).
+2. Replace the live Apps Script project's `Code.gs` with the checked canonical file.
+3. Save.
+4. Deploy → Manage deployments → Edit → New version → Deploy.
+5. Verify public `getBooks` contains no raw Drive/Docs links and test authorized EPUB/private asset access.
+
+Never restore public Drive sharing to repair a reader problem.
