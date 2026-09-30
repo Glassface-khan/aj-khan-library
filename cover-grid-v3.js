@@ -163,8 +163,10 @@
       '#'+GRID_ID+'.ajk-admin-reorder .ajk-cover-thumb{position:relative}' +
       '.ajk-cover-drag-handle{display:none;position:absolute;right:7px;top:7px;z-index:5;width:36px;height:36px;border-radius:18px;background:rgba(32,28,22,.82);color:#fff;align-items:center;justify-content:center;font-family:"Archivo",sans-serif;font-size:18px;line-height:1;box-shadow:0 3px 12px rgba(0,0,0,.24);touch-action:none;user-select:none;-webkit-user-select:none;cursor:grab}' +
       '#'+GRID_ID+'.ajk-admin-reorder .ajk-cover-drag-handle{display:flex}' +
-      '.ajk-cover-thumb.is-dragging{z-index:6;opacity:.78;transform:scale(.97)}' +
+      '.ajk-cover-thumb.is-dragging{z-index:6;opacity:.24}' +
       '.ajk-cover-thumb.is-dragging .ajk-cover-frame{border-color:var(--gold,#b89448);box-shadow:0 18px 38px rgba(0,0,0,.25)}' +
+      '.ajk-cover-drag-ghost{position:fixed!important;z-index:9999!important;pointer-events:none!important;margin:0!important;opacity:.94!important;transform:none!important;transition:none!important;filter:drop-shadow(0 16px 22px rgba(0,0,0,.24))}' +
+      '.ajk-cover-drag-ghost .ajk-cover-drag-handle{display:none!important}' +
       '.ajk-search-hidden,.ajk-search-slot-hidden{display:none!important}' +
       '#books.ajk-search-active{min-height:0!important;height:auto!important;padding-bottom:0!important}' +
       '#books .book-list-wrap.ajk-search-active{min-height:0!important;height:auto!important;padding-bottom:0!important;margin-bottom:0!important}' +
@@ -770,11 +772,57 @@
       e.stopPropagation();
     });
 
+    function nearestTarget_(x, y) {
+      var best = null;
+      var bestDistance = Infinity;
+      Array.prototype.forEach.call(grid.querySelectorAll('.ajk-cover-thumb'), function (candidate) {
+        if (candidate === thumb) return;
+        var r = candidate.getBoundingClientRect();
+        var cx = r.left + r.width / 2;
+        var cy = r.top + r.height / 2;
+        var dx = x - cx;
+        var dy = y - cy;
+        var distance = dx * dx + dy * dy;
+        if (distance < bestDistance) {
+          bestDistance = distance;
+          best = { node: candidate, rect: r };
+        }
+      });
+      return best;
+    }
+
+    function moveGhost_(state, x, y) {
+      if (!state || !state.ghost) return;
+      state.ghost.style.left = (x - state.offsetX) + 'px';
+      state.ghost.style.top = (y - state.offsetY) + 'px';
+    }
+
     handle.addEventListener('pointerdown', function (e) {
       if (e.button !== undefined && e.button !== 0) return;
       e.preventDefault();
       e.stopPropagation();
-      dragState_ = { thumb: thumb, grid: grid, pointerId: e.pointerId, moved: false };
+
+      var rect = thumb.getBoundingClientRect();
+      var ghost = thumb.cloneNode(true);
+      ghost.classList.remove('is-dragging');
+      ghost.classList.add('ajk-cover-drag-ghost');
+      ghost.style.width = rect.width + 'px';
+      ghost.style.height = rect.height + 'px';
+      ghost.style.left = rect.left + 'px';
+      ghost.style.top = rect.top + 'px';
+      var ghostHandle = ghost.querySelector('.ajk-cover-drag-handle');
+      if (ghostHandle) ghostHandle.remove();
+      document.body.appendChild(ghost);
+
+      dragState_ = {
+        thumb: thumb,
+        grid: grid,
+        pointerId: e.pointerId,
+        moved: false,
+        ghost: ghost,
+        offsetX: e.clientX - rect.left,
+        offsetY: e.clientY - rect.top
+      };
       thumb.classList.add('is-dragging');
       try { handle.setPointerCapture(e.pointerId); } catch (_) {}
     });
@@ -782,16 +830,34 @@
     handle.addEventListener('pointermove', function (e) {
       if (!dragState_ || dragState_.pointerId !== e.pointerId) return;
       e.preventDefault();
-      var el = document.elementFromPoint(e.clientX, e.clientY);
-      var target = el && el.closest ? el.closest('.ajk-cover-thumb') : null;
-      if (!target || target === thumb || target.parentNode !== grid) return;
-      var rect = target.getBoundingClientRect();
-      var before = (e.clientY < rect.top + rect.height / 2) ||
-        (Math.abs(e.clientY - (rect.top + rect.height / 2)) < rect.height * .35 &&
-         e.clientX < rect.left + rect.width / 2);
-      if (before) grid.insertBefore(thumb, target);
-      else grid.insertBefore(thumb, target.nextSibling);
-      dragState_.moved = true;
+
+      moveGhost_(dragState_, e.clientX, e.clientY);
+
+      // Gentle edge scrolling makes it possible to move a cover across several
+      // rows in one continuous gesture on a phone.
+      var edge = 90;
+      if (e.clientY < edge) window.scrollBy(0, -Math.min(18, (edge - e.clientY) / 3));
+      else if (e.clientY > window.innerHeight - edge) {
+        window.scrollBy(0, Math.min(18, (e.clientY - (window.innerHeight - edge)) / 3));
+      }
+
+      var nearest = nearestTarget_(e.clientX, e.clientY);
+      if (!nearest) return;
+      var target = nearest.node;
+      var rect = nearest.rect;
+      var rowBand = Math.abs(e.clientY - (rect.top + rect.height / 2)) < rect.height * .38;
+      var before = e.clientY < rect.top + rect.height / 2;
+      if (rowBand) before = e.clientX < rect.left + rect.width / 2;
+
+      if (before) {
+        if (thumb.nextSibling !== target) {
+          grid.insertBefore(thumb, target);
+          dragState_.moved = true;
+        }
+      } else if (target.nextSibling !== thumb) {
+        grid.insertBefore(thumb, target.nextSibling);
+        dragState_.moved = true;
+      }
     });
 
     function finish(e) {
@@ -799,8 +865,10 @@
       e.preventDefault();
       e.stopPropagation();
       var moved = dragState_.moved;
+      var ghost = dragState_.ghost;
       dragState_ = null;
       thumb.classList.remove('is-dragging');
+      if (ghost && ghost.parentNode) ghost.parentNode.removeChild(ghost);
       try { handle.releasePointerCapture(e.pointerId); } catch (_) {}
       if (moved) {
         suppressCoverClickUntil_ = Date.now() + 700;
