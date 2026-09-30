@@ -109,6 +109,30 @@ if (!s.includes('const firstReadable = spineItems.find')) {
 }
 
 
+// AJK PRIVATE EPUB PROXY
+// Public browser data now contains only opaque private-epub markers. Resolve
+// the real Drive file server-side by book title + language; never send a Drive
+// ID or URL to the browser.
+if (!s.includes("action: 'getPrivateEpub'")) {
+  once(
+    String.raw`      const effEpubUrl = (langInfo && langInfo.epubUrl) || b.epubUrl;\n      const effWordCount = (langInfo && langInfo.wordCount) || b.wordCount;`,
+    String.raw`      const effEpubUrl = (langInfo && langInfo.epubUrl) || b.epubUrl;\n      const effLangCode = activeLang || (langCodes.length === 1 ? langCodes[0] : '');\n      const effWordCount = (langInfo && langInfo.wordCount) || b.wordCount;`,
+    'private epub effective language'
+  );
+
+  s = s.split("this.openReader(b.title, effEpubUrl);").join("this.openReader(b.title, effEpubUrl, effLangCode);");
+  s = s.split("this.downloadEpub(b.title, effEpubUrl);").join("this.downloadEpub(b.title, effEpubUrl, effLangCode);");
+
+  const openStart = s.indexOf('  openReader = (title, epubUrl) => {');
+  const mountStart = s.indexOf('  mountEpubReader = (base64, serverCfi) => {', openStart);
+  if (openStart < 0 || mountStart < 0) throw new Error('private epub method boundaries not found');
+
+  const methods = String.raw`  openReader = (title, epubRef, langCode) => {\n    // No Drive URL is kept client-side. This opaque key is only for bookmarks.\n    const privateKey = 'private-epub:' + title + ':' + (langCode || '');\n    this.currentEpubUrl = privateKey;\n    this.setState({ readerOpen: true, readerBookTitle: title, readerLoading: true, readerError: '' });\n    const code = this.state.visitorAccessCode || '';\n    const epubParams = new URLSearchParams({ action: 'getPrivateEpub', bookTitle: title, langCode: langCode || '', intent: 'read', code: code, adminToken: this.state.adminToken || '' });\n    const bookmarkFetch = code\n      ? fetch(this.SCRIPT_URL, { method: 'POST', body: new URLSearchParams({ action: 'getBookmark', epubUrl: privateKey, code: code }) }).then(r => r.json()).catch(() => ({ ok: false }))\n      : Promise.resolve({ ok: false });\n    Promise.all([\n      fetch(this.SCRIPT_URL, { method: 'POST', body: epubParams }).then(r => r.json()),\n      bookmarkFetch\n    ])\n      .then(([epubData, bookmarkData]) => {\n        if (epubData.ok) this.setState({ readerLoading: false }, () => this.mountEpubReader(epubData.dataBase64, (bookmarkData && bookmarkData.ok && bookmarkData.cfi) || ''));\n        else this.setState({ readerLoading: false, readerError: epubData.error || 'EPUB konnte nicht geladen werden.' });\n      })\n      .catch(() => this.setState({ readerLoading: false, readerError: 'Verbindung fehlgeschlagen — bitte erneut versuchen.' }));\n  };\n  downloadEpub = (title, epubRef, langCode) => {\n    const params = new URLSearchParams({ action: 'getPrivateEpub', bookTitle: title, langCode: langCode || '', intent: 'download', code: this.state.visitorAccessCode || '', adminToken: this.state.adminToken || '' });\n    fetch(this.SCRIPT_URL, { method: 'POST', body: params })\n      .then(r => r.json())\n      .then(data => {\n        if (!data.ok) { window.alert(data.error || 'Download nicht möglich.'); return; }\n        const raw = atob(data.dataBase64);\n        const bytes = new Uint8Array(raw.length);\n        for (let i = 0; i < raw.length; i++) bytes[i] = raw.charCodeAt(i);\n        const blob = new Blob([bytes], { type: data.mimeType || 'application/epub+zip' });\n        const url = URL.createObjectURL(blob);\n        const a = document.createElement('a');\n        a.href = url; a.download = data.fileName || ((title || 'buch').replace(/[^\\w\\-. ]+/g, '') + '.epub');\n        document.body.appendChild(a); a.click(); document.body.removeChild(a);\n        setTimeout(() => URL.revokeObjectURL(url), 5000);\n      })\n      .catch(() => window.alert('Verbindung fehlgeschlagen — bitte erneut versuchen.'));\n  };\n`;
+
+  s = s.slice(0, openStart) + methods + s.slice(mountStart);
+}
+
+
 // ADMIN BOOK ORDER PERSISTENCE
 // Arrow moves in the Admin panel use a dedicated lightweight endpoint so a
 // reorder cannot accidentally overwrite metadata or trigger Drive cleanup.
