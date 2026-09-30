@@ -133,6 +133,29 @@ if (!s.includes("action: 'getPrivateEpub'")) {
 }
 
 
+// AJK PRIVATE EPUB LEGACY FALLBACK
+// During the one deployment window in which the frontend is newer than the
+// Apps Script backend, retry the already permission-checked legacy endpoint
+// only when the backend reports "unknown action" and the current catalogue
+// still supplied a legacy Drive EPUB URL. Once getPrivateEpub is deployed,
+// this branch is never used.
+if (!s.includes('AJK private EPUB legacy fallback')) {
+  const oldOpenFetch = String.raw`    Promise.all([\n      fetch(this.SCRIPT_URL, { method: 'POST', body: epubParams }).then(r => r.json()),\n      bookmarkFetch\n    ])`;
+  const newOpenFetch = String.raw`    const privateFetch = fetch(this.SCRIPT_URL, { method: 'POST', body: epubParams }).then(r => r.json()).then(data => {\n      // AJK private EPUB legacy fallback\n      if (data && !data.ok && /unknown action/i.test(String(data.error || '')) && /^https?:\\/\\/(?:drive|docs)\\.google\\.com\\//i.test(String(epubRef || ''))) {\n        const legacy = new URLSearchParams({ action: 'getEpubData', epubUrl: epubRef, bookTitle: title, intent: 'read', code: code, adminToken: this.state.adminToken || '' });\n        return fetch(this.SCRIPT_URL, { method: 'POST', body: legacy }).then(r => r.json());\n      }\n      return data;\n    });\n    Promise.all([\n      privateFetch,\n      bookmarkFetch\n    ])`;
+  if (s.includes(oldOpenFetch)) s = s.replace(oldOpenFetch, newOpenFetch);
+
+  const oldDownloadFetch = String.raw`    fetch(this.SCRIPT_URL, { method: 'POST', body: params })\n      .then(r => r.json())\n      .then(data => {`;
+  const newDownloadFetch = String.raw`    fetch(this.SCRIPT_URL, { method: 'POST', body: params })\n      .then(r => r.json())\n      .then(data => {\n        if (data && !data.ok && /unknown action/i.test(String(data.error || '')) && /^https?:\\/\\/(?:drive|docs)\\.google\\.com\\//i.test(String(epubRef || ''))) {\n          const legacy = new URLSearchParams({ action: 'getEpubData', epubUrl: epubRef, bookTitle: title, intent: 'download', code: this.state.visitorAccessCode || '', adminToken: this.state.adminToken || '' });\n          return fetch(this.SCRIPT_URL, { method: 'POST', body: legacy }).then(r => r.json());\n        }\n        return data;\n      })\n      .then(data => {`;
+  const pos=s.indexOf('  downloadEpub = (title, epubRef, langCode) => {');
+  if(pos>=0){
+    const tail=s.slice(pos);
+    const rel=tail.indexOf(oldDownloadFetch);
+    if(rel>=0) s=s.slice(0,pos+rel)+newDownloadFetch+s.slice(pos+rel+oldDownloadFetch.length);
+  }
+}
+
+
+
 // ADMIN BOOK ORDER PERSISTENCE
 // Arrow moves in the Admin panel use a dedicated lightweight endpoint so a
 // reorder cannot accidentally overwrite metadata or trigger Drive cleanup.
