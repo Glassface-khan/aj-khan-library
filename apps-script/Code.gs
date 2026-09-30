@@ -413,7 +413,7 @@ function generateBlurbWithAI_(manuscriptText, bookTitle, genre, langCode) {
 // Klappentext des Buches standardmäßig EN genommen, sonst die einzige
 // fertige Sprache, sonst alphabetisch die erste fertige.
 
-const DRIVE_ROOT_FOLDER_ID = '1wCKKVMexGWRPTWx2yQrnb2b4-fLhKLAU';
+const DRIVE_ROOT_FOLDER_ID = PropertiesService.getScriptProperties().getProperty('DRIVE_ROOT_FOLDER_ID') || '';
 const SYNC_PREFERRED_LANGUAGE = 'EN';
 
 function getOrCreateSubfolder(parent, name) {
