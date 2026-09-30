@@ -105,7 +105,7 @@ for (const marker of forbidden) {
   if (app.includes(marker)) throw new Error('Legacy private-link marker still present: ' + marker);
 }
 
-const encoded = JSON.stringify(app).replace(/<\\/script/gi, '<\\\\/script');
+const encoded = JSON.stringify(app).split('</script>').join('<\\/script>');
 const newTag = match[0].replace(match[1], encoded);
 outer = outer.slice(0, match.index) + newTag + outer.slice(match.index + match[0].length);
 
