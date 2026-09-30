@@ -16,7 +16,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Syntax-check Code.gs
-        run: node --check apps-script/Code.gs
+        run: |
+          cp apps-script/Code.gs /tmp/Code.js
+          node --check /tmp/Code.js
       - name: Package Code.gs
         run: zip -j Code.gs.zip apps-script/Code.gs
       - name: Upload artifact
