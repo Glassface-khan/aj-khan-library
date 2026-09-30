@@ -20,13 +20,49 @@ env:
   TOKENIZERS_PARALLELISM: "false"
 
 jobs:
+  claim:
+    name: Check queue
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      has_job: ${{ steps.claim.outputs.has_job }}
+      job_id: ${{ steps.claim.outputs.job_id }}
+    steps:
+      - name: Claim one waiting audiobook job using GitHub OIDC
+        id: claim
+        shell: bash
+        run: |
+          set -euo pipefail
+          OIDC_JSON="$(curl --fail --silent --show-error             -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN"             "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=ajk-audiobook-factory")"
+          OIDC_TOKEN="$(printf '%s' "$OIDC_JSON" | jq -r '.value')"
+          curl --fail --silent --show-error             -H "Authorization: Bearer $OIDC_TOKEN"             -H "Content-Type: application/json"             -d '{"op":"workerClaim"}'             "https://ipoqyjrojljmbqslmxxf.supabase.co/functions/v1/audiobook-factory"             > claim.json
+          JOB_ID="$(jq -r '.job.id // empty' claim.json)"
+          if [ -n "$JOB_ID" ]; then
+            echo "has_job=true" >> "$GITHUB_OUTPUT"
+            echo "job_id=$JOB_ID" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_job=false" >> "$GITHUB_OUTPUT"
+            echo "job_id=" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Pass private claim payload to pre-production job
+        if: steps.claim.outputs.has_job == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: audiobook-claim-${{ steps.claim.outputs.job_id }}
+          path: claim.json
+          retention-days: 1
+          compression-level: 0
+
   prepare:
-    name: Claim + pre-production QC
+    name: Pre-production QC
+    needs: claim
+    if: needs.claim.outputs.has_job == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 90
     outputs:
       has_job: ${{ steps.prepare.outputs.has_job }}
-      job_id: ${{ steps.prepare.outputs.job_id }}
+      job_id: ${{ needs.claim.outputs.job_id }}
       shard_count: ${{ steps.prepare.outputs.shard_count }}
     steps:
       - uses: actions/checkout@v4
@@ -37,7 +73,7 @@ jobs:
           cache: "pip"
           cache-dependency-path: audiobook-cloud/requirements.txt
 
-      - name: Cache TTS and ASR models
+      - name: Restore TTS and ASR model cache
         uses: actions/cache@v4
         with:
           path: ~/.cache/huggingface
@@ -54,16 +90,22 @@ jobs:
           python -m pip install torch --index-url https://download.pytorch.org/whl/cpu
           python -m pip install -r audiobook-cloud/requirements.txt
 
-      - name: Claim job, parse manuscript, run pre-production QC
+      - name: Restore claimed job details
+        uses: actions/download-artifact@v4
+        with:
+          name: audiobook-claim-${{ needs.claim.outputs.job_id }}
+          path: claim
+
+      - name: Parse manuscript and run pre-production quality gate
         id: prepare
         run: |
-          python audiobook-cloud/worker.py prepare --workdir prepared --shard-count 4
+          python audiobook-cloud/worker.py prepare             --claim-file claim/claim.json             --workdir prepared             --shard-count 4
 
-      - name: Persist production manifest
+      - name: Persist parsed manuscript and voice state
         if: steps.prepare.outputs.has_job == 'true'
         uses: actions/upload-artifact@v4
         with:
-          name: audiobook-prepared-${{ steps.prepare.outputs.job_id }}
+          name: audiobook-prepared-${{ needs.claim.outputs.job_id }}
           path: prepared
           if-no-files-found: error
           retention-days: 1
@@ -71,7 +113,7 @@ jobs:
 
   produce:
     name: Produce + validate shard ${{ matrix.shard }}
-    needs: prepare
+    needs: [claim, prepare]
     if: needs.prepare.outputs.has_job == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 330
@@ -108,21 +150,17 @@ jobs:
       - name: Restore parsed manuscript and voice state
         uses: actions/download-artifact@v4
         with:
-          name: audiobook-prepared-${{ needs.prepare.outputs.job_id }}
+          name: audiobook-prepared-${{ needs.claim.outputs.job_id }}
           path: prepared
 
       - name: Produce assigned sections with automatic QC
         run: |
-          python audiobook-cloud/worker.py produce \
-            --workdir prepared \
-            --job-id "${{ needs.prepare.outputs.job_id }}" \
-            --shard-index "${{ matrix.shard }}" \
-            --shard-count "${{ needs.prepare.outputs.shard_count }}"
+          python audiobook-cloud/worker.py produce             --workdir prepared             --job-id "${{ needs.claim.outputs.job_id }}"             --shard-index "${{ matrix.shard }}"             --shard-count "${{ needs.prepare.outputs.shard_count }}"
 
   finalize:
     name: Final gate + publish
-    needs: [prepare, produce]
-    if: always() && needs.prepare.outputs.has_job == 'true'
+    needs: [claim, prepare, produce]
+    if: always() && needs.claim.outputs.has_job == 'true' && needs.prepare.outputs.has_job == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -138,4 +176,4 @@ jobs:
 
       - name: Final QC gate and publish only if every section passed
         run: |
-          python audiobook-cloud/worker.py finalize --job-id "${{ needs.prepare.outputs.job_id }}"
+          python audiobook-cloud/worker.py finalize --job-id "${{ needs.claim.outputs.job_id }}"
