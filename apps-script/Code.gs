@@ -137,8 +137,8 @@ function sanitizeBooksForPublic_(books) {
 
     // Keep feature presence without exposing a Drive file/folder ID.
     if (b.epubUrl) b.epubUrl = privateAssetMarker_('epub', b, '');
-    if (b.manuscriptDocUrl && isGooglePrivateUrl_(b.manuscriptDocUrl)) delete b.manuscriptDocUrl;
-    if (b.pdfUrl && isGooglePrivateUrl_(b.pdfUrl)) delete b.pdfUrl;
+    if (b.manuscriptDocUrl && isGooglePrivateUrl_(b.manuscriptDocUrl)) b.manuscriptDocUrl = privateAssetMarker_('manuscript', b, '');
+    if (b.pdfUrl && isGooglePrivateUrl_(b.pdfUrl)) b.pdfUrl = privateAssetMarker_('manuscript', b, '');
 
     if (b.bgUrl && isGooglePrivateUrl_(b.bgUrl)) b.bgUrl = privateAssetMarker_('background', b, '');
     if (b.videoUrl && isGooglePrivateUrl_(b.videoUrl)) b.videoUrl = privateAssetMarker_('video', b, '');
@@ -149,8 +149,8 @@ function sanitizeBooksForPublic_(books) {
         const entry = b.langs[code];
         if (!entry || typeof entry !== 'object') return;
         if (entry.epubUrl) entry.epubUrl = privateAssetMarker_('epub', b, code);
-        if (entry.manuscriptDocUrl && isGooglePrivateUrl_(entry.manuscriptDocUrl)) delete entry.manuscriptDocUrl;
-        if (entry.pdfUrl && isGooglePrivateUrl_(entry.pdfUrl)) delete entry.pdfUrl;
+        if (entry.manuscriptDocUrl && isGooglePrivateUrl_(entry.manuscriptDocUrl)) entry.manuscriptDocUrl = privateAssetMarker_('manuscript', b, code);
+        if (entry.pdfUrl && isGooglePrivateUrl_(entry.pdfUrl)) entry.pdfUrl = privateAssetMarker_('manuscript', b, code);
       });
     }
 
@@ -254,6 +254,140 @@ function getPrivateEpubByBook_(e) {
       mimeType: blob.getContentType() || 'application/epub+zip',
       fileName: file.getName(),
       langCode: resolved.langCode || langCode || ''
+    };
+  } catch (err) {
+    return { ok: false, error: String(err && err.message || err) };
+  }
+}
+
+
+function resolvePrivateAssetTarget_(book, assetType, langCode) {
+  if (!book) return null;
+  const type = String(assetType || '').trim();
+  const code = String(langCode || '').trim().toUpperCase();
+  let url = '';
+
+  if (type === 'manuscript') {
+    if (code && book.langs && book.langs[code]) {
+      url = book.langs[code].pdfUrl || book.langs[code].manuscriptDocUrl || '';
+    }
+    if (!url) url = book.pdfUrl || book.manuscriptDocUrl || '';
+  } else if (type === 'background') {
+    url = book.bgUrl || '';
+  } else if (type === 'video') {
+    url = book.videoUrl || '';
+  } else if (type === 'alt') {
+    url = book.altUrl || '';
+  }
+
+  const id = fileIdFromStoredUrl_(url);
+  return id ? { id: id, sourceUrl: url } : null;
+}
+
+function listDriveFolderFiles_(folder) {
+  const out = [];
+  const files = folder.getFiles();
+  while (files.hasNext()) {
+    const file = files.next();
+    out.push({
+      file: file,
+      name: file.getName(),
+      mimeType: file.getMimeType(),
+      size: Number(file.getSize() || 0)
+    });
+  }
+  out.sort(function(a, b) { return a.name.localeCompare(b.name); });
+  return out;
+}
+
+function privateAssetItems_(book, assetType, langCode) {
+  const target = resolvePrivateAssetTarget_(book, assetType, langCode);
+  if (!target) return [];
+
+  try {
+    const folder = DriveApp.getFolderById(target.id);
+    return listDriveFolderFiles_(folder);
+  } catch (folderErr) {
+    try {
+      const file = DriveApp.getFileById(target.id);
+      return [{
+        file: file,
+        name: file.getName(),
+        mimeType: file.getMimeType(),
+        size: Number(file.getSize() || 0)
+      }];
+    } catch (fileErr) {
+      return [];
+    }
+  }
+}
+
+function listPrivateBookAssets_(e) {
+  const title = String(e.parameter.bookTitle || '').trim();
+  const type = String(e.parameter.assetType || '').trim();
+  const langCode = String(e.parameter.langCode || '').trim().toUpperCase();
+  const book = findBookByTitle_(title);
+  if (!book) return { ok: false, error: 'Buch nicht gefunden.' };
+
+  // Non-EPUB private assets intentionally require full reader access/admin.
+  const auth = accessForBookAsset_(e, book.title, 'read', true);
+  if (!auth.ok) return { ok: false, error: 'Kein Zugriff auf diese Datei.' };
+
+  const allowedTypes = ['manuscript', 'background', 'video', 'alt'];
+  if (allowedTypes.indexOf(type) < 0) return { ok: false, error: 'Unbekannter Dateityp.' };
+
+  const items = privateAssetItems_(book, type, langCode);
+  return {
+    ok: true,
+    assetType: type,
+    items: items.map(function(item, index) {
+      return {
+        index: index,
+        name: item.name,
+        mimeType: item.mimeType,
+        size: item.size
+      };
+    })
+  };
+}
+
+function privateFileBlob_(file) {
+  const mime = file.getMimeType();
+  if (mime === MimeType.GOOGLE_DOCS || mime === 'application/vnd.google-apps.document') {
+    return file.getAs(MimeType.PDF).setName(file.getName().replace(/\.gdoc$/i, '') + '.pdf');
+  }
+  if (mime === MimeType.GOOGLE_SHEETS || mime === 'application/vnd.google-apps.spreadsheet') {
+    return file.getAs(MimeType.PDF).setName(file.getName() + '.pdf');
+  }
+  if (mime === MimeType.GOOGLE_SLIDES || mime === 'application/vnd.google-apps.presentation') {
+    return file.getAs(MimeType.PDF).setName(file.getName() + '.pdf');
+  }
+  return file.getBlob();
+}
+
+function getPrivateBookAsset_(e) {
+  const title = String(e.parameter.bookTitle || '').trim();
+  const type = String(e.parameter.assetType || '').trim();
+  const langCode = String(e.parameter.langCode || '').trim().toUpperCase();
+  const index = Math.max(0, Number(e.parameter.index || 0) || 0);
+  const book = findBookByTitle_(title);
+  if (!book) return { ok: false, error: 'Buch nicht gefunden.' };
+
+  const auth = accessForBookAsset_(e, book.title, 'read', true);
+  if (!auth.ok) return { ok: false, error: 'Kein Zugriff auf diese Datei.' };
+
+  const items = privateAssetItems_(book, type, langCode);
+  if (!items.length || !items[index]) return { ok: false, error: 'Datei nicht gefunden.' };
+
+  try {
+    const blob = privateFileBlob_(items[index].file);
+    const bytes = blob.getBytes();
+    return {
+      ok: true,
+      dataBase64: Utilities.base64Encode(bytes),
+      mimeType: blob.getContentType() || items[index].mimeType || 'application/octet-stream',
+      fileName: blob.getName() || items[index].name,
+      size: bytes.length
     };
   } catch (err) {
     return { ok: false, error: String(err && err.message || err) };
@@ -2196,6 +2330,14 @@ function handle(e) {
 
   if (action === 'getPrivateEpub') {
     return jsonOut(getPrivateEpubByBook_(e));
+  }
+
+  if (action === 'listPrivateBookAssets') {
+    return jsonOut(listPrivateBookAssets_(e));
+  }
+
+  if (action === 'getPrivateBookAsset') {
+    return jsonOut(getPrivateBookAsset_(e));
   }
 
   if (action === 'savePoems') {
