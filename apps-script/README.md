@@ -24,9 +24,13 @@ GitHub is the source of truth; Apps Script is the deployment target.
 
 ## Security note
 
-The protected EPUB reader/download path is `action=getEpubData`. EPUB files should not be intentionally shared as “Anyone with the link”.
+The Drive library root and all manuscript/EPUB/private-asset folders must remain **Restricted**. Do not use “Anyone with the link” for manuscripts, EPUBs, background material, videos, or alternate-cover folders.
 
-If the parent Drive folder is itself public, Google Drive permissions are inherited and cannot be reduced on a child file. In that case set the **Alis Books** root folder to **Restricted** once; cover/video/alternate-cover assets that must be public are shared individually by the sync code.
+Public `getBooks` output is sanitized by `sanitizeBooksForPublic_()`: private Drive URLs/IDs are replaced with opaque `private-*://` feature markers. Admin-only `getBooksAdmin` retains the internal data needed for maintenance.
+
+Reader/download access uses `action=getPrivateEpub` with book title + language + access code/admin token. The browser never needs the Drive file ID. Other private assets use `listPrivateBookAssets` and `getPrivateBookAsset` and require admin/full-reader access.
+
+The Drive sync must never widen sharing for private assets. Main public cover images are the deliberate exception: covers are publication-facing website assets and may be shared individually for display.
 
 ## metadata.json fields consumed
 
