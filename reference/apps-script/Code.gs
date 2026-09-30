@@ -80,13 +80,15 @@ function notifyFirstLogin_(code, name) {
   }
 }
 
-// null = alle Bücher sichtbar (Standard); sonst Array erlaubter Titel.
+// null = alle Bücher sichtbar (nur bei wirklich leerer Zelle).
+// [] = ausdrücklich KEINE Bücher sichtbar. Das ist wichtig für Zugänge, bei
+// denen im Admin-Panel bewusst alle Bücher abgewählt wurden.
 function parseVisibleBooks_(cellValue) {
-  const raw = String(cellValue || '').trim();
+  const raw = String(cellValue == null ? '' : cellValue).trim();
   if (!raw) return null;
   try {
     const arr = JSON.parse(raw);
-    return (Array.isArray(arr) && arr.length) ? arr : null;
+    return Array.isArray(arr) ? arr : null;
   } catch (e) {
     return null;
   }
