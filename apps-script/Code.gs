@@ -357,6 +357,27 @@ function privateFileBlob_(file) {
   if (mime === MimeType.GOOGLE_DOCS || mime === 'application/vnd.google-apps.document') {
     return file.getAs(MimeType.PDF).setName(file.getName().replace(/\.gdoc$/i, '') + '.pdf');
   }
+  if (
+    mime === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' ||
+    mime === 'application/msword'
+  ) {
+    // Preserve the old Drive-preview experience without exposing a Drive URL:
+    // convert the private Word file to a temporary Google Doc, export PDF,
+    // then immediately trash the temporary copy.
+    let tempId = '';
+    try {
+      const copy = Drive.Files.copy(
+        { mimeType: MimeType.GOOGLE_DOCS, title: 'tmp-private-reader-preview' },
+        file.getId(),
+        { convert: true }
+      );
+      tempId = copy.id;
+      const pdf = DriveApp.getFileById(tempId).getAs(MimeType.PDF);
+      return pdf.setName(file.getName().replace(/\.(docx?|DOCX?)$/i, '') + '.pdf');
+    } finally {
+      if (tempId) { try { DriveApp.getFileById(tempId).setTrashed(true); } catch (e) {} }
+    }
+  }
   if (mime === MimeType.GOOGLE_SHEETS || mime === 'application/vnd.google-apps.spreadsheet') {
     return file.getAs(MimeType.PDF).setName(file.getName() + '.pdf');
   }
