@@ -687,8 +687,19 @@ function generateBlurbWithAI_(manuscriptText, bookTitle, genre, langCode) {
 // Klappentext des Buches standardmäßig EN genommen, sonst die einzige
 // fertige Sprache, sonst alphabetisch die erste fertige.
 
-const DRIVE_ROOT_FOLDER_ID = PropertiesService.getScriptProperties().getProperty('DRIVE_ROOT_FOLDER_ID') || '';
+const DRIVE_ROOT_FOLDER_NAME = '_WEBSITE_RUNTIME – AUTO (NICHT BEARBEITEN)';
 const SYNC_PREFERRED_LANGUAGE = 'EN';
+
+function getDriveRootFolder_() {
+  const configured = String(PropertiesService.getScriptProperties().getProperty('DRIVE_ROOT_FOLDER_ID') || '').trim();
+  if (configured) return DriveApp.getFolderById(configured);
+
+  const matches = DriveApp.getFoldersByName(DRIVE_ROOT_FOLDER_NAME);
+  if (!matches.hasNext()) throw new Error('Website-Runtime-Ordner nicht gefunden: ' + DRIVE_ROOT_FOLDER_NAME);
+  const folder = matches.next();
+  if (matches.hasNext()) throw new Error('Mehrere Website-Runtime-Ordner mit demselben Namen gefunden. Bitte DRIVE_ROOT_FOLDER_ID als Script Property setzen.');
+  return folder;
+}
 
 function getOrCreateSubfolder(parent, name) {
   const it = parent.getFoldersByName(name);
@@ -1663,7 +1674,7 @@ function scanReleasePackageZips_(rootFolder, logSheet) {
 // Manuell im Apps-Script-Editor ausfuehrbar, falls man nicht auf den
 // Stunden-Trigger warten will. Kein Parameter noetig.
 function runBookCloseImportNow() {
-  const rootFolder = DriveApp.getFolderById(DRIVE_ROOT_FOLDER_ID);
+  const rootFolder = getDriveRootFolder_();
   const logSheet = getOrCreateSyncLogSheet_();
   const results = scanReleasePackageZips_(rootFolder, logSheet);
   syncDriveForAllBooks();
@@ -1680,7 +1691,7 @@ function syncDriveForAllBooks() {
   // Fehler eines Pakets werden nur geloggt und blockieren den restlichen
   // Autorenseiten-Sync nicht.
   try {
-    const importRoot = DriveApp.getFolderById(DRIVE_ROOT_FOLDER_ID);
+    const importRoot = getDriveRootFolder_();
     scanReleasePackageZips_(importRoot, logSheet);
   } catch (releaseErr) {
     logDriveSync(logSheet, '(ReleaseImport)', 'Scanner-Fehler: ' + releaseErr.message);
@@ -1704,7 +1715,7 @@ function syncDriveForAllBooks() {
     }
   });
 
-  const rootFolder = DriveApp.getFolderById(DRIVE_ROOT_FOLDER_ID);
+  const rootFolder = getDriveRootFolder_();
   const folderCache = {}; // verhindert doppelte Ordner, wenn ein Titel mehrfach in einem Lauf vorkommt
   let changed = false;
 
@@ -2236,7 +2247,7 @@ function handle(e) {
       const newIds = {};
       books.forEach(function(b) { newIds[b.id] = true; });
 
-      const rootFolder = DriveApp.getFolderById(DRIVE_ROOT_FOLDER_ID);
+      const rootFolder = getDriveRootFolder_();
       const logSheet = getOrCreateSyncLogSheet_();
 
       Object.keys(oldById).forEach(function(id) {
@@ -2587,7 +2598,7 @@ function handle(e) {
       if (kind !== 'METADATA' && !langCode) return jsonOut({ ok: false, error: 'Kein Sprachcode angegeben (z.B. DE, EN, BS).' });
       if (!base64Data) return jsonOut({ ok: false, error: 'Keine Datei erhalten.' });
 
-      const rootFolder = DriveApp.getFolderById(DRIVE_ROOT_FOLDER_ID);
+      const rootFolder = getDriveRootFolder_();
       const folders = ensureBookFolders(rootFolder, bookTitle);
       const targetFolder = (kind === 'METADATA') ? folders.bookFolder : getOrCreateSubfolder(folders.manuskriptFolder, langCode);
 
@@ -2631,7 +2642,7 @@ function handle(e) {
     const zipFileId = String(e.parameter.zipFileId || '').trim();
     if (!zipFileId) return jsonOut({ ok: false, error: 'zipFileId fehlt.' });
     try {
-      const rootFolder = DriveApp.getFolderById(DRIVE_ROOT_FOLDER_ID);
+      const rootFolder = getDriveRootFolder_();
       const logSheet = getOrCreateSyncLogSheet_();
       const result = processReleasePackageZip_(DriveApp.getFileById(zipFileId), rootFolder, logSheet);
       syncDriveForAllBooks();
@@ -2645,7 +2656,7 @@ function handle(e) {
     const admin = checkAdmin(e);
     if (!admin.ok) return jsonOut({ ok: false, error: 'unauthorized' });
     try {
-      const rootFolder = DriveApp.getFolderById(DRIVE_ROOT_FOLDER_ID);
+      const rootFolder = getDriveRootFolder_();
       const results = scanReleasePackageZips_(rootFolder, getOrCreateSyncLogSheet_());
       syncDriveForAllBooks();
       return jsonOut({ ok: true, results: results });
