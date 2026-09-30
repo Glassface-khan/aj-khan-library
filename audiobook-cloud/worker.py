@@ -445,7 +445,13 @@ def load_tts(language: str, voice_source: str, workdir: Path, temp: float = 0.7)
     model = TTSModel.load_model(language=language, temp=temp)
     voice_path = voice_source
     if voice_source.startswith("http://") or voice_source.startswith("https://"):
-        ext = ".safetensors" if ".safetensors" in voice_source.lower() else ".wav"
+        lower = voice_source.lower()
+        if ".safetensors" in lower:
+            ext = ".safetensors"
+        elif ".mp3" in lower:
+            ext = ".mp3"
+        else:
+            ext = ".wav"
         vp = workdir / ("voice" + ext)
         download(voice_source, vp)
         voice_path = str(vp)
