@@ -1,0 +1,141 @@
+name: Audiobook Cloud Worker
+
+on:
+  schedule:
+    - cron: "*/5 * * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: ajk-audiobook-cloud-factory
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  id-token: write
+
+env:
+  PYTHONUNBUFFERED: "1"
+  OMP_NUM_THREADS: "2"
+  MKL_NUM_THREADS: "2"
+  TOKENIZERS_PARALLELISM: "false"
+
+jobs:
+  prepare:
+    name: Claim + pre-production QC
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    outputs:
+      has_job: ${{ steps.prepare.outputs.has_job }}
+      job_id: ${{ steps.prepare.outputs.job_id }}
+      shard_count: ${{ steps.prepare.outputs.shard_count }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+          cache-dependency-path: audiobook-cloud/requirements.txt
+
+      - name: Cache TTS and ASR models
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/huggingface
+          key: audiobook-models-${{ runner.os }}-pocket-tts-3.3.0-whisper-base-v1
+
+      - name: System audio tools
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq ffmpeg libsndfile1
+
+      - name: Install CPU runtime
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install torch --index-url https://download.pytorch.org/whl/cpu
+          python -m pip install -r audiobook-cloud/requirements.txt
+
+      - name: Claim job, parse manuscript, run pre-production QC
+        id: prepare
+        run: |
+          python audiobook-cloud/worker.py prepare --workdir prepared --shard-count 4
+
+      - name: Persist production manifest
+        if: steps.prepare.outputs.has_job == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: audiobook-prepared-${{ steps.prepare.outputs.job_id }}
+          path: prepared
+          if-no-files-found: error
+          retention-days: 1
+          compression-level: 6
+
+  produce:
+    name: Produce + validate shard ${{ matrix.shard }}
+    needs: prepare
+    if: needs.prepare.outputs.has_job == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 330
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [0, 1, 2, 3]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+          cache-dependency-path: audiobook-cloud/requirements.txt
+
+      - name: Restore TTS and ASR model cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/huggingface
+          key: audiobook-models-${{ runner.os }}-pocket-tts-3.3.0-whisper-base-v1
+
+      - name: System audio tools
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq ffmpeg libsndfile1
+
+      - name: Install CPU runtime
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install torch --index-url https://download.pytorch.org/whl/cpu
+          python -m pip install -r audiobook-cloud/requirements.txt
+
+      - name: Restore parsed manuscript and voice state
+        uses: actions/download-artifact@v4
+        with:
+          name: audiobook-prepared-${{ needs.prepare.outputs.job_id }}
+          path: prepared
+
+      - name: Produce assigned sections with automatic QC
+        run: |
+          python audiobook-cloud/worker.py produce \
+            --workdir prepared \
+            --job-id "${{ needs.prepare.outputs.job_id }}" \
+            --shard-index "${{ matrix.shard }}" \
+            --shard-count "${{ needs.prepare.outputs.shard_count }}"
+
+  finalize:
+    name: Final gate + publish
+    needs: [prepare, produce]
+    if: always() && needs.prepare.outputs.has_job == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install lightweight finalizer dependencies
+        run: |
+          python -m pip install "requests>=2.32,<3" "numpy>=2,<3" "soundfile>=0.13,<1"
+
+      - name: Final QC gate and publish only if every section passed
+        run: |
+          python audiobook-cloud/worker.py finalize --job-id "${{ needs.prepare.outputs.job_id }}"
