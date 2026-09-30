@@ -531,6 +531,15 @@ def prepare(args: argparse.Namespace) -> int:
     workdir.mkdir(parents=True, exist_ok=True)
     if args.claim_file:
         claim = json.loads(Path(args.claim_file).read_text(encoding="utf-8"))
+    elif args.job_id:
+        remote = api("workerManifest", {"jobId": args.job_id})
+        rjob = remote["job"]
+        claim = {
+            "job": rjob,
+            "sourceUrl": remote["sourceUrl"],
+            "voice": remote["voice"],
+            "resumeProduction": rjob.get("qc_status") == "passed" and int(rjob.get("detected_sections") or 0) > 0,
+        }
     else:
         claim = api("workerClaim")
     job = claim.get("job")
@@ -560,23 +569,17 @@ def prepare(args: argparse.Namespace) -> int:
         gh_output("has_job", "false")
         return 0
 
-    voice = claim["voice"]
     if claim.get("resumeProduction"):
-        model, state = load_tts(voice["ttsLanguage"], voice["source"], workdir)
-        from pocket_tts import export_model_state
-        export_model_state(state, workdir / "voice.safetensors")
-        save_prepared_manifest(workdir, job, detected_title, sections, diagnostics)
         gh_output("has_job", "true")
         return 0
 
+    voice = claim["voice"]
     requested = normalize_text(job.get("requested_title") or "")
     detected = normalize_text(detected_title)
     title_similarity = difflib.SequenceMatcher(None, requested, detected).ratio() if requested and detected else 1.0
 
     try:
         model, state = load_tts(voice["ttsLanguage"], voice["source"], workdir)
-        from pocket_tts import export_model_state
-        export_model_state(state, workdir / "voice.safetensors")
         asr = AsrChecker(job["language_code"])
         picks = sorted(set([0, len(sections) // 2, len(sections) - 1]))
         sample_results = []
@@ -610,6 +613,7 @@ def prepare(args: argparse.Namespace) -> int:
             "policy": {
                 "full_production_requires_all_preflight_samples_pass": True,
                 "asr_model": "base.en" if job["language_code"] == "EN" else "base",
+                "private_inputs_never_uploaded_as_github_artifacts": True,
             },
         }
         payload_sections = [
@@ -629,11 +633,7 @@ def prepare(args: argparse.Namespace) -> int:
             "sections": payload_sections,
             "errorDetail": "" if passed else "Pre-production QC failed; full production was not started.",
         }, timeout=180)
-        if not passed:
-            gh_output("has_job", "false")
-            return 0
-        save_prepared_manifest(workdir, job, detected_title, sections, diagnostics)
-        gh_output("has_job", "true")
+        gh_output("has_job", "true" if passed else "false")
         return 0
     except Exception as exc:
         try:
@@ -650,7 +650,6 @@ def prepare(args: argparse.Namespace) -> int:
             pass
         gh_output("has_job", "false")
         raise
-
 
 def section_from_json(path: Path) -> Section:
     d = json.loads(path.read_text(encoding="utf-8"))
@@ -717,12 +716,23 @@ def produce_section(job: dict[str, Any], section: Section, model, state, asr: As
 
 def produce(args: argparse.Namespace) -> int:
     workdir = Path(args.workdir).resolve()
-    manifest = json.loads((workdir / "manifest.json").read_text(encoding="utf-8"))
-    job_id = args.job_id or manifest["job_id"]
+    workdir.mkdir(parents=True, exist_ok=True)
+    job_id = args.job_id
+    if not job_id:
+        raise ValueError("--job-id is required for cloud production")
+
     remote = api("workerManifest", {"jobId": job_id})
     job = remote["job"]
     if job["status"] == "cancelled":
         return 0
+
+    source = workdir / "source.docx"
+    download(remote["sourceUrl"], source)
+    _, parsed_sections, _ = parse_docx(source)
+    section_map = {s.index: s for s in parsed_sections}
+    if len(section_map) != int(job.get("detected_sections") or len(section_map)):
+        raise RuntimeError("Private source re-parse does not match pre-production manifest")
+
     ready = {
         int(s["section_index"]) for s in remote["sections"]
         if s["status"] == "ready" and s["qc_status"] == "passed"
@@ -734,9 +744,11 @@ def produce(args: argparse.Namespace) -> int:
         "john_d": "english",
         "arne_b": "german_24l",
     }[job["voice_key"]]
+    voice = remote["voice"]
+    voice_state_path = workdir / "voice.safetensors"
     job_ctx = dict(job)
     job_ctx["tts_language"] = tts_language
-    job_ctx["voice_state_path"] = str(workdir / "voice.safetensors")
+    job_ctx["voice_state_path"] = str(voice_state_path)
 
     asr = AsrChecker(job["language_code"])
     model = state = None
@@ -745,8 +757,8 @@ def produce(args: argparse.Namespace) -> int:
     outdir.mkdir(parents=True, exist_ok=True)
 
     indices = [
-        int(s["index"]) for s in manifest["sections"]
-        if int(s["index"]) % args.shard_count == args.shard_index
+        s.index for s in parsed_sections
+        if s.index % args.shard_count == args.shard_index
     ]
     for ix in indices:
         if ix in ready:
@@ -754,10 +766,15 @@ def produce(args: argparse.Namespace) -> int:
         start = api("workerSectionStart", {"jobId": job_id, "sectionIndex": ix})
         if start.get("skip"):
             continue
-        section = section_from_json(workdir / "sections" / f"{ix:03d}.json")
+        section = section_map[ix]
         try:
             if model is None or sections_since_reload >= MODEL_RELOAD_EVERY_SECTIONS:
-                model, state = load_tts_from_prepared(tts_language, workdir / "voice.safetensors")
+                if not voice_state_path.exists():
+                    model, state = load_tts(voice["ttsLanguage"], voice["source"], workdir)
+                    from pocket_tts import export_model_state
+                    export_model_state(state, voice_state_path)
+                else:
+                    model, state = load_tts_from_prepared(tts_language, voice_state_path)
                 sections_since_reload = 0
             passed, detail = produce_section(job_ctx, section, model, state, asr, outdir, job_id)
             api("workerSectionResult", {
@@ -790,7 +807,6 @@ def produce(args: argparse.Namespace) -> int:
         api("workerHeartbeat", {"jobId": job_id})
     return 0
 
-
 def finalize(args: argparse.Namespace) -> int:
     data = api("workerFinalize", {"jobId": args.job_id}, timeout=180)
     print(json.dumps(data, ensure_ascii=False, indent=2))
@@ -814,6 +830,7 @@ def main() -> int:
     sp.add_argument("--workdir", default="prepared")
     sp.add_argument("--shard-count", type=int, default=SHARD_COUNT_DEFAULT)
     sp.add_argument("--claim-file", default="")
+    sp.add_argument("--job-id", default="")
     sp.set_defaults(func=prepare)
 
     sp = sub.add_parser("produce")
