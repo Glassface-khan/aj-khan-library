@@ -96,3 +96,36 @@ if (!s.includes("books-live.json?_=\" + Date.now()")) {
 
 fs.writeFileSync(path, s, 'utf8');
 console.log('Patched books-live fallback into encoded bundle:', s.length);
+
+function scrubPrivateDriveLinks() {
+  const booksPath = 'books-live.json';
+  if (!fs.existsSync(booksPath)) return;
+  const outer = JSON.parse(fs.readFileSync(booksPath, 'utf8'));
+  let books = outer.books || [];
+  if (typeof books === 'string') books = JSON.parse(books || '[]');
+
+  const driveRe = /^https?:\/\/(?:drive|docs)\.google\.com\//i;
+
+  const scrub = (value) => {
+    if (Array.isArray(value)) {
+      value.forEach(scrub);
+      return;
+    }
+    if (!value || typeof value !== 'object') return;
+    Object.keys(value).forEach((key) => {
+      const v = value[key];
+      if (typeof v === 'string' && driveRe.test(v)) {
+        delete value[key];
+      } else {
+        scrub(v);
+      }
+    });
+  };
+
+  scrub(books);
+  outer.books = JSON.stringify(books);
+  fs.writeFileSync(booksPath, JSON.stringify(outer, null, 2) + '\n', 'utf8');
+  console.log('Scrubbed private Google Drive/Docs URLs from books-live.json');
+}
+
+scrubPrivateDriveLinks();
