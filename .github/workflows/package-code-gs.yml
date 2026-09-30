@@ -15,6 +15,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Syntax-check Code.gs
+        run: node --check apps-script/Code.gs
       - name: Package Code.gs
         run: zip -j Code.gs.zip apps-script/Code.gs
       - name: Upload artifact
