@@ -78,6 +78,14 @@ def normalize_text(text: str) -> str:
     return " ".join(text.split())
 
 
+def finite(value: Any, default: float = 0.0) -> float:
+    try:
+        v = float(value)
+        return v if math.isfinite(v) else default
+    except Exception:
+        return default
+
+
 def atomic_json(path: Path, data: Any) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     tmp = path.with_suffix(path.suffix + ".tmp")
@@ -515,7 +523,10 @@ def save_prepared_manifest(workdir: Path, job: dict[str, Any], title: str, secti
 def prepare(args: argparse.Namespace) -> int:
     workdir = Path(args.workdir).resolve()
     workdir.mkdir(parents=True, exist_ok=True)
-    claim = api("workerClaim")
+    if args.claim_file:
+        claim = json.loads(Path(args.claim_file).read_text(encoding="utf-8"))
+    else:
+        claim = api("workerClaim")
     job = claim.get("job")
     if not job:
         gh_output("has_job", "false")
@@ -747,11 +758,11 @@ def produce(args: argparse.Namespace) -> int:
                 "jobId": job_id,
                 "sectionIndex": ix,
                 "qcStatus": "passed" if passed else "failed",
-                "durationSeconds": detail.get("duration_seconds", 0),
-                "wordsPerMinute": detail.get("words_per_minute", 0),
-                "transcriptSimilarity": detail.get("sequence_similarity", 0),
-                "clippingRatio": detail.get("clipping_ratio", 0),
-                "silenceRatio": detail.get("silence_ratio", 0),
+                "durationSeconds": finite(detail.get("duration_seconds", 0)),
+                "wordsPerMinute": finite(detail.get("words_per_minute", 0)),
+                "transcriptSimilarity": finite(detail.get("sequence_similarity", 0)),
+                "clippingRatio": finite(detail.get("clipping_ratio", 0)),
+                "silenceRatio": finite(detail.get("silence_ratio", 0)),
                 "qcDetail": detail,
                 "storagePath": detail.get("storagePath", ""),
                 "byteSize": detail.get("byteSize", 0),
@@ -796,6 +807,7 @@ def main() -> int:
     sp = sub.add_parser("prepare")
     sp.add_argument("--workdir", default="prepared")
     sp.add_argument("--shard-count", type=int, default=SHARD_COUNT_DEFAULT)
+    sp.add_argument("--claim-file", default="")
     sp.set_defaults(func=prepare)
 
     sp = sub.add_parser("produce")
