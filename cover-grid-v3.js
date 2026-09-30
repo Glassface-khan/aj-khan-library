@@ -556,17 +556,53 @@
     return select;
   }
 
+  function visitorBookAccess_() {
+    // Access permissions from the logged-in visitor are stricter than any DOM
+    // fallback. In particular, an explicit [] means "no books" and must never
+    // be mistaken for "visibility unknown" or "show everything".
+    if (isAdmin_()) return { known: true, unrestricted: true, allowed: null };
+    try {
+      var raw = localStorage.getItem('ajk_visitor_access');
+      if (!raw) return { known: false, unrestricted: false, allowed: null };
+      var access = JSON.parse(raw) || {};
+      if (!access.code) return { known: false, unrestricted: false, allowed: null };
+      if (Array.isArray(access.visibleBooks)) {
+        var allowed = {};
+        access.visibleBooks.forEach(function (title) {
+          var key = normTitle_(title);
+          if (key) allowed[key] = true;
+        });
+        return { known: true, unrestricted: false, allowed: allowed };
+      }
+      if (access.visibleBooks === null || access.visibleBooks === undefined) {
+        return { known: true, unrestricted: true, allowed: null };
+      }
+    } catch (_) {}
+    return { known: false, unrestricted: false, allowed: null };
+  }
+
   function booksForGrid_(wrap) {
     // STRICT canonical grid: one catalogue entry = one thumbnail.
-    // Order, identity and cover normally come from books-live.json. If that
-    // same-origin file has not arrived yet, use the already rendered cards as
-    // a temporary fail-safe so Covers mode never presents an empty page.
+    // The logged-in visitor's explicit VisibleBooks permission is authoritative.
+    // Only when that permission is genuinely unknown do we fall back to the
+    // currently rendered/jump-list titles.
+    var access = visitorBookAccess_();
     var visibleTitles = visibleTitlesInOrder_(wrap);
     var visible = {};
-    visibleTitles.forEach(function (title) { visible[normTitle_(title)] = true; });
-    var hasVisibilityFilter = visibleTitles.length > 0;
 
-    if (!canonicalCatalog_.length && visibleTitles.length) {
+    if (access.known && !access.unrestricted) {
+      visible = access.allowed || {};
+    } else {
+      visibleTitles.forEach(function (title) { visible[normTitle_(title)] = true; });
+    }
+
+    var hasVisibilityFilter = access.known && !access.unrestricted
+      ? true
+      : visibleTitles.length > 0;
+
+    // For an explicitly restricted visitor, even an empty permission set is
+    // final: do not repopulate the grid from DOM fallbacks.
+    if (!canonicalCatalog_.length && visibleTitles.length && !(access.known && !access.unrestricted)) {
       return visibleTitles.map(function (title) {
         return dataForTitle_(title, wrap);
       }).filter(function (book) {
