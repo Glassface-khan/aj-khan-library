@@ -827,23 +827,19 @@ function firstVideoFile_(folder) {
 // spielt Videos direkt im eingebauten Drive-Player im Browser ab, statt sie
 // herunterzuladen.
 function videoViewUrlFor_(file) {
-  try {
-    file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
-  } catch (err) {}
-  return 'https://drive.google.com/file/d/' + file.getId() + '/view';
+  // SECURITY: keep videos private in Drive. Store only an internal reference
+  // in BooksData; sanitizeBooksForPublic_ removes/replaces it for visitors.
+  return 'drive-private://file/' + file.getId();
 }
 
 // Verlinkt (statt einzelne Bilder einzubetten) den ganzen Alt-Cover-Ordner —
 // der bestehende "Alt. covers"-Button auf der Website ist ein simpler
 // Link-Button, kein Bild-Karussell, das passt also direkt.
 function publicFolderUrlFor_(folder) {
-  try {
-    folder.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
-  } catch (err) {
-    // wie bei publicViewUrlFor — Freigabe evtl. durch Domain-Richtlinie
-    // eingeschränkt, Link wird trotzdem gesetzt.
-  }
-  return 'https://drive.google.com/drive/folders/' + folder.getId();
+  // SECURITY: this helper is retained for compatibility with existing sync
+  // code, but it no longer changes Drive sharing. The returned reference is
+  // server-internal and is stripped/replaced by sanitizeBooksForPublic_.
+  return 'drive-private://folder/' + folder.getId();
 }
 
 function scanBookLanguages(manuskriptFolder) {
@@ -2013,7 +2009,9 @@ function syncDriveForAllBooks() {
             logDriveSync(logSheet, b.title, 'Alt-Cover-Ordner verlinkt.');
           }
           const altImageFiles = allImageFiles_(folders.altCoverFolder);
-          const newAltCovers = altImageFiles.map(function(f) { return publicViewUrlFor(f); });
+          // SECURITY: alt-cover files remain private. The browser receives
+          // only a presence flag; actual bytes come through getPrivateBookAsset.
+          const newAltCovers = altImageFiles.map(function(f) { return 'drive-private://file/' + f.getId(); });
           const oldAltCovers = Array.isArray(b.altCovers) ? b.altCovers : [];
           if (newAltCovers.join('|') !== oldAltCovers.join('|')) {
             b.altCovers = newAltCovers;
