@@ -444,6 +444,7 @@ def load_tts(language: str, voice_source: str, workdir: Path, temp: float = 0.7)
     from pocket_tts import TTSModel
     model = TTSModel.load_model(language=language, temp=temp)
     voice_path = voice_source
+    downloaded_voice: Path | None = None
     if voice_source.startswith("http://") or voice_source.startswith("https://"):
         lower = voice_source.lower()
         if ".safetensors" in lower:
@@ -455,7 +456,13 @@ def load_tts(language: str, voice_source: str, workdir: Path, temp: float = 0.7)
         vp = workdir / ("voice" + ext)
         download(voice_source, vp)
         voice_path = str(vp)
+        downloaded_voice = vp
     state = model.get_state_for_audio_prompt(voice_path)
+    if downloaded_voice is not None and downloaded_voice.suffix.lower() in {".mp3", ".wav"}:
+        try:
+            downloaded_voice.unlink(missing_ok=True)
+        except Exception:
+            pass
     return model, state
 
 
