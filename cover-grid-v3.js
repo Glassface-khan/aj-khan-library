@@ -16,6 +16,7 @@
   var suppressCoverClickUntil_ = 0;
   var searchTimer_ = null;
   var SEARCH_SCOPE_ID = 'ajk-book-search-scope';
+  var ADMIN_ORDER_KEY = 'ajk_cover_admin_order_v1';
   // Per-book edition choice for the cover-detail modal. The native book card
   // already supports book.langs; this mirrors that selector in Covers view.
   var detailLangChoice_ = {};
@@ -33,6 +34,62 @@
     return String(value || '').replace(/\s+/g, ' ').trim().toLocaleLowerCase();
   }
 
+  function orderKey_(item) {
+    if (!item) return '';
+    var id = String(item.id || '').trim();
+    if (id) return 'id:' + id;
+    var title = normTitle_(item.title);
+    return title ? 't:' + title : '';
+  }
+
+  function readAdminOrder_() {
+    if (!isAdmin_()) return [];
+    try {
+      var raw = JSON.parse(localStorage.getItem(ADMIN_ORDER_KEY) || '[]');
+      return Array.isArray(raw) ? raw.filter(function (x) { return x && (x.id || x.title); }) : [];
+    } catch (_) {
+      return [];
+    }
+  }
+
+  function writeAdminOrder_(order) {
+    if (!isAdmin_() || !Array.isArray(order) || !order.length) return;
+    try { localStorage.setItem(ADMIN_ORDER_KEY, JSON.stringify(order)); } catch (_) {}
+  }
+
+  function applyOrder_(books, order) {
+    if (!Array.isArray(books) || !books.length || !Array.isArray(order) || !order.length) return books || [];
+    var rank = {};
+    order.forEach(function (item, i) {
+      var key = orderKey_(item);
+      if (key) rank[key] = i;
+      if (item && item.title) rank['t:' + normTitle_(item.title)] = i;
+    });
+    return books.map(function (book, i) { return { book: book, original: i }; }).sort(function (a, b) {
+      var ka = orderKey_(a.book);
+      var kb = orderKey_(b.book);
+      var ra = Object.prototype.hasOwnProperty.call(rank, ka) ? rank[ka] :
+        (a.book && a.book.title && Object.prototype.hasOwnProperty.call(rank, 't:' + normTitle_(a.book.title))
+          ? rank['t:' + normTitle_(a.book.title)] : Number.MAX_SAFE_INTEGER);
+      var rb = Object.prototype.hasOwnProperty.call(rank, kb) ? rank[kb] :
+        (b.book && b.book.title && Object.prototype.hasOwnProperty.call(rank, 't:' + normTitle_(b.book.title))
+          ? rank['t:' + normTitle_(b.book.title)] : Number.MAX_SAFE_INTEGER);
+      if (ra !== rb) return ra - rb;
+      return a.original - b.original;
+    }).map(function (x) { return x.book; });
+  }
+
+  function sameOrder_(books, order) {
+    if (!Array.isArray(books) || !Array.isArray(order) || !order.length) return false;
+    var normalizedBooks = books.map(function (b) { return orderKey_(b) || ('t:' + normTitle_(b && b.title)); });
+    var normalizedOrder = order.map(function (b) { return orderKey_(b) || ('t:' + normTitle_(b && b.title)); });
+    if (normalizedBooks.length !== normalizedOrder.length) return false;
+    for (var i = 0; i < normalizedBooks.length; i++) {
+      if (normalizedBooks[i] !== normalizedOrder[i]) return false;
+    }
+    return true;
+  }
+
   async function loadCanonicalCatalog_() {
     var liveBooks = [];
     var fallbackBooks = [];
@@ -48,6 +105,7 @@
         var fallbackRaw = fallbackPayload && fallbackPayload.books;
         if (typeof fallbackRaw === 'string') fallbackRaw = JSON.parse(fallbackRaw || '[]');
         if (Array.isArray(fallbackRaw)) fallbackBooks = fallbackRaw.filter(function (b) { return b && b.title; });
+        if (isAdmin_()) fallbackBooks = applyOrder_(fallbackBooks, readAdminOrder_());
       }
     } catch (_) {}
 
@@ -59,16 +117,12 @@
       try { refreshGridAfterCatalog_(); } catch (_) {}
     }
 
-    // The live backend is only an order/metadata enhancement. Give it a short
-    // deadline; the static catalogue remains a complete usable fallback.
+    // The same-origin fallback is already visible at this point, so there is
+    // no reason to abandon the live order after 2.5 seconds. On mobile the Apps
+    // Script endpoint can legitimately take longer; cancelling it made a saved
+    // admin order appear to "revert" permanently to books-live.json.
     try {
-      var timeoutPromise = new Promise(function (_, reject) {
-        setTimeout(function () { reject(new Error('live_catalog_timeout')); }, 2500);
-      });
-      var liveRes = await Promise.race([
-        fetch(GAS_URL + '?action=getBooks&cb=' + Date.now(), { cache: 'no-store' }),
-        timeoutPromise
-      ]);
+      var liveRes = await fetch(GAS_URL + '?action=getBooks&cb=' + Date.now(), { cache: 'no-store' });
       if (liveRes && liveRes.ok) {
         var livePayload = await liveRes.json();
         var liveRaw = livePayload && livePayload.books;
@@ -730,6 +784,7 @@
       return;
     }
     var order = reorderCanonicalFromGrid_(grid);
+    writeAdminOrder_(order);
     var token = adminToken_();
     if (!token || !order.length) return;
 
@@ -751,6 +806,25 @@
           throw new Error(error);
         }
       }
+
+      // Verify the central order immediately. If an older/partial deployment
+      // acknowledges the action without actually storing the new sequence,
+      // fall back to the proven saveBooks path instead of showing a false ✓.
+      try {
+        var verifyParams = new URLSearchParams({ action: 'getBooks' });
+        var verifyRes = await fetch(GAS_URL, { method: 'POST', body: verifyParams, cache: 'no-store' });
+        var verifyData = await verifyRes.json();
+        var verifyBooks = verifyData && verifyData.books;
+        if (typeof verifyBooks === 'string') verifyBooks = JSON.parse(verifyBooks || '[]');
+        if (Array.isArray(verifyBooks) && !sameOrder_(verifyBooks, order)) {
+          await saveOrderViaLegacy_(order, token);
+        }
+      } catch (_) {
+        // The server has already acknowledged the save. Keep the local order
+        // cache so reopening on this device still restores the user's sequence.
+      }
+
+      writeAdminOrder_(order);
       showOrderToast_(t('Reihenfolge gespeichert ✓', 'Order saved ✓'));
     } catch (err) {
       window.alert(t('Reihenfolge konnte nicht zentral gespeichert werden: ', 'Order could not be saved centrally: ') + err.message);
