@@ -793,8 +793,39 @@
 
     function moveGhost_(state, x, y) {
       if (!state || !state.ghost) return;
-      state.ghost.style.left = (x - state.offsetX) + 'px';
-      state.ghost.style.top = (y - state.offsetY) + 'px';
+      var dx = x - state.startX;
+      var dy = y - state.startY;
+      state.ghost.style.transform = 'translate3d(' + dx + 'px,' + dy + 'px,0)';
+    }
+
+    function reorderAt_(state, x, y) {
+      if (!state) return;
+
+      // Gentle edge scrolling makes it possible to move a cover across several
+      // rows in one continuous gesture on a phone.
+      var edge = 90;
+      if (y < edge) window.scrollBy(0, -Math.min(18, (edge - y) / 3));
+      else if (y > window.innerHeight - edge) {
+        window.scrollBy(0, Math.min(18, (y - (window.innerHeight - edge)) / 3));
+      }
+
+      var nearest = nearestTarget_(x, y);
+      if (!nearest) return;
+      var target = nearest.node;
+      var rect = nearest.rect;
+      var rowBand = Math.abs(y - (rect.top + rect.height / 2)) < rect.height * .38;
+      var before = y < rect.top + rect.height / 2;
+      if (rowBand) before = x < rect.left + rect.width / 2;
+
+      if (before) {
+        if (thumb.nextSibling !== target) {
+          grid.insertBefore(thumb, target);
+          state.moved = true;
+        }
+      } else if (target.nextSibling !== thumb) {
+        grid.insertBefore(thumb, target.nextSibling);
+        state.moved = true;
+      }
     }
 
     function removeWindowListeners_() {
@@ -819,8 +850,8 @@
       Array.prototype.forEach.call(document.querySelectorAll('.ajk-cover-drag-ghost'), function (node) {
         if (node.parentNode) node.parentNode.removeChild(node);
       });
-      if (pointerId != null) {
-        try { handle.releasePointerCapture(pointerId); } catch (_) {}
+      if (state.raf) {
+        try { cancelAnimationFrame(state.raf); } catch (_) {}
       }
       removeWindowListeners_();
       if (shouldPersist && moved) {
@@ -833,32 +864,20 @@
       if (!dragState_ || dragState_.thumb !== thumb || dragState_.pointerId !== e.pointerId) return;
       e.preventDefault();
 
-      moveGhost_(dragState_, e.clientX, e.clientY);
+      var state = dragState_;
+      state.lastX = e.clientX;
+      state.lastY = e.clientY;
 
-      // Gentle edge scrolling makes it possible to move a cover across several
-      // rows in one continuous gesture on a phone.
-      var edge = 90;
-      if (e.clientY < edge) window.scrollBy(0, -Math.min(18, (edge - e.clientY) / 3));
-      else if (e.clientY > window.innerHeight - edge) {
-        window.scrollBy(0, Math.min(18, (e.clientY - (window.innerHeight - edge)) / 3));
-      }
-
-      var nearest = nearestTarget_(e.clientX, e.clientY);
-      if (!nearest) return;
-      var target = nearest.node;
-      var rect = nearest.rect;
-      var rowBand = Math.abs(e.clientY - (rect.top + rect.height / 2)) < rect.height * .38;
-      var before = e.clientY < rect.top + rect.height / 2;
-      if (rowBand) before = e.clientX < rect.left + rect.width / 2;
-
-      if (before) {
-        if (thumb.nextSibling !== target) {
-          grid.insertBefore(thumb, target);
-          dragState_.moved = true;
-        }
-      } else if (target.nextSibling !== thumb) {
-        grid.insertBefore(thumb, target.nextSibling);
-        dragState_.moved = true;
+      // The floating preview follows every pointer event via GPU transform.
+      // Actual grid reordering is throttled to one update per animation frame
+      // so iOS does not perform dozens of synchronous grid layouts per second.
+      moveGhost_(state, e.clientX, e.clientY);
+      if (!state.raf) {
+        state.raf = requestAnimationFrame(function () {
+          if (!dragState_ || dragState_ !== state) return;
+          state.raf = 0;
+          reorderAt_(state, state.lastX, state.lastY);
+        });
       }
     }
 
@@ -908,7 +927,12 @@
         moved: false,
         ghost: ghost,
         offsetX: e.clientX - rect.left,
-        offsetY: e.clientY - rect.top
+        offsetY: e.clientY - rect.top,
+        startX: e.clientX,
+        startY: e.clientY,
+        lastX: e.clientX,
+        lastY: e.clientY,
+        raf: 0
       };
       thumb.classList.add('is-dragging');
 
@@ -917,8 +941,10 @@
       window.addEventListener('pointercancel', onFinish_, { capture: true, passive: false });
       window.addEventListener('blur', onAbort_, true);
       document.addEventListener('visibilitychange', onVisibility_, true);
-      handle.addEventListener('lostpointercapture', onAbort_, { once: true });
-      try { handle.setPointerCapture(e.pointerId); } catch (_) {}
+      // Deliberately do NOT use setPointerCapture here. On iOS Safari the
+      // dragged grid item is reinserted as its order changes; that can emit
+      // lostpointercapture after the first position change and prematurely end
+      // the gesture. Window-level listeners already keep the drag alive.
     });
 
     thumb.appendChild(handle);
