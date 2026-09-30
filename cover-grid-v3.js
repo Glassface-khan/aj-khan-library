@@ -16,6 +16,9 @@
   var suppressCoverClickUntil_ = 0;
   var searchTimer_ = null;
   var SEARCH_SCOPE_ID = 'ajk-book-search-scope';
+  // Per-book edition choice for the cover-detail modal. The native book card
+  // already supports book.langs; this mirrors that selector in Covers view.
+  var detailLangChoice_ = {};
 
   function isAdmin_() {
     try { return localStorage.getItem('ajk_author_admin') === '1' && !!localStorage.getItem('ajk_admin_token'); }
@@ -145,6 +148,9 @@
       '#'+MODAL_ID+' .ajk-cover-detail-img{width:100%;aspect-ratio:2/3;object-fit:cover;border:1px solid var(--rule);display:block}' +
       '#'+MODAL_ID+' .ajk-cover-detail-title{font-family:"Cormorant Garamond",serif;font-weight:400;font-size:clamp(30px,5vw,46px);line-height:1.05;margin:0 0 12px;color:var(--ink)}' +
       '#'+MODAL_ID+' .ajk-cover-detail-meta{font-family:"Archivo",sans-serif;font-size:10.5px;letter-spacing:.08em;color:var(--ink-3);margin:0 0 12px}' +
+      '#'+MODAL_ID+' .ajk-cover-detail-langs{display:flex;flex-wrap:wrap;gap:8px;margin:0 0 14px}' +
+      '#'+MODAL_ID+' .ajk-cover-detail-lang{appearance:none;background:transparent;border:1px solid var(--rule,#cfc6b5);color:var(--ink-2,#555);font-family:"Archivo",sans-serif;font-size:10.5px;letter-spacing:.10em;text-transform:uppercase;padding:8px 12px;cursor:pointer}' +
+      '#'+MODAL_ID+' .ajk-cover-detail-lang[aria-pressed="true"]{border-color:var(--gold,#b89448);color:var(--gold,#b89448);background:rgba(212,175,55,.08)}' +
       '#'+MODAL_ID+' .ajk-cover-detail-hook{color:var(--ink-2);font-size:17px;line-height:1.62;white-space:pre-wrap;margin:0 0 18px}' +
       '#'+MODAL_ID+' .ajk-cover-detail-actions{display:flex;flex-wrap:wrap;gap:10px}' +
       '#'+MODAL_ID+' .ajk-cover-detail-action,#'+MODAL_ID+' .ajk-cover-detail-close{background:none;border:1px solid var(--gold);color:var(--gold);font-family:"Archivo",sans-serif;font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;padding:9px 14px;cursor:pointer}' +
@@ -288,14 +294,30 @@
     var entry = catalogEntryForTitle_(title) || {};
     var card = cardForTitle_(wrap, title);
     var dom = domDetailsForTitle_(wrap, title, card);
+    var langCodes = (entry.langs && typeof entry.langs === 'object') ? Object.keys(entry.langs) : [];
+    var choiceKey = entry.id || title;
+    var selectedLang = null;
+    if (langCodes.length) {
+      var remembered = detailLangChoice_[choiceKey];
+      if (remembered && entry.langs[remembered]) selectedLang = remembered;
+      else if (entry.defaultLang && entry.langs[entry.defaultLang]) selectedLang = entry.defaultLang;
+      else selectedLang = langCodes[0];
+    }
+    var edition = selectedLang && entry.langs[selectedLang] ? entry.langs[selectedLang] : {};
     return {
       card: card,
       id: entry.id || (card && card.id) || ('book-card-' + encodeURIComponent(title || '')),
-      title: entry.title || title,
-      src: entry.coverUrl || dom.src || '',
-      hook: entry.hook || dom.hook || '',
+      entryId: choiceKey,
+      baseTitle: title,
+      title: edition.title || entry.title || title,
+      src: edition.coverUrl || entry.coverUrl || dom.src || '',
+      hook: edition.hook || entry.hook || dom.hook || '',
       meta: entry.kind || dom.meta || '',
-      actions: dom.actions || []
+      actions: dom.actions || [],
+      langCodes: langCodes,
+      selectedLang: selectedLang,
+      epubUrl: edition.epubUrl || entry.epubUrl || '',
+      wordCount: edition.wordCount || entry.wordCount || 0
     };
   }
 
@@ -339,6 +361,39 @@
     var info = document.createElement('div');
     var h = document.createElement('h3'); h.className = 'ajk-cover-detail-title'; h.textContent = book.title; info.appendChild(h);
     if (book.meta) { var m = document.createElement('div'); m.className = 'ajk-cover-detail-meta'; m.textContent = book.meta; info.appendChild(m); }
+
+    // Mirror the native DE/EN selector in Covers view. Changing the edition
+    // also clicks the matching native card control when available so READ and
+    // other permission-aware actions continue to use the selected EPUB.
+    if (book.langCodes && book.langCodes.length > 1) {
+      var langBar = document.createElement('div');
+      langBar.className = 'ajk-cover-detail-langs';
+      book.langCodes.forEach(function (code) {
+        var lb = document.createElement('button');
+        lb.type = 'button';
+        lb.className = 'ajk-cover-detail-lang';
+        lb.textContent = code;
+        lb.setAttribute('aria-pressed', code === book.selectedLang ? 'true' : 'false');
+        lb.addEventListener('click', function () {
+          detailLangChoice_[book.entryId] = code;
+          try {
+            var nativeButtons = book.card ? book.card.querySelectorAll('button') : [];
+            for (var i = 0; i < nativeButtons.length; i++) {
+              if (String(nativeButtons[i].textContent || '').trim().toUpperCase() === String(code).toUpperCase()) {
+                nativeButtons[i].click();
+                break;
+              }
+            }
+          } catch (_) {}
+          setTimeout(function () {
+            openDetail(dataForTitle_(book.baseTitle, listWrap()));
+          }, 120);
+        });
+        langBar.appendChild(lb);
+      });
+      info.appendChild(langBar);
+    }
+
     if (book.hook) { var p = document.createElement('p'); p.className = 'ajk-cover-detail-hook'; p.textContent = book.hook; info.appendChild(p); }
 
     if (book.actions.length) {
