@@ -971,3 +971,32 @@
     setInterval(syncVisibility, 2000);
   }
 })();
+
+
+/* A. J. Khan · Admin-only Cloud Audiobook Factory launcher */
+(() => {
+  'use strict';
+  const FLAG = 'data-ajk-audiobook-factory-launch';
+  function installFactoryLaunch() {
+    try {
+      if (localStorage.getItem('ajk_author_admin') !== '1') return;
+      if (document.querySelector('[' + FLAG + ']')) return;
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.setAttribute(FLAG, '1');
+      b.textContent = 'Audiobook Factory';
+      b.style.cssText = [
+        'position:fixed','right:max(18px,env(safe-area-inset-right))',
+        'bottom:calc(68px + env(safe-area-inset-bottom))','z-index:9997',
+        'border:1px solid #9F7A34','background:#16140F','color:#E6E2D7',
+        'font:600 10px/1.2 Archivo,sans-serif','letter-spacing:.12em',
+        'text-transform:uppercase','padding:11px 14px','cursor:pointer'
+      ].join(';');
+      b.addEventListener('click', () => { window.location.href = './audiobook-factory.html'; });
+      document.body.appendChild(b);
+    } catch (_) {}
+  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', installFactoryLaunch);
+  else installFactoryLaunch();
+  window.addEventListener('storage', installFactoryLaunch);
+})();
