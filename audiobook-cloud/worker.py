@@ -20,8 +20,8 @@ import soundfile as sf
 API = "https://ipoqyjrojljmbqslmxxf.supabase.co/functions/v1/audiobook-factory"
 OIDC_AUDIENCE = "ajk-audiobook-factory"
 SHARD_COUNT_DEFAULT = 4
-MAX_CHUNK_WORDS = 120
-MAX_CHUNK_CHARS = 760
+MAX_CHUNK_WORDS = 20
+MAX_CHUNK_CHARS = 150
 MODEL_RELOAD_EVERY_SECTIONS = 4
 MAX_CHUNK_RETRIES = 3
 
@@ -494,7 +494,7 @@ def write_mp3(wav_path: Path, mp3_path: Path) -> None:
     ], check=True)
 
 
-def preflight_sample_text(section: Section, max_words: int = 100) -> str:
+def preflight_sample_text(section: Section, max_words: int = 16) -> str:
     text = section.spoken_text.replace("[[SCENE_BREAK]]", " ")
     return " ".join(text.split()[:max_words])
 
