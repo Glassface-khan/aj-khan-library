@@ -48,6 +48,16 @@ jobs:
       - name: Run audiobook staging regression tests
         run: node tests/audiobook_factory_staging.test.js
 
+      - name: Check audiobook worker Python syntax
+        run: python -m py_compile audiobook-cloud/worker.py
+
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+
+      - name: Check staged Supabase Edge Function
+        run: deno check staging/supabase/audiobook-factory/index.ts
+
       - name: Check audiobook factory HTML/JS syntax
         run: |
           node - <<'NODE'
