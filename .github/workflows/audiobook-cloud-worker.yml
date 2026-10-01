@@ -27,7 +27,7 @@ env:
 jobs:
   claim:
     name: Check queue
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 5
     outputs:
       has_job: ${{ steps.claim.outputs.has_job }}
@@ -54,7 +54,7 @@ jobs:
     name: Pre-production QC
     needs: claim
     if: needs.claim.outputs.has_job == 'true'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 90
     env:
       HF_TOKEN: ${{ secrets.HF_TOKEN }}
@@ -112,9 +112,27 @@ jobs:
 
       - name: System audio tools
         if: steps.hf_gate.outputs.continue == 'true'
+        shell: bash
         run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y -qq ffmpeg libsndfile1
+          set -euo pipefail
+          export DEBIAN_FRONTEND=noninteractive
+          for attempt in 1 2 3; do
+            echo "Audio dependency setup attempt $attempt/3"
+            if timeout 180s sudo apt-get -o Acquire::Retries=3 -o DPkg::Lock::Timeout=60 update -qq \
+              && timeout 180s sudo apt-get -o Acquire::Retries=3 -o DPkg::Lock::Timeout=60 install -y -qq ffmpeg libsndfile1; then
+              ffmpeg -version | head -n 1
+              python - <<'PY'
+import soundfile
+print("libsndfile/python soundfile import OK")
+PY
+              exit 0
+            fi
+            if [ "$attempt" -lt 3 ]; then
+              sleep $((attempt * 15))
+            fi
+          done
+          echo "::error::Audio dependency setup failed after 3 bounded attempts."
+          exit 1
 
       - name: Install CPU runtime
         if: steps.hf_gate.outputs.continue == 'true'
@@ -133,7 +151,7 @@ jobs:
     name: Produce + validate shard ${{ matrix.shard }}
     needs: [claim, prepare]
     if: needs.prepare.outputs.has_job == 'true'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 330
     env:
       HF_TOKEN: ${{ secrets.HF_TOKEN }}
@@ -157,9 +175,23 @@ jobs:
           key: audiobook-models-${{ runner.os }}-pocket-tts-3.3.0-whisper-base-v1
 
       - name: System audio tools
+        shell: bash
         run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y -qq ffmpeg libsndfile1
+          set -euo pipefail
+          export DEBIAN_FRONTEND=noninteractive
+          for attempt in 1 2 3; do
+            echo "Audio dependency setup attempt $attempt/3"
+            if timeout 180s sudo apt-get -o Acquire::Retries=3 -o DPkg::Lock::Timeout=60 update -qq \
+              && timeout 180s sudo apt-get -o Acquire::Retries=3 -o DPkg::Lock::Timeout=60 install -y -qq ffmpeg libsndfile1; then
+              ffmpeg -version | head -n 1
+              exit 0
+            fi
+            if [ "$attempt" -lt 3 ]; then
+              sleep $((attempt * 15))
+            fi
+          done
+          echo "::error::Audio dependency setup failed after 3 bounded attempts."
+          exit 1
 
       - name: Install CPU runtime
         run: |
@@ -175,7 +207,7 @@ jobs:
     name: Final gate + publish
     needs: [claim, prepare, produce]
     if: always() && needs.claim.outputs.has_job == 'true' && needs.prepare.outputs.has_job == 'true'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
