@@ -9,6 +9,7 @@ import math
 import os
 import re
 import subprocess
+import time
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -20,8 +21,8 @@ import soundfile as sf
 API = "https://ipoqyjrojljmbqslmxxf.supabase.co/functions/v1/audiobook-factory"
 OIDC_AUDIENCE = "ajk-audiobook-factory"
 SHARD_COUNT_DEFAULT = 4
-MAX_CHUNK_WORDS = 20
-MAX_CHUNK_CHARS = 150
+MAX_CHUNK_WORDS = 16
+MAX_CHUNK_CHARS = 120
 MODEL_RELOAD_EVERY_SECTIONS = 4
 MAX_CHUNK_RETRIES = 3
 
@@ -99,13 +100,23 @@ def oidc_token() -> str:
     if not req_url or not req_token:
         raise RuntimeError("GitHub OIDC environment is missing")
     sep = "&" if "?" in req_url else "?"
-    r = requests.get(
-        req_url + sep + "audience=" + OIDC_AUDIENCE,
-        headers={"Authorization": "Bearer " + req_token},
-        timeout=30,
-    )
-    r.raise_for_status()
-    return r.json()["value"]
+    url = req_url + sep + "audience=" + OIDC_AUDIENCE
+    last_error: Exception | None = None
+    for attempt in range(1, 5):
+        try:
+            r = requests.get(
+                url,
+                headers={"Authorization": "Bearer " + req_token},
+                timeout=30,
+            )
+            r.raise_for_status()
+            return r.json()["value"]
+        except (requests.RequestException, KeyError, ValueError) as exc:
+            last_error = exc
+            if attempt == 4:
+                break
+            time.sleep(2 ** attempt)
+    raise RuntimeError(f"GitHub OIDC token request failed after 4 attempts: {last_error}")
 
 
 def api(op: str, payload: dict[str, Any] | None = None, timeout: int = 120) -> dict[str, Any]:
