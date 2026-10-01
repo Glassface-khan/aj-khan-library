@@ -41,18 +41,6 @@ jobs:
           code="$(curl -sS -o /tmp/hf-model.json -w '%{http_code}'             -H "Authorization: Bearer $HF_TOKEN"             "https://huggingface.co/api/models/kyutai/pocket-tts")"
           test "$code" = "200"
 
-      - name: System audio tools
-        shell: bash
-        run: |
-          set -euo pipefail
-          if command -v ffmpeg >/dev/null 2>&1 && ldconfig -p 2>/dev/null | grep -q 'libsndfile\.so'; then
-            echo "Audio dependencies already available."
-            exit 0
-          fi
-          export DEBIAN_FRONTEND=noninteractive
-          timeout 180s sudo apt-get -o Acquire::Retries=3 -o DPkg::Lock::Timeout=60 update -qq
-          timeout 180s sudo apt-get -o Acquire::Retries=3 -o DPkg::Lock::Timeout=60 install -y -qq --no-install-recommends ffmpeg libsndfile1
-
       - name: Install CPU runtime
         run: |
           python -m pip install --upgrade pip
@@ -68,6 +56,6 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: john-d-voice-sample
-          path: voice-sample/john_d_voice_sample.mp3
+          path: voice-sample/john_d_voice_sample.wav
           if-no-files-found: error
           retention-days: 1
