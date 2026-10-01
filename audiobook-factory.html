@@ -47,7 +47,7 @@ pre{white-space:pre-wrap;word-break:break-word;font-size:11px;background:#11100d
       <div class="full">
         <label>DOCX-Manuskript</label>
         <input id="source" type="file" accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document">
-        <div class="muted">Auf dem iPhone kannst du hier direkt Google Drive oder iCloud Drive auswählen.</div>
+        <div id="sourceStatus" class="muted">Auf dem iPhone kannst du hier direkt Google Drive oder iCloud Drive auswählen.</div>
       </div>
       <div>
         <label>Buch auf der Autorenseite</label>
@@ -88,7 +88,7 @@ pre{white-space:pre-wrap;word-break:break-word;font-size:11px;background:#11100d
 <script>
 const API='https://ipoqyjrojljmbqslmxxf.supabase.co/functions/v1/audiobook-factory';
 const $=s=>document.querySelector(s);
-let books=[],voices=[],token='';
+let books=[],voices=[],token='',currentJobs=[],jobSubmitLocked=false,lastSubmittedKey='';
 const norm=s=>String(s||'').toLowerCase().normalize('NFKD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9]+/g,' ').trim();
 const api=async body=>{
  const r=await fetch(API,{method:'POST',headers:{'Content-Type':'application/json'},cache:'no-store',body:JSON.stringify({...body,adminToken:token})});
@@ -163,25 +163,65 @@ async function uploadMissingVoice(){
    await loadVoices();
  }catch(e){$('#error').textContent=e.message}
 }
+function selectedJobKey(file,b,voice){
+ return [file.name,file.size,file.lastModified,b.id,$('#lang').value,voice.key].join('|');
+}
+function resetJobSubmitState(){
+ jobSubmitLocked=false;lastSubmittedKey='';
+ $('#start').disabled=false;
+ $('#start').textContent='QUALITÄT PRÜFEN & HÖRBUCH STARTEN';
+ const file=$('#source').files[0];
+ $('#sourceStatus').textContent=file?('Ausgewählt: '+file.name):'Auf dem iPhone kannst du hier direkt Google Drive oder iCloud Drive auswählen.';
+}
+function matchingExistingJob(file,b){
+ const lang=$('#lang').value;
+ return currentJobs.find(j=>{
+   const sameFile=String(j.source_file_name||'')===file.name;
+   const sameTitle=norm(j.requested_title||j.detected_title||'')===norm(b.title);
+   const sameLang=String(j.language_code||'').toUpperCase()===lang;
+   const reusable=['uploading','queued','preflight','qc_running','production','finalizing','needs_attention','failed'].includes(String(j.status||''));
+   return sameFile&&sameTitle&&sameLang&&reusable;
+ });
+}
 async function startJob(){
  $('#error').textContent='';
+ if(jobSubmitLocked)return;
+ let success=false;
  try{
    const file=$('#source').files[0];if(!file)throw new Error('Bitte DOCX auswählen.');
    const b=books.find(x=>x.id===$('#book').value);if(!b)throw new Error('Bitte Buch auf der Autorenseite auswählen.');
    const voice=voices.find(v=>v.key===$('#voice').value);if(!voice||!voice.ready)throw new Error('Bitte verfügbare Stimme auswählen.');
+   const key=selectedJobKey(file,b,voice);
+   if(lastSubmittedKey===key)throw new Error('Für diese Auswahl wurde bereits ein Job angelegt.');
+   jobSubmitLocked=true;
+   $('#start').disabled=true;$('#start').textContent='PRÜFE BESTEHENDE JOBS …';
+   const existing=matchingExistingJob(file,b);
+   if(existing){
+     throw new Error('Für diese Datei existiert bereits ein Cloud-Job ('+statusLabel(existing)+'). Bitte den vorhandenen Job verwenden bzw. „Automatisch erneut versuchen“.');
+   }
    localStorage.setItem('ajk_factory_voice_'+$('#lang').value,voice.key);
-   $('#start').disabled=true;$('#start').textContent='JOB WIRD ANGELEGT …';
-   const c=await api({op:'createJob',fileName:file.name,title:b.title,siteBookId:b.id,coverUrl:b.coverUrl||'',languageCode:$('#lang').value,voiceKey:voice.key,publishAutomatically:$('#autoPublish').checked});
+   $('#start').textContent='JOB WIRD ANGELEGT …';
+   const created=await api({op:'createJob',fileName:file.name,title:b.title,siteBookId:b.id,coverUrl:b.coverUrl||'',languageCode:$('#lang').value,voiceKey:voice.key,publishAutomatically:$('#autoPublish').checked});
    $('#start').textContent='MANUSKRIPT WIRD IN DIE CLOUD GELADEN …';
    const r=await fetch(API,{method:'POST',headers:{
-     'x-ajk-op':'upload-source','x-admin-token':token,'x-job-id':c.jobId,
+     'x-ajk-op':'upload-source','x-admin-token':token,'x-job-id':created.jobId,
      'Content-Type':'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
    },body:file});
-   const d=await r.json();if(!r.ok||!d.ok)throw new Error(d.error||'Manuskript-Upload fehlgeschlagen');
-   $('#source').value='';
+   const d=await r.json().catch(()=>({}));if(!r.ok||!d.ok)throw new Error(d.error||'Manuskript-Upload fehlgeschlagen');
+   lastSubmittedKey=key;
+   success=true;
+   $('#sourceStatus').textContent='Upload abgeschlossen: '+file.name+' · Cloud-Job '+String(created.jobId||'').slice(0,8)+'…';
+   $('#start').textContent='JOB ANGELEGT · QC LÄUFT';
    await loadJobs();
- }catch(e){$('#error').textContent=e.message}
- finally{$('#start').disabled=false;$('#start').textContent='QUALITÄT PRÜFEN & HÖRBUCH STARTEN'}
+ }catch(e){
+   $('#error').textContent=e.message;
+ }finally{
+   if(!success){
+     jobSubmitLocked=false;
+     $('#start').disabled=false;
+     $('#start').textContent='QUALITÄT PRÜFEN & HÖRBUCH STARTEN';
+   }
+ }
 }
 const esc=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 function statusLabel(j){
@@ -202,7 +242,7 @@ function renderJob(j){
 }
 async function loadJobs(){
  try{
-  const d=await api({op:'listJobs'});const js=d.jobs||[];
+  const d=await api({op:'listJobs'});const js=d.jobs||[];currentJobs=js;
   $('#jobs').innerHTML=js.length?js.map(renderJob).join(''):'<p class="muted">Noch keine Cloud-Jobs.</p>';
   document.querySelectorAll('[data-retry]').forEach(b=>b.onclick=async()=>{await api({op:'retryJob',jobId:b.dataset.retry});loadJobs()});
   document.querySelectorAll('[data-cancel]').forEach(b=>b.onclick=async()=>{if(confirm('Job wirklich abbrechen?')){await api({op:'cancelJob',jobId:b.dataset.cancel});loadJobs()}});
@@ -224,10 +264,10 @@ async function init(){
    setInterval(()=>{if(!document.hidden)loadJobs()},10000);
  }catch(e){$('#authText').textContent='Admin-Sitzung konnte nicht bestätigt werden: '+e.message}
 }
-$('#source').onchange=()=>{const f=$('#source').files[0];if(f)chooseBookFromFilename(f.name)};
-$('#book').onchange=syncBookLanguage;
-$('#lang').onchange=renderVoices;
-$('#voice').onchange=updateVoiceInfo;
+$('#source').onchange=()=>{resetJobSubmitState();const f=$('#source').files[0];if(f)chooseBookFromFilename(f.name)};
+$('#book').onchange=()=>{resetJobSubmitState();syncBookLanguage()};
+$('#lang').onchange=()=>{resetJobSubmitState();renderVoices()};
+$('#voice').onchange=()=>{resetJobSubmitState();updateVoiceInfo()};
 $('#start').onclick=startJob;
 $('#refresh').onclick=loadJobs;
 $('#uploadVoice').onclick=uploadMissingVoice;
