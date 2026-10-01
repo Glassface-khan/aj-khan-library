@@ -29,6 +29,16 @@ jobs:
           echo "LIVE_SITE_HTTP=$code"
           test "$code" = "200"
           grep -q "A. J. Khan" /tmp/site.html
+      - name: Check HF token secret presence
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        run: |
+          if [ -z "$HF_TOKEN" ]; then
+            echo "HF_SECRET_PRESENT=false"
+            exit 1
+          fi
+          echo "HF_SECRET_PRESENT=true"
+
       - name: Check audiobook factory HTML/JS syntax
         run: |
           node - <<'NODE'
