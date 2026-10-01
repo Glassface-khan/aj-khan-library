@@ -898,10 +898,8 @@ function makeDriveItemPrivate_(item) {
   if (!item) return 0;
   const fileId = item.getId();
 
-  // Built-in Drive service first.
-  item.setSharing(DriveApp.Access.PRIVATE, DriveApp.Permission.VIEW);
-
-  // Explicitly delete stale anyone/domain permission objects and verify.
+  // Advanced Drive permission objects are the source of truth here.
+  // Delete general-access permissions directly, then verify.
   const removed = removeGeneralDrivePermissions_(fileId);
   assertNoGeneralDrivePermissions_(fileId);
   return removed;
@@ -926,6 +924,59 @@ function makeFolderTreePrivate_(folder) {
   return removed;
 }
 
+function hardenStoredPrivateRef_(value) {
+  const id = fileIdFromStoredUrl_(value);
+  if (!id) return { checked: 0, removed: 0 };
+
+  try {
+    const folder = DriveApp.getFolderById(id);
+    return { checked: 1, removed: makeFolderTreePrivate_(folder) || 0 };
+  } catch (folderErr) {
+    const file = DriveApp.getFileById(id);
+    return { checked: 1, removed: makeDriveItemPrivate_(file) || 0 };
+  }
+}
+
+function hardenReferencedPrivateAssets_(books) {
+  let checked = 0;
+  let removed = 0;
+  const seen = {};
+
+  function harden(value) {
+    const id = fileIdFromStoredUrl_(value);
+    if (!id || seen[id]) return;
+    seen[id] = true;
+    const result = hardenStoredPrivateRef_(value);
+    checked += result.checked;
+    removed += result.removed;
+  }
+
+  (books || []).forEach(function(book) {
+    if (!book) return;
+
+    // Intentionally exclude coverUrl: approved main covers may remain public.
+    [
+      book.epubUrl,
+      book.manuscriptDocUrl,
+      book.pdfUrl,
+      book.bgUrl,
+      book.videoUrl,
+      book.altUrl
+    ].forEach(harden);
+
+    (Array.isArray(book.altCovers) ? book.altCovers : []).forEach(harden);
+
+    if (book.langs && typeof book.langs === 'object') {
+      Object.keys(book.langs).forEach(function(code) {
+        const entry = book.langs[code] || {};
+        [entry.epubUrl, entry.manuscriptDocUrl, entry.pdfUrl].forEach(harden);
+      });
+    }
+  });
+
+  return { checked: checked, removed: removed };
+}
+
 // One-time/manual safety sweep for all private website assets. Main cover
 // folders/files are intentionally excluded because approved public covers may
 // remain public.
@@ -935,7 +986,15 @@ function hardenPrivateAssetsNow() {
   let booksChecked = 0;
   let foldersChecked = 0;
   let permissionsRemoved = 0;
+  let referencedAssetsChecked = 0;
   const hardenedIds = {};
+
+  // First secure the exact private references used by BooksData. This is
+  // independent of runtime-folder discovery and therefore closes stale or
+  // historically linked assets as well.
+  const referenced = hardenReferencedPrivateAssets_(books);
+  referencedAssetsChecked = referenced.checked;
+  permissionsRemoved += referenced.removed;
 
   books.forEach(function(book) {
     if (!book || !book.title) return;
@@ -971,10 +1030,15 @@ function hardenPrivateAssetsNow() {
   const result = {
     ok: true,
     booksChecked: booksChecked,
+    referencedAssetsChecked: referencedAssetsChecked,
     privateRootFoldersChecked: foldersChecked,
     verifiedPrivateRoots: Object.keys(hardenedIds).length,
-    permissionsRemoved: permissionsRemoved
+    permissionsRemoved: permissionsRemoved,
+    completedAt: new Date().toISOString()
   };
+  const props = PropertiesService.getScriptProperties();
+  props.setProperty('PRIVATE_ASSET_LOCKDOWN_LAST_RUN', result.completedAt);
+  props.setProperty('PRIVATE_ASSET_LOCKDOWN_LAST_RESULT', JSON.stringify(result));
   Logger.log(JSON.stringify(result));
   return result;
 }
@@ -2346,10 +2410,24 @@ function setupDriveSyncTrigger() {
 }
 
 function privacyBuildInfo_() {
+  const props = PropertiesService.getScriptProperties();
+  let lastHarden = null;
+  try {
+    lastHarden = JSON.parse(props.getProperty('PRIVATE_ASSET_LOCKDOWN_LAST_RESULT') || 'null');
+  } catch (e) {
+    lastHarden = null;
+  }
   return {
     ok: true,
-    privacyBuild: '2026-10-01-v2v3-permissions-fix',
-    legacyEpubRoute: false
+    privacyBuild: '2026-10-01-direct-ref-permissions-fix',
+    legacyEpubRoute: false,
+    lastHarden: lastHarden ? {
+      ok: !!lastHarden.ok,
+      referencedAssetsChecked: Number(lastHarden.referencedAssetsChecked || 0),
+      permissionsRemoved: Number(lastHarden.permissionsRemoved || 0),
+      privateRootFoldersChecked: Number(lastHarden.privateRootFoldersChecked || 0),
+      completedAt: lastHarden.completedAt || ''
+    } : null
   };
 }
 
