@@ -813,15 +813,22 @@ function publicViewUrlFor(file) {
 function ensureBookFolders(rootFolder, bookTitle) {
   const bookFolder = getOrCreateSubfolder(rootFolder, bookTitle);
   const manuskriptFolder = getOrCreateSubfolder(bookFolder, 'Manuskript');
-  getOrCreateSubfolder(bookFolder, 'Intern');
+  const internFolder = getOrCreateSubfolder(bookFolder, 'Intern');
   const externFolder = getOrCreateSubfolder(bookFolder, 'Extern');
   const videoFolder = getOrCreateSubfolder(bookFolder, 'Video');
   const bilderFolder = getOrCreateSubfolder(bookFolder, 'Bilder');
   const coverFolder = getOrCreateSubfolder(bilderFolder, 'Cover');
   const altCoverFolder = getOrCreateSubfolder(bilderFolder, 'Alt-Cover');
+
+  // Private containers must never inherit or retain public link sharing.
+  [manuskriptFolder, internFolder, externFolder, videoFolder, altCoverFolder].forEach(function(folder) {
+    makeDriveItemPrivate_(folder);
+  });
+
   return {
     bookFolder: bookFolder,
     manuskriptFolder: manuskriptFolder,
+    internFolder: internFolder,
     coverFolder: coverFolder,
     altCoverFolder: altCoverFolder,
     externFolder: externFolder,
@@ -845,12 +852,84 @@ function firstVideoFile_(folder) {
   return best;
 }
 
+// SECURITY: revoke public/domain link sharing from a Drive item while keeping
+// the owner's access intact. Specific named-user shares are not removed.
+function makeDriveItemPrivate_(item) {
+  if (!item) return;
+  try {
+    item.setSharing(DriveApp.Access.PRIVATE, DriveApp.Permission.VIEW);
+  } catch (err) {
+    // Some Drive item types/accounts may reject setSharing. The caller logs
+    // higher-level failures where appropriate; do not break the whole sync.
+  }
+}
+
+function makeFolderDirectContentsPrivate_(folder) {
+  if (!folder) return;
+  makeDriveItemPrivate_(folder);
+  const files = folder.getFiles();
+  while (files.hasNext()) makeDriveItemPrivate_(files.next());
+  const folders = folder.getFolders();
+  while (folders.hasNext()) makeDriveItemPrivate_(folders.next());
+}
+
+function makeFolderTreePrivate_(folder) {
+  if (!folder) return;
+  makeDriveItemPrivate_(folder);
+  const files = folder.getFiles();
+  while (files.hasNext()) makeDriveItemPrivate_(files.next());
+  const folders = folder.getFolders();
+  while (folders.hasNext()) makeFolderTreePrivate_(folders.next());
+}
+
+// One-time/manual safety sweep for all private website assets. Main cover
+// folders/files are intentionally excluded because approved public covers may
+// remain public.
+function hardenPrivateAssetsNow() {
+  const rootFolder = getDriveRootFolder_();
+  const books = getBooksArray();
+  let booksChecked = 0;
+  let foldersChecked = 0;
+
+  books.forEach(function(book) {
+    if (!book || !book.title) return;
+    const matches = rootFolder.getFoldersByName(book.title);
+    if (!matches.hasNext()) return;
+    const bookFolder = matches.next();
+    booksChecked++;
+
+    ['Manuskript', 'Intern', 'Extern', 'Video'].forEach(function(name) {
+      const it = bookFolder.getFoldersByName(name);
+      while (it.hasNext()) {
+        const folder = it.next();
+        makeFolderTreePrivate_(folder);
+        foldersChecked++;
+      }
+    });
+
+    const bilderIt = bookFolder.getFoldersByName('Bilder');
+    while (bilderIt.hasNext()) {
+      const bilder = bilderIt.next();
+      const altIt = bilder.getFoldersByName('Alt-Cover');
+      while (altIt.hasNext()) {
+        const alt = altIt.next();
+        makeFolderTreePrivate_(alt);
+        foldersChecked++;
+      }
+    }
+  });
+
+  PropertiesService.getScriptProperties().setProperty('PRIVATE_ASSET_LOCKDOWN_LAST_RUN', new Date().toISOString());
+  return { ok: true, booksChecked: booksChecked, foldersChecked: foldersChecked };
+}
+
 // Drive-eigene Ansichtsseite (nicht der Direkt-Download-Link wie bei EPUB) —
 // spielt Videos direkt im eingebauten Drive-Player im Browser ab, statt sie
 // herunterzuladen.
 function videoViewUrlFor_(file) {
   // SECURITY: keep videos private in Drive. Store only an internal reference
   // in BooksData; sanitizeBooksForPublic_ removes/replaces it for visitors.
+  makeDriveItemPrivate_(file);
   return 'drive-private://file/' + file.getId();
 }
 
@@ -858,26 +937,30 @@ function videoViewUrlFor_(file) {
 // der bestehende "Alt. covers"-Button auf der Website ist ein simpler
 // Link-Button, kein Bild-Karussell, das passt also direkt.
 function publicFolderUrlFor_(folder) {
-  // SECURITY: this helper is retained for compatibility with existing sync
-  // code, but it no longer changes Drive sharing. The returned reference is
-  // server-internal and is stripped/replaced by sanitizeBooksForPublic_.
+  // SECURITY: legacy public sharing is actively revoked. The returned
+  // reference remains server-internal and is stripped/replaced publicly.
+  makeFolderDirectContentsPrivate_(folder);
   return 'drive-private://folder/' + folder.getId();
 }
 
 function scanBookLanguages(manuskriptFolder) {
   const langs = {};
+  makeDriveItemPrivate_(manuskriptFolder);
   const it = manuskriptFolder.getFolders();
   while (it.hasNext()) {
     const langFolder = it.next();
+    makeDriveItemPrivate_(langFolder);
     const code = langFolder.getName().trim().toUpperCase();
     if (!code) continue;
     const finalFile = findFileByPrefix(langFolder, 'FINAL_');
     const entwurfFile = findFileByPrefix(langFolder, 'ENTWURF_');
     const klappentextFile = findFileByPrefix(langFolder, 'KLAPPENTEXT_');
+    [finalFile, entwurfFile, klappentextFile].forEach(function(file) { makeDriveItemPrivate_(file); });
     // EPUB_-Datei: eine bereits fertige, direkt hochgeladene EPUB anstelle
     // eines Manuskript-Dokuments (siehe ARCHITECTURE.md) -- macht die
     // Sprache ebenfalls "fertig", auch ohne FINAL_-Datei.
     const epubReadyFile = findFileByPrefix(langFolder, 'EPUB_');
+    makeDriveItemPrivate_(epubReadyFile);
     langs[code] = {
       status: (finalFile || epubReadyFile) ? 'fertig' : (entwurfFile ? 'in-arbeit' : 'offen'),
       finalFile: finalFile,
@@ -2033,7 +2116,10 @@ function syncDriveForAllBooks() {
           const altImageFiles = allImageFiles_(folders.altCoverFolder);
           // SECURITY: alt-cover files remain private. The browser receives
           // only a presence flag; actual bytes come through getPrivateBookAsset.
-          const newAltCovers = altImageFiles.map(function(f) { return 'drive-private://file/' + f.getId(); });
+          const newAltCovers = altImageFiles.map(function(f) {
+            makeDriveItemPrivate_(f);
+            return 'drive-private://file/' + f.getId();
+          });
           const oldAltCovers = Array.isArray(b.altCovers) ? b.altCovers : [];
           if (newAltCovers.join('|') !== oldAltCovers.join('|')) {
             b.altCovers = newAltCovers;
