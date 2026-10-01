@@ -6,7 +6,7 @@ from pathlib import Path
 import numpy as np
 import soundfile as sf
 
-from worker import api, load_tts, gen_audio, silence, write_mp3
+from worker import api, load_tts, gen_audio, silence
 
 SAMPLE_TEXT = (
     "There are places the wind remembers long after people have forgotten them. "
@@ -30,13 +30,11 @@ def main() -> int:
     audio = np.concatenate([audio, silence(0.25, model.sample_rate)])
 
     wav = outdir / "john_d_voice_sample.wav"
-    mp3 = outdir / "john_d_voice_sample.mp3"
     sf.write(wav, audio, model.sample_rate, subtype="PCM_16")
-    write_mp3(wav, mp3)
 
     print(f"SAMPLE_TEXT={SAMPLE_TEXT}")
     print(f"SAMPLE_SECONDS={len(audio) / float(model.sample_rate):.2f}")
-    print(f"SAMPLE_MP3={mp3}")
+    print(f"SAMPLE_WAV={wav}")
     return 0
 
 if __name__ == "__main__":
