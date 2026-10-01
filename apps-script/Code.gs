@@ -853,15 +853,54 @@ function firstVideoFile_(folder) {
 }
 
 // SECURITY: revoke public/domain link sharing from a Drive item while keeping
-// the owner's access intact. Specific named-user shares are not removed.
+// owner + explicitly named-user permissions intact. Security failures MUST
+// surface; they are never swallowed.
+function removeGeneralDrivePermissions_(fileId) {
+  let pageToken = null;
+  do {
+    const args = {
+      fields: 'nextPageToken,permissions(id,type,role)',
+      supportsAllDrives: true
+    };
+    if (pageToken) args.pageToken = pageToken;
+    const resp = Drive.Permissions.list(fileId, args);
+    const perms = (resp && resp.permissions) || [];
+    perms.forEach(function(p) {
+      if (p && (p.type === 'anyone' || p.type === 'domain')) {
+        Drive.Permissions.remove(fileId, p.id, { supportsAllDrives: true });
+      }
+    });
+    pageToken = (resp && resp.nextPageToken) || null;
+  } while (pageToken);
+}
+
+function assertNoGeneralDrivePermissions_(fileId) {
+  const resp = Drive.Permissions.list(fileId, {
+    fields: 'permissions(id,type,role)',
+    supportsAllDrives: true
+  });
+  const leaked = ((resp && resp.permissions) || []).filter(function(p) {
+    return p && (p.type === 'anyone' || p.type === 'domain');
+  });
+  if (leaked.length) {
+    throw new Error('Public/domain Drive permission remains on ' + fileId + ': ' +
+      leaked.map(function(p) { return p.type + '/' + p.role; }).join(', '));
+  }
+}
+
 function makeDriveItemPrivate_(item) {
   if (!item) return;
-  try {
-    item.setSharing(DriveApp.Access.PRIVATE, DriveApp.Permission.VIEW);
-  } catch (err) {
-    // Some Drive item types/accounts may reject setSharing. The caller logs
-    // higher-level failures where appropriate; do not break the whole sync.
-  }
+  const fileId = item.getId();
+
+  // Built-in Drive service first: switch the general-access class to PRIVATE.
+  // Google documents PRIVATE as "only explicitly granted users". Preserve the
+  // current sharing permission value because setSharing() expects both args.
+  item.setSharing(DriveApp.Access.PRIVATE, item.getSharingPermission());
+
+  // Belt-and-suspenders: explicitly delete any stale anyone/domain permission
+  // objects through the Advanced Drive service, then verify the result.
+  removeGeneralDrivePermissions_(fileId);
+  assertNoGeneralDrivePermissions_(fileId);
 }
 
 function makeFolderDirectContentsPrivate_(folder) {
@@ -890,6 +929,7 @@ function hardenPrivateAssetsNow() {
   const books = getBooksArray();
   let booksChecked = 0;
   let foldersChecked = 0;
+  const hardenedIds = {};
 
   books.forEach(function(book) {
     if (!book || !book.title) return;
@@ -903,6 +943,7 @@ function hardenPrivateAssetsNow() {
       while (it.hasNext()) {
         const folder = it.next();
         makeFolderTreePrivate_(folder);
+        hardenedIds[folder.getId()] = true;
         foldersChecked++;
       }
     });
@@ -914,13 +955,21 @@ function hardenPrivateAssetsNow() {
       while (altIt.hasNext()) {
         const alt = altIt.next();
         makeFolderTreePrivate_(alt);
+        hardenedIds[alt.getId()] = true;
         foldersChecked++;
       }
     }
   });
 
   PropertiesService.getScriptProperties().setProperty('PRIVATE_ASSET_LOCKDOWN_LAST_RUN', new Date().toISOString());
-  return { ok: true, booksChecked: booksChecked, foldersChecked: foldersChecked };
+  const result = {
+    ok: true,
+    booksChecked: booksChecked,
+    privateRootFoldersChecked: foldersChecked,
+    verifiedPrivateRoots: Object.keys(hardenedIds).length
+  };
+  Logger.log(JSON.stringify(result));
+  return result;
 }
 
 // Drive-eigene Ansichtsseite (nicht der Direkt-Download-Link wie bei EPUB) —
