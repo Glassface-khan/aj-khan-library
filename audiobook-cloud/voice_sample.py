@@ -8,10 +8,11 @@ import soundfile as sf
 
 from worker import api, load_tts, gen_audio, silence
 
-SAMPLE_TEXT = (
-    "There are places the wind remembers long after people have forgotten them. "
-    "At dusk, the road disappears into silence, and every footstep seems to carry a story."
-)
+SAMPLE_LINES = [
+    "The road was quiet beneath the evening sky.",
+    "A warm wind carried dust across the empty fields.",
+    "Somewhere ahead, a door opened into the dark.",
+]
 
 def main() -> int:
     p = argparse.ArgumentParser()
@@ -26,13 +27,16 @@ def main() -> int:
     voice = remote["voice"]
 
     model, state = load_tts(voice["ttsLanguage"], voice["source"], outdir)
-    audio = gen_audio(model, state, SAMPLE_TEXT)
-    audio = np.concatenate([audio, silence(0.25, model.sample_rate)])
+    rendered = []
+    for line in SAMPLE_LINES:
+        rendered.append(gen_audio(model, state, line))
+        rendered.append(silence(0.35, model.sample_rate))
+    audio = np.concatenate(rendered)
 
     wav = outdir / "john_d_voice_sample.wav"
     sf.write(wav, audio, model.sample_rate, subtype="PCM_16")
 
-    print(f"SAMPLE_TEXT={SAMPLE_TEXT}")
+    print("SAMPLE_TEXT=" + " ".join(SAMPLE_LINES))
     print(f"SAMPLE_SECONDS={len(audio) / float(model.sample_rate):.2f}")
     print(f"SAMPLE_WAV={wav}")
     return 0
