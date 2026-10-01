@@ -54,6 +54,8 @@ jobs:
               except Exception as e:
                   return None, repr(e)
 
+          print('APPS_SCRIPT_ENDPOINT=' + gas)
+
           # 1) Static public fallback must not expose private Drive locations.
           for needle in ('drive.google.com', 'docs.google.com', 'drive-private://'):
               n = live.count(needle)
