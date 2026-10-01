@@ -131,6 +131,15 @@ for (const marker of required) {
   if (!app.includes(marker)) throw new Error('Required secure marker missing: ' + marker);
 }
 
+if (app.includes('getEpubData')) {
+  let p = 0, n = 0;
+  while ((p = app.indexOf('getEpubData', p)) >= 0) {
+    n += 1;
+    console.log('LEGACY_SNIPPET_' + n + '=' + app.slice(Math.max(0, p - 260), Math.min(app.length, p + 520)).replace(/\\n/g, ' '));
+    p += 'getEpubData'.length;
+  }
+}
+
 const forbidden = [
   "readHref: (canRead && effPdfUrl) ? effPdfUrl",
   "bgHref: (canRead && b.bgUrl) ? b.bgUrl",
