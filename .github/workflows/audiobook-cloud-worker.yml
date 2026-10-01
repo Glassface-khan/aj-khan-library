@@ -56,6 +56,8 @@ jobs:
     if: needs.claim.outputs.has_job == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 90
+    env:
+      HF_TOKEN: ${{ secrets.HF_TOKEN }}
     outputs:
       has_job: ${{ steps.prepare.outputs.has_job }}
       job_id: ${{ needs.claim.outputs.job_id }}
@@ -86,6 +88,23 @@ jobs:
           python -m pip install torch --index-url https://download.pytorch.org/whl/cpu
           python -m pip install -r audiobook-cloud/requirements.txt
 
+      - name: Verify Hugging Face token and Pocket TTS gated access
+        run: |
+          set -euo pipefail
+          if [ -z "${HF_TOKEN:-}" ]; then
+            echo "::error::HF_TOKEN repository secret is missing. John D./custom voice cloning cannot run."
+            exit 1
+          fi
+          hf auth whoami
+          python - <<'PY'
+          from huggingface_hub import HfApi
+          api = HfApi()
+          files = api.list_repo_files("kyutai/pocket-tts")
+          if not files:
+              raise SystemExit("Pocket TTS repository returned no files")
+          print("HF_POCKET_TTS_ACCESS=PASS")
+          PY
+
       - name: Parse private manuscript and run pre-production quality gate
         id: prepare
         run: |
@@ -97,6 +116,8 @@ jobs:
     if: needs.prepare.outputs.has_job == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 330
+    env:
+      HF_TOKEN: ${{ secrets.HF_TOKEN }}
     strategy:
       fail-fast: false
       matrix:
