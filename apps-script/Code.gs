@@ -2524,54 +2524,6 @@ function handle(e) {
     return jsonOut({ ok: true });
   }
 
-  // Liefert die Rohbytes einer EPUB-Datei Base64-codiert an den Browser —
-  // noetig fuer den Inline-Reader (epub.js), weil ein direkter Cross-Origin-
-  // fetch() auf den Drive-Download-Link an CORS scheitert; dieser Umweg
-  // ueber denselben Apps-Script-Endpunkt, den die Seite ohnehin fuer alles
-  // andere benutzt, funktioniert zuverlaessig. Kein Admin-Token noetig (das
-  // ist ein oeffentlicher Lese-Endpunkt, genau wie getBooks), aber zur
-  // Sicherheit wird die angefragte Datei-ID gegen die tatsaechlich in den
-  // Buchdaten hinterlegten EPUB-URLs geprueft — sonst liesse sich darueber
-  // im Prinzip jede beliebige, dem Angreifer bekannte Drive-Datei-ID
-  // abrufen, nicht nur EPUBs.
-  if (action === 'getEpubData') {
-    // Legacy compatibility only. New clients must use getPrivateEpub so the
-    // browser never needs a Drive URL or file ID.
-    const epubUrl = e.parameter.epubUrl || '';
-    const idMatch = epubUrl.match(/[-\w]{25,}/);
-    if (!idMatch) return jsonOut({ ok: false, error: 'Keine gültige EPUB-Referenz.' });
-    const requestedId = idMatch[0];
-    const bookTitle = e.parameter.bookTitle || '';
-    const intent = e.parameter.intent === 'download' ? 'download' : 'read';
-
-    // SECURITY: legacy compatibility must never authorize an EPUB from a
-    // different book. Old Drive IDs may exist in public Git history, so
-    // "known somewhere in the catalogue" is not a sufficient boundary.
-    const requestedBook = findBookByTitle_(bookTitle);
-    if (!requestedBook) return jsonOut({ ok: false, error: 'Buch nicht gefunden.' });
-
-    const auth = accessForBookAsset_(e, requestedBook.title, intent, false);
-    if (!auth.ok) return jsonOut({ ok: false, error: 'Kein Zugriff auf dieses Buch.' });
-
-    let known = false;
-    if (requestedBook.epubUrl && requestedBook.epubUrl.indexOf(requestedId) >= 0) known = true;
-    if (requestedBook.langs) {
-      Object.keys(requestedBook.langs).forEach(function(code) {
-        const entry = requestedBook.langs[code];
-        if (entry && entry.epubUrl && entry.epubUrl.indexOf(requestedId) >= 0) known = true;
-      });
-    }
-    if (!known) return jsonOut({ ok: false, error: 'EPUB gehört nicht zu diesem Buch.' });
-
-    try {
-      const file = DriveApp.getFileById(requestedId);
-      const bytes = file.getBlob().getBytes();
-      return jsonOut({ ok: true, dataBase64: Utilities.base64Encode(bytes) });
-    } catch (err) {
-      return jsonOut({ ok: false, error: err.message });
-    }
-  }
-
   // Ermittelt den Buchtitel direkt aus einer EPUB-Datei, BEVOR sie
   // endgueltig hochgeladen wird (§52) -- schreibt nichts nach Drive, rein
   // lesende Vorab-Aktion. Admin-geschuetzt wie uploadBookFile, weil sie
