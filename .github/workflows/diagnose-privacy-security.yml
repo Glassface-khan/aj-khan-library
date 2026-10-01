@@ -1,0 +1,136 @@
+name: Diagnose privacy security
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - '.github/workflows/diagnose-privacy-security.yml'
+      - 'apps-script/Code.gs'
+      - 'books-live.json'
+      - 'tools/patch_author_site.js'
+      - 'tools/patch_live_books.js'
+
+permissions:
+  contents: read
+
+jobs:
+  privacy-smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check public catalogue and live Apps Script privacy boundary
+        run: |
+          python - <<'PY'
+          import json, pathlib, re, sys, urllib.parse, urllib.request, urllib.error
+
+          index = pathlib.Path('index.html').read_text(encoding='utf-8', errors='replace')
+          live = pathlib.Path('books-live.json').read_text(encoding='utf-8', errors='replace')
+          failures = []
+
+          urls = sorted(set(re.findall(r'https://script\\.google\\.com/macros/s/[A-Za-z0-9_-]+/exec', index)))
+          if len(urls) != 1:
+              failures.append(f'Expected exactly one Apps Script URL in index.html, found {len(urls)}')
+              gas = urls[0] if urls else ''
+          else:
+              gas = urls[0]
+
+          def get_json(action, **params):
+              if not gas:
+                  return None, 'missing Apps Script URL'
+              q = {'action': action}
+              q.update({k: str(v) for k, v in params.items() if v is not None})
+              url = gas + '?' + urllib.parse.urlencode(q)
+              req = urllib.request.Request(url, headers={'User-Agent': 'AJK-Privacy-Smoke/1.0'})
+              try:
+                  with urllib.request.urlopen(req, timeout=30) as r:
+                      status = getattr(r, 'status', 200)
+                      raw = r.read().decode('utf-8', 'replace')
+                  return json.loads(raw), f'HTTP {status}'
+              except urllib.error.HTTPError as e:
+                  body = e.read().decode('utf-8', 'replace') if hasattr(e, 'read') else ''
+                  return None, f'HTTP {e.code}: {body[:300]}'
+              except Exception as e:
+                  return None, repr(e)
+
+          # 1) Static public fallback must not expose private Drive locations.
+          for needle in ('drive.google.com', 'docs.google.com', 'drive-private://'):
+              n = live.count(needle)
+              print(f'STATIC_{needle}=COUNT:{n}')
+              if n:
+                  failures.append(f'books-live.json exposes {needle} ({n} occurrence(s))')
+
+          # 2) Frontend must contain the protected private routes.
+          for needle in ('getPrivateEpub', 'listPrivateBookAssets', 'getPrivateBookAsset'):
+              present = needle in index
+              print(f'FRONTEND_{needle}={present}')
+              if not present:
+                  failures.append(f'index.html missing {needle}')
+
+          # Legacy route may still exist during transition; report only.
+          print('FRONTEND_getEpubData_LEGACY_COUNT=' + str(index.count('getEpubData')))
+
+          # 3) Public live catalogue must be reachable and sanitized.
+          data, status = get_json('getBooks')
+          print('GETBOOKS_STATUS=' + status)
+          books = []
+          if not isinstance(data, dict):
+              failures.append('Live Apps Script getBooks is not reachable as JSON')
+          else:
+              raw_books = data.get('books', '[]')
+              try:
+                  books = json.loads(raw_books) if isinstance(raw_books, str) else raw_books
+              except Exception as e:
+                  failures.append(f'getBooks payload is not parseable: {e!r}')
+                  books = []
+              if not isinstance(books, list):
+                  failures.append('getBooks books payload is not a list')
+                  books = []
+              raw_public = json.dumps(books, ensure_ascii=False)
+              for needle in ('drive.google.com', 'docs.google.com', 'drive-private://'):
+                  n = raw_public.count(needle)
+                  print(f'LIVE_PUBLIC_{needle}=COUNT:{n}')
+                  if n:
+                      failures.append(f'getBooks exposes {needle} ({n} occurrence(s))')
+              print('LIVE_BOOK_COUNT=' + str(len(books)))
+
+          # Pick a real title/language for negative auth tests.
+          test_title = 'THE TESTIMONY OF SAND'
+          test_lang = 'EN'
+          if books and not any(str(b.get('title','')).strip() == test_title for b in books if isinstance(b, dict)):
+              for b in books:
+                  if isinstance(b, dict) and b.get('title'):
+                      test_title = str(b['title']).strip()
+                      langs = b.get('langs') if isinstance(b.get('langs'), dict) else {}
+                      test_lang = next(iter(langs.keys()), '')
+                      break
+          print('NEGATIVE_TEST_BOOK=' + test_title)
+          print('NEGATIVE_TEST_LANG=' + test_lang)
+
+          # 4) New private endpoints must exist AND deny unauthenticated access.
+          checks = [
+              ('getPrivateEpub', {'bookTitle': test_title, 'langCode': test_lang, 'intent': 'read'}),
+              ('listPrivateBookAssets', {'bookTitle': test_title, 'assetType': 'background', 'langCode': test_lang}),
+              ('getPrivateBookAsset', {'bookTitle': test_title, 'assetType': 'background', 'langCode': test_lang, 'index': 0}),
+          ]
+          for action, params in checks:
+              payload, st = get_json(action, **params)
+              print(f'{action}_STATUS={st}')
+              print(f'{action}_PAYLOAD={json.dumps(payload, ensure_ascii=False)[:500] if payload is not None else "NONE"}')
+              if not isinstance(payload, dict):
+                  failures.append(f'{action} is not live/reachable as JSON')
+                  continue
+              if payload.get('ok') is True:
+                  failures.append(f'{action} allowed unauthenticated private access')
+              err = str(payload.get('error','')).lower()
+              if 'unknown action' in err:
+                  failures.append(f'{action} is not deployed in live Apps Script')
+
+          print('PRIVACY_FAILURE_COUNT=' + str(len(failures)))
+          for f in failures:
+              print('FAIL|' + f)
+
+          if failures:
+              sys.exit(1)
+          print('PRIVACY_SMOKE=PASS')
+          PY
