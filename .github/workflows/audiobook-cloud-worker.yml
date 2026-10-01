@@ -63,49 +63,68 @@ jobs:
       job_id: ${{ needs.claim.outputs.job_id }}
       shard_count: ${{ steps.prepare.outputs.shard_count }}
     steps:
+      - name: Gate custom voice cloning before expensive setup
+        id: hf_gate
+        shell: bash
+        run: |
+          set -euo pipefail
+          block_job() {
+            local reason="$1"
+            OIDC_JSON="$(curl --fail --silent --show-error               -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN"               "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=ajk-audiobook-factory")"
+            OIDC_TOKEN="$(printf '%s' "$OIDC_JSON" | jq -r '.value')"
+            jq -n               --arg jobId "${{ needs.claim.outputs.job_id }}"               --arg reason "$reason"               '{op:"workerPreflightResult",jobId:$jobId,qcStatus:"failed",qcScore:0,qcSummary:{reasons:[$reason]},errorDetail:$reason,sections:[]}'               > /tmp/hf-block.json
+            curl --fail --silent --show-error               -H "Authorization: Bearer $OIDC_TOKEN"               -H "Content-Type: application/json"               --data-binary @/tmp/hf-block.json               "https://ipoqyjrojljmbqslmxxf.supabase.co/functions/v1/audiobook-factory"               > /tmp/hf-block-response.json
+            echo "continue=false" >> "$GITHUB_OUTPUT"
+          }
+
+          if [ -z "${HF_TOKEN:-}" ]; then
+            echo "::warning::HF_TOKEN repository secret is missing; custom voice cloning is blocked."
+            block_job "HF_TOKEN is missing. Add the repository secret before using John D. or another cloned voice."
+            exit 0
+          fi
+
+          code="$(curl -sS -o /tmp/hf-model.json -w '%{http_code}'             -H "Authorization: Bearer $HF_TOKEN"             "https://huggingface.co/api/models/kyutai/pocket-tts")"
+          if [ "$code" != "200" ]; then
+            echo "::warning::Hugging Face access to kyutai/pocket-tts is not available (HTTP $code)."
+            block_job "Hugging Face access to kyutai/pocket-tts is not available. Accept the model terms and verify HF_TOKEN."
+            exit 0
+          fi
+
+          echo "continue=true" >> "$GITHUB_OUTPUT"
+          echo "HF_POCKET_TTS_ACCESS=PASS"
+
       - uses: actions/checkout@v4
+        if: steps.hf_gate.outputs.continue == 'true'
 
       - uses: actions/setup-python@v5
+        if: steps.hf_gate.outputs.continue == 'true'
         with:
           python-version: "3.12"
           cache: "pip"
           cache-dependency-path: audiobook-cloud/requirements.txt
 
       - name: Cache TTS and ASR model files only
+        if: steps.hf_gate.outputs.continue == 'true'
         uses: actions/cache@v4
         with:
           path: ~/.cache/huggingface
           key: audiobook-models-${{ runner.os }}-pocket-tts-3.3.0-whisper-base-v1
 
       - name: System audio tools
+        if: steps.hf_gate.outputs.continue == 'true'
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y -qq ffmpeg libsndfile1
 
       - name: Install CPU runtime
+        if: steps.hf_gate.outputs.continue == 'true'
         run: |
           python -m pip install --upgrade pip
           python -m pip install torch --index-url https://download.pytorch.org/whl/cpu
           python -m pip install -r audiobook-cloud/requirements.txt
 
-      - name: Verify Hugging Face token and Pocket TTS gated access
-        run: |
-          set -euo pipefail
-          if [ -z "${HF_TOKEN:-}" ]; then
-            echo "::error::HF_TOKEN repository secret is missing. John D./custom voice cloning cannot run."
-            exit 1
-          fi
-          hf auth whoami
-          python - <<'PY'
-          from huggingface_hub import HfApi
-          api = HfApi()
-          files = api.list_repo_files("kyutai/pocket-tts")
-          if not files:
-              raise SystemExit("Pocket TTS repository returned no files")
-          print("HF_POCKET_TTS_ACCESS=PASS")
-          PY
-
       - name: Parse private manuscript and run pre-production quality gate
+        if: steps.hf_gate.outputs.continue == 'true'
         id: prepare
         run: |
           python audiobook-cloud/worker.py prepare             --job-id "${{ needs.claim.outputs.job_id }}"             --workdir prepared             --shard-count 4
