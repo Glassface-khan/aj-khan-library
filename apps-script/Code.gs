@@ -2688,8 +2688,8 @@ function handle(e) {
  * (Code.gs), nicht ein Ersatz — gleiches Muster wie RevisionModule.gs
  * (siehe dort für den ausführlich dokumentierten Präzedenzfall). Sie fügt
  * ausschließlich NEUE Funktionen und zwei NEUE Aktionen (`getBookmark`,
- * `saveBookmark`) hinzu. Keine bestehende Funktion (getEpubData, checkAccess,
- * getBooks, saveBooks, ...) wird verändert oder überschrieben.
+ * `saveBookmark`) hinzu. Keine bestehende Zugriffs- oder Buchfunktion wird
+ * verändert oder überschrieben.
  *
  * Hintergrund: Der Inline-EPUB-Reader (Abschnitt 16) merkt sich die
  * Leseposition seit Abschnitt 19 rein clientseitig in localStorage — pro
