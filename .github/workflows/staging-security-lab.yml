@@ -21,3 +21,24 @@ jobs:
           node --check /tmp/Code.js
       - name: Run privacy permission harness
         run: node tests/security_privacy_harness.test.js
+      - name: Check live GitHub Pages
+        run: |
+          set -euo pipefail
+          URL="https://glassface-khan.github.io/aj-khan-library/"
+          code="$(curl -L -sS -o /tmp/site.html -w '%{http_code}' "$URL")"
+          echo "LIVE_SITE_HTTP=$code"
+          test "$code" = "200"
+          grep -q "A. J. Khan" /tmp/site.html
+      - name: Check audiobook factory HTML/JS syntax
+        run: |
+          node - <<'NODE'
+          const fs=require('fs');
+          const html=fs.readFileSync('audiobook-factory.html','utf8');
+          const m=html.match(/<script>([\s\S]*?)<\/script>/);
+          if(!m) throw new Error('inline script not found');
+          new Function(m[1]);
+          if(/\$\('#source'\)\.value\s*=\s*['"]{2}/.test(m[1])) throw new Error('source input is still cleared after upload');
+          if(!html.includes('sourceStatus')) throw new Error('persistent source upload status missing');
+          if(!html.includes('matchingExistingJob')) throw new Error('duplicate-job UI guard missing');
+          console.log('AUDIOBOOK_FACTORY_STATIC_TESTS=PASS');
+          NODE
