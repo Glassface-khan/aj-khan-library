@@ -84,38 +84,38 @@ replaceBlock(
 
 // The protected backend is live now. Remove the temporary EPUB fallback that
 // sent a client-supplied Drive URL/ID to the legacy getEpubData action.
-const legacyOpenFetch = String.raw`    const privateFetch = fetch(this.SCRIPT_URL, { method: 'POST', body: epubParams }).then(r => r.json()).then(data => {
-      // AJK private EPUB legacy fallback
-      if (data && !data.ok && /unknown action/i.test(String(data.error || '')) && /^https?:\\/\\/(?:drive|docs)\\.google\\.com\\//i.test(String(epubRef || ''))) {
-        const legacy = new URLSearchParams({ action: 'getEpubData', epubUrl: epubRef, bookTitle: title, intent: 'read', code: code, adminToken: this.state.adminToken || '' });
-        return fetch(this.SCRIPT_URL, { method: 'POST', body: legacy }).then(r => r.json());
-      }
-      return data;
-    });
-    Promise.all([
-      privateFetch,
-      bookmarkFetch
-    ])`;
-const cleanOpenFetch = String.raw`    Promise.all([
-      fetch(this.SCRIPT_URL, { method: 'POST', body: epubParams }).then(r => r.json()),
-      bookmarkFetch
-    ])`;
-if (app.includes(legacyOpenFetch)) app = app.replace(legacyOpenFetch, cleanOpenFetch);
+const openReaderStart = app.indexOf('  openReader = (title, epubRef, langCode) => {');
+if (openReaderStart >= 0) {
+  const privateFetchStart = app.indexOf('    const privateFetch = fetch(', openReaderStart);
+  const promiseStart = privateFetchStart >= 0 ? app.indexOf('    Promise.all([', privateFetchStart) : -1;
+  const promiseEnd = promiseStart >= 0 ? app.indexOf('    ])', promiseStart) : -1;
+  if (privateFetchStart >= 0 && promiseStart >= 0 && promiseEnd >= 0) {
+    const cleanOpenFetch = [
+      '    Promise.all([',
+      "      fetch(this.SCRIPT_URL, { method: 'POST', body: epubParams }).then(r => r.json()),",
+      '      bookmarkFetch',
+      '    ])'
+    ].join('\n');
+    app = app.slice(0, privateFetchStart) + cleanOpenFetch + app.slice(promiseEnd + '    ])'.length);
+  }
+}
 
-const legacyDownloadFetch = String.raw`    fetch(this.SCRIPT_URL, { method: 'POST', body: params })
-      .then(r => r.json())
-      .then(data => {
-        if (data && !data.ok && /unknown action/i.test(String(data.error || '')) && /^https?:\\/\\/(?:drive|docs)\\.google\\.com\\//i.test(String(epubRef || ''))) {
-          const legacy = new URLSearchParams({ action: 'getEpubData', epubUrl: epubRef, bookTitle: title, intent: 'download', code: this.state.visitorAccessCode || '', adminToken: this.state.adminToken || '' });
-          return fetch(this.SCRIPT_URL, { method: 'POST', body: legacy }).then(r => r.json());
-        }
-        return data;
-      })
-      .then(data => {`;
-const cleanDownloadFetch = String.raw`    fetch(this.SCRIPT_URL, { method: 'POST', body: params })
-      .then(r => r.json())
-      .then(data => {`;
-if (app.includes(legacyDownloadFetch)) app = app.replace(legacyDownloadFetch, cleanDownloadFetch);
+const downloadStart = app.indexOf('  downloadEpub = (title, epubRef, langCode) => {');
+if (downloadStart >= 0) {
+  const legacyPos = app.indexOf("action: 'getEpubData'", downloadStart);
+  const downloadEnd = app.indexOf('\n  };', downloadStart);
+  if (legacyPos >= 0 && (downloadEnd < 0 || legacyPos < downloadEnd)) {
+    const fallbackThenStart = app.lastIndexOf('      .then(data => {', legacyPos);
+    const realThenStart = app.indexOf('      .then(data => {', legacyPos + 1);
+    if (fallbackThenStart >= downloadStart && realThenStart > fallbackThenStart) {
+      app = app.slice(0, fallbackThenStart) + app.slice(realThenStart);
+    }
+  }
+}
+
+// Update the old explanatory comment too; no legacy endpoint should remain in
+// the browser bundle after this migration.
+app = app.split('Endpunkt (getEpubData, Base64)').join('Endpunkt (getPrivateEpub, Base64)');
 
 const required = [
   "action: 'getPrivateEpub'",
@@ -129,15 +129,6 @@ const required = [
 ];
 for (const marker of required) {
   if (!app.includes(marker)) throw new Error('Required secure marker missing: ' + marker);
-}
-
-if (app.includes('getEpubData')) {
-  let p = 0, n = 0;
-  while ((p = app.indexOf('getEpubData', p)) >= 0) {
-    n += 1;
-    console.log('LEGACY_SNIPPET_' + n + '=' + app.slice(Math.max(0, p - 260), Math.min(app.length, p + 520)).replace(/\\n/g, ' '));
-    p += 'getEpubData'.length;
-  }
 }
 
 const forbidden = [
