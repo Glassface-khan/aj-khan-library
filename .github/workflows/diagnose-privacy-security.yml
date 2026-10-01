@@ -6,6 +6,7 @@ on:
     paths:
       - '.github/workflows/diagnose-privacy-security.yml'
       - 'apps-script/Code.gs'
+      - 'index.html'
       - 'books-live.json'
       - 'tools/patch_author_site.js'
       - 'tools/patch_live_books.js'
@@ -67,8 +68,12 @@ jobs:
               if not present:
                   failures.append(f'index.html missing {needle}')
 
-          # Legacy route may still exist during transition; report only.
-          print('FRONTEND_getEpubData_LEGACY_COUNT=' + str(index.count('getEpubData')))
+          # The migration is complete: no browser code may retain the legacy
+          # Drive-ID based EPUB path.
+          legacy_count = index.count('getEpubData')
+          print('FRONTEND_getEpubData_LEGACY_COUNT=' + str(legacy_count))
+          if legacy_count:
+              failures.append(f'index.html still contains legacy getEpubData ({legacy_count} occurrence(s))')
 
           # 3) Public live catalogue must be reachable and sanitized.
           data, status = get_json('getBooks')
@@ -125,6 +130,21 @@ jobs:
               err = str(payload.get('error','')).lower()
               if 'unknown action' in err:
                   failures.append(f'{action} is not deployed in live Apps Script')
+
+          # 5) The legacy Drive-ID EPUB endpoint must be gone from the live
+          # deployment, not merely unused by the frontend.
+          legacy_payload, legacy_st = get_json(
+              'getEpubData',
+              epubUrl='legacy-test-id-ABCDEFGHIJKLMNOPQRSTUVWXYZ',
+              bookTitle=test_title,
+              intent='read'
+          )
+          print('LEGACY_getEpubData_STATUS=' + legacy_st)
+          print('LEGACY_getEpubData_PAYLOAD=' + (json.dumps(legacy_payload, ensure_ascii=False)[:500] if legacy_payload is not None else 'NONE'))
+          if not isinstance(legacy_payload, dict):
+              failures.append('Legacy getEpubData probe is not reachable as JSON')
+          elif 'unknown action' not in str(legacy_payload.get('error','')).lower():
+              failures.append('Legacy getEpubData endpoint is still live')
 
           print('PRIVACY_FAILURE_COUNT=' + str(len(failures)))
           for f in failures:
