@@ -2544,21 +2544,24 @@ function handle(e) {
     const bookTitle = e.parameter.bookTitle || '';
     const intent = e.parameter.intent === 'download' ? 'download' : 'read';
 
-    const auth = accessForBookAsset_(e, bookTitle, intent, false);
+    // SECURITY: legacy compatibility must never authorize an EPUB from a
+    // different book. Old Drive IDs may exist in public Git history, so
+    // "known somewhere in the catalogue" is not a sufficient boundary.
+    const requestedBook = findBookByTitle_(bookTitle);
+    if (!requestedBook) return jsonOut({ ok: false, error: 'Buch nicht gefunden.' });
+
+    const auth = accessForBookAsset_(e, requestedBook.title, intent, false);
     if (!auth.ok) return jsonOut({ ok: false, error: 'Kein Zugriff auf dieses Buch.' });
 
-    const books = getBooksArray();
     let known = false;
-    books.forEach(function(b) {
-      if (b.epubUrl && b.epubUrl.indexOf(requestedId) >= 0) known = true;
-      if (b.langs) {
-        Object.keys(b.langs).forEach(function(code) {
-          const entry = b.langs[code];
-          if (entry && entry.epubUrl && entry.epubUrl.indexOf(requestedId) >= 0) known = true;
-        });
-      }
-    });
-    if (!known) return jsonOut({ ok: false, error: 'Unbekannte EPUB-Datei.' });
+    if (requestedBook.epubUrl && requestedBook.epubUrl.indexOf(requestedId) >= 0) known = true;
+    if (requestedBook.langs) {
+      Object.keys(requestedBook.langs).forEach(function(code) {
+        const entry = requestedBook.langs[code];
+        if (entry && entry.epubUrl && entry.epubUrl.indexOf(requestedId) >= 0) known = true;
+      });
+    }
+    if (!known) return jsonOut({ ok: false, error: 'EPUB gehört nicht zu diesem Buch.' });
 
     try {
       const file = DriveApp.getFileById(requestedId);
