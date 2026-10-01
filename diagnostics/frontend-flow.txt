@@ -104,6 +104,96 @@ reibt automatisch die komplette Liste ins Sheet.
       .catch(() => {});
   };
 
+  fetchBooksAdmin = (tokenOverride) => {
+    const token = tokenOverride || this.state.adminToken || '';
+    if (!token) return Promise.resolve(false);
+    const params = new URLSearchParams({ action: 'getBooksAdmin', adminToken: token });
+    return fetch(this.SCRIPT_URL, { method: 'POST', body: params, cache: 'no-store' })
+      .then(r => r.json())
+      .then(data => {
+        if (!data || !data.ok) throw new Error((data && data.error) || 'getBooksAdmin_failed');
+        const books = JSON.parse(data.books || '[]');
+        if (!Array.isArray(books) || !books.length) throw new Error('getBooksAdmin_empty');
+        this._liveBooksLoaded = true;
+        this.setState({ books });
+        try { localStorage.setItem('ajk_author_books_draft', JSON.stringify({ books })); } catch (e) {}
+        return true;
+      })
+      .catch(() => false);
+  };
+
+  fetchBooks = (attempt = 0) => {
+    if (attempt === 0) this.fetchBooksLiveFallback();
+    const url = this.SCRIPT_URL + '?action=getBooks&_=' + Date.now();
+    fetch(url, { cache: 'no-store' })
+      .then(r => {
+        if (!r.ok) throw new Error('getBooks_http_' + r.status);
+        return r.json();
+      })
+      .then(data => {
+        const books = JSON.parse(data.books || '[]');
+        if (!Array.isArray(books) || !books.length) throw new Error('getBooks_empty');
+        this._liveBooksLoaded = true;
+        this.setState({ books });
+        try { localStorage.setItem('ajk_author_books_draft', JSON.stringify({ books })); } catch (e) {}
+      })
+      .catch(() => {
+        if (attempt < 3) {
+          const delay = 900 * (attempt + 1);
+          setTimeout(() => this.fetchBooks(attempt + 1), delay);
+        }
+      });
+  };
+
+  // Server-gespeicherte Seiten-Einstellungen (aktuell: Part-Bilder für die
+  // Poems-Sektion). Analog zu getBooks/saveBooks, eigener SettingsData-Tab
+  // im selben Sheet — läuft ohne Admin-Token (nur Lesen), damit auch
+  // normale Besucher die aktuellen Bilder sehen.
+  fetchSettings = () => {
+    fetch(this.SCRIPT_URL + '?action=getSettings')
+      .then(r => r.json())
+      .then(data => {
+        const settings = JSON.parse(data.settings || '{}');
+        if (settings && typeof settings === 'object') this.setState({ settings, settingsLoaded: true });
+      })
+      .catch(() => this.setState({ settingsLoaded: true })); // Fehlerfall: nicht dauerhaft blockieren, aber Save bleibt riskant
+  };
+
+  // Nimmt sowohl einen normalen Drive-"Freigeben"-Link
+  // (.../file/d/ID/view?us
+
+=== ajk_author_books_draft #3 @ 223819 ===
+rn r.json();
+      })
+      .then(data => {
+        const raw = data && data.books;
+        const books = (typeof raw === 'string') ? JSON.parse(raw || '[]') : raw;
+        if (!Array.isArray(books) || !books.length) throw new Error('books_live_empty');
+        if (this._liveBooksLoaded) return;
+        this.setState({ books });
+        try { localStorage.setItem('ajk_author_books_draft', JSON.stringify({ books })); } catch (e) {}
+      })
+      .catch(() => {});
+  };
+
+  fetchBooksAdmin = (tokenOverride) => {
+    const token = tokenOverride || this.state.adminToken || '';
+    if (!token) return Promise.resolve(false);
+    const params = new URLSearchParams({ action: 'getBooksAdmin', adminToken: token });
+    return fetch(this.SCRIPT_URL, { method: 'POST', body: params, cache: 'no-store' })
+      .then(r => r.json())
+      .then(data => {
+        if (!data || !data.ok) throw new Error((data && data.error) || 'getBooksAdmin_failed');
+        const books = JSON.parse(data.books || '[]');
+        if (!Array.isArray(books) || !books.length) throw new Error('getBooksAdmin_empty');
+        this._liveBooksLoaded = true;
+        this.setState({ books });
+        try { localStorage.setItem('ajk_author_books_draft', JSON.stringify({ books })); } catch (e) {}
+        return true;
+      })
+      .catch(() => false);
+  };
+
   fetchBooks = (attempt = 0) => {
     if (attempt === 0) this.fetchBooksLiveFallback();
     const url = this.SCRIPT_URL + '?action=getBooks&_=' + Date.now();
@@ -159,23 +249,21 @@ reibt automatisch die komplette Liste ins Sheet.
 
   setPartImage = (label, e) => {
     const url = this.normalizeDriveImageUrl(e.target.value);
-    this.setState(s => ({ settings: {
+    this.setS
 
-=== ajk_author_books_draft #3 @ 223678 ===
-  return fetch(url, { cache: 'no-store' })
-      .then(r => {
-        if (!r.ok) throw new Error('books_live_http_' + r.status);
-        return r.json();
-      })
+=== ajk_author_books_draft #4 @ 224535 ===
+  return fetch(this.SCRIPT_URL, { method: 'POST', body: params, cache: 'no-store' })
+      .then(r => r.json())
       .then(data => {
-        const raw = data && data.books;
-        const books = (typeof raw === 'string') ? JSON.parse(raw || '[]') : raw;
-        if (!Array.isArray(books) || !books.length) throw new Error('books_live_empty');
-        if (this._liveBooksLoaded) return;
+        if (!data || !data.ok) throw new Error((data && data.error) || 'getBooksAdmin_failed');
+        const books = JSON.parse(data.books || '[]');
+        if (!Array.isArray(books) || !books.length) throw new Error('getBooksAdmin_empty');
+        this._liveBooksLoaded = true;
         this.setState({ books });
         try { localStorage.setItem('ajk_author_books_draft', JSON.stringify({ books })); } catch (e) {}
+        return true;
       })
-      .catch(() => {});
+      .catch(() => false);
   };
 
   fetchBooks = (attempt = 0) => {
@@ -248,96 +336,30 @@ reibt automatisch die komplette Liste ins Sheet.
     if (!this.state.settingsLoaded) {
       // Schutz gegen Überschreiben: die vorher gespeicherten Werte sin
 
-=== ajk_author_books_draft #4 @ 260601 ===
- () => {
-    localStorage.removeItem('ajk_author_unlocked');
-    localStorage.removeItem('ajk_visitor_access');
-    this.setState({ isUnlocked: false, visitorName: '', visitorCanDownload: false, visitorCanCopy: false });
-  };
-
-  addPoem = () => {
-    const np = { title: '', part: '', text: '' };
-    this.setState(s => ({ poems: [...s.poems, np], editingIndex: s.poems.length, forms: { ...s.forms, [s.poems.length]: { ...np } } }));
-  };
-  editPoem = (i) => this.setState(s => ({ editingIndex: i, forms: { ...s.forms, [i]: { ...s.poems[i] } } }));
-  cancelEdit = (i) => this.setState({ editingIndex: null });
-  setFormField = (i, field, value) => this.setState(s => ({ forms: { ...s.forms, [i]: { ...s.forms[i], [field]: value } } }));
-  savePoem = (i) => {
-    this.setState(s => {
-      const poems = s.poems.map((p, idx) => idx === i ? { ...s.forms[i] } : p);
-      return { poems, editingIndex: null };
-    }, () => this.persistPoems());
-  };
-  removePoem = (i) => {
-    if (!window.confirm('Delete this poem?')) return;
-    this.setState(s => ({ poems: s.poems.filter((_, idx) => idx !== i), poemIndex: 0 }), () => this.persistPoems());
-  };
-
-  persistBooks() {
-    try { localStorage.setItem('ajk_author_books_draft', JSON.stringify({ books: this.state.books })); } catch (e) { window.alert('Speichern fehlgeschlagen — Bild evtl. zu groß.'); }
-    const params = new URLSearchParams({ action: 'saveBooks', books: JSON.stringify(this.state.books), adminToken: this.state.adminToken });
-    // Frueher wurde ein Fehlschlagen hier stillschweigend verschluckt (leeres
-    // .catch) — die UI zeigte die Aenderung (aus dem State) trotzdem an, obwohl
-    // sie serverseitig NICHT gespeichert wurde (z.B. abgelaufenes Admin-Token
-    // nach 24h). Ergebnis: ein Buch schien angelegt, verschwand aber beim
-    // naechsten Laden wieder spurlos, ohne jede Fehlermeldung. Jetzt mit klarer
-    // Rueckmeldung.
-    fetch(this.SCRIPT_URL, { method: 'POST', body: params })
-      .then(r => r.json())
-      .then(data => {
-        if (!data.ok) window.alert('Speichern auf dem Server fehlgeschlagen — die Änderung ist NUR lokal in diesem Browser sichtbar, NICHT fuer andere! Grund: ' + (data.error || 'unbekannt') + '. Bitte einmal aus- und wieder als Admin einloggen und danach erneut speichern.'); else this.showSavedToast();
-      })
-      .catch(() => window.alert('Verbindung zum Server fehlgeschlagen — die Änderung ist NUR lokal in diesem Browser sichtbar, NICHT fuer andere! Bitte erneut versuchen.'));
-  }
-  // Alt-Cover DIREKT vom Geraet hochladen (kein Drive noetig), Mehrfach-
-  // Auswahl erlaubt. Gleiches Prinzip wie handleCoverFile: client-seitig
-  // verkleinern/komprimieren und als Data-URL direkt im Buch-Datensatz
-  // speichern. Etwas grosszuegigerer Groessen-Deckel als beim Haupt-Cover
-  // (Galerie-Bilder duerfen etwas groesser sein), aber weiterhin klein
-  // genug, um mehrere Stueck in einer Sheet-Zelle unterzubringen.
-  // Transiente Upload-UI-Werte (Sprachcode, Fertig/Entwurf, Lade-Status)
-  // pro Buch -- bewusst NICHT in bookForms[i] (das wird beim Speichern 1:1
-  // in den Buch-Datensatz uebernommen, wuerde also unerwuenscht mitgespeichert).
-  getUploadState(i) {
-    return this.state.uploadState[i] || { langCode: 'DE', kind: 'FINAL', busy: false, klappentextBusy: false, message: '' };
-  }
-  setUploadField(i, field, value) {
-    this.setState((s) => ({ uploadState: { ...s.uploadState, [i]: { ...this.getUploadState(i), [field]: value } } }));
-  }
-  // Datei als reinen Base64-String lesen (kein Bild, keine Komprimierung --
-  // Manuskripte/Klappentexte muessen unveraendert ankommen). data:-URL-Praefix
-  // vor dem eigentlichen Base64-Teil wird abgeschnitten.
-  readFileAsBase64_(file) {
-    return new Promise((resolve, reject) => {
-      const reader = new 
-
-=== ?action=getBooks #1 @ 223216 ===
- if (Array.isArray(poems) && poems.length) {
-          this.setState({ poems });
-          localStorage.setItem('ajk_author_poems_draft', JSON.stringify({ poems }));
-        }
-      })
-      .catch(() => {});
-  };
-
-  fetchBooksLiveFallback = () => {
-    // AJK books-live fallback: same-origin, fast and deploy-coupled.
-    // BooksData remains canonical; this prevents stale bundled/localStorage catalogues.
-    const url = 'books-live.json?_=' + Date.now();
-    return fetch(url, { cache: 'no-store' })
-      .then(r => {
-        if (!r.ok) throw new Error('books_live_http_' + r.status);
-        return r.json();
-      })
-      .then(data => {
-        const raw = data && data.books;
-        const books = (typeof raw === 'string') ? JSON.parse(raw || '[]') : raw;
-        if (!Array.isArray(books) || !books.length) throw new Error('books_live_empty');
+=== ?action=getBooks #1 @ 224073 ===
         if (this._liveBooksLoaded) return;
         this.setState({ books });
         try { localStorage.setItem('ajk_author_books_draft', JSON.stringify({ books })); } catch (e) {}
       })
       .catch(() => {});
+  };
+
+  fetchBooksAdmin = (tokenOverride) => {
+    const token = tokenOverride || this.state.adminToken || '';
+    if (!token) return Promise.resolve(false);
+    const params = new URLSearchParams({ action: 'getBooksAdmin', adminToken: token });
+    return fetch(this.SCRIPT_URL, { method: 'POST', body: params, cache: 'no-store' })
+      .then(r => r.json())
+      .then(data => {
+        if (!data || !data.ok) throw new Error((data && data.error) || 'getBooksAdmin_failed');
+        const books = JSON.parse(data.books || '[]');
+        if (!Array.isArray(books) || !books.length) throw new Error('getBooksAdmin_empty');
+        this._liveBooksLoaded = true;
+        this.setState({ books });
+        try { localStorage.setItem('ajk_author_books_draft', JSON.stringify({ books })); } catch (e) {}
+        return true;
+      })
+      .catch(() => false);
   };
 
   fetchBooks = (attempt = 0) => {
@@ -607,7 +629,7 @@ ions: keep long-lived browser/PWA
         const books = (typeof raw === 'string') ? JSON.parse(raw || '[]') : raw;
         if (!Array.isArray(books) || !books.length) throw 
 
-=== visitorVisibleBooks #4 @ 254742 ===
+=== visitorVisibleBooks #4 @ 260145 ===
 chRatings();
       })
       .catch(() => {});
@@ -677,7 +699,7 @@ chRatings();
       .then(data => {
         if (!data.ok) window.alert('Speichern auf dem Server fehlgeschlagen — die Änderung ist NUR lokal in diesem Browser sichtbar, NICHT fuer andere! Grund: ' + (data.error || 'unbekannt') + '. Bitte einmal aus- und wieder als Admin einloggen und danach erneut speichern.'); else thi
 
-=== visibleBooksSourceRaw #1 @ 288948 ===
+=== visibleBooksSourceRaw #1 @ 294526 ===
 isionMsg: 'Manuskript gespeichert.' });
         this.fetchRevisionManuscripts(this.state.revisionSelectedNovelId);
       })
@@ -737,7 +759,7 @@ isionMsg: 'Manuskript gespeichert.' });
     const ui = uiStrings[s.uiLang] || uiStrings.de;
     const bookViewToggleLabel =
 
-=== visibleBooksSourceRaw #2 @ 289394 ===
+=== visibleBooksSourceRaw #2 @ 294972 ===
 anuscriptDetails[id]) {
       const params = new URLSearchParams({ action: 'revisionGetManuscript', adminToken: this.state.adminToken, id });
       fetch(this.SCRIPT_URL + '?' + params.toString())
@@ -797,7 +819,7 @@ anuscriptDetails[id]) {
       const myStars = draft.stars || 0;
       // Mehrsprachige Bücher (book.l
 
-=== visibleBooksSourceRaw #3 @ 289517 ===
+=== visibleBooksSourceRaw #3 @ 295095 ===
 adminToken, id });
       fetch(this.SCRIPT_URL + '?' + params.toString())
         .then(r => r.json())
@@ -857,7 +879,7 @@ adminToken, id });
       // Mehrsprachige Bücher (book.langs = { EN: {coverUrl,hook,pdfUrl,wordCount}, DE: {...} }):
       // aktive Sprache bestimmt Cover/Klappentext/Read-Link/W
 
-=== visibleBooksSourceRaw #4 @ 289879 ===
+=== visibleBooksSourceRaw #4 @ 295457 ===
 ;
     // Manche Zugangscodes dürfen nur eine Teilmenge der Bücher sehen
     // (visitorVisibleBooks = null heißt: alle sichtbar). Admin sieht beim
@@ -1129,14 +1151,13 @@ derToc: [], readerTocOpen: false, readerProgress: 0, readerSpeaking: false, rati
       .catch(() => {});
   };
 
-  fetchBooks = (attempt = 0) => {
-    if (attempt === 0) this.fetchBooksLiveFallback();
-    const url = this.SCRIPT_URL + '?action=getBooks&_=' + Date.now();
-    fetch(url, { cache: 'no-store' })
-      .then(r => {
-        if (!r.ok) throw new Error('getBooks_http_' + r.s
+  fetchBooksAdmin = (tokenOverride) => {
+    const token = tokenOverride || this.state.adminToken || '';
+    if (!token) return Promise.resolve(false);
+    const params = new URLSearchParams({ action: 'getBooksAdmin', adminToken: token });
+    return fetch(this.SCRIPT_URL
 
-=== persistBooks #1 @ 255348 ===
+=== persistBooks #1 @ 260751 ===
 ta.visibleBooks) ? data.visibleBooks : null,
             showPoems: data.showPoems !== false,
             code: this.state.viewerCodeInput,
@@ -1199,7 +1220,7 @@ ta.visibleBooks) ? data.visibleBooks : null,
   openPartAndJumpToFirst = (i, firstIdx) => this.setState({ poemIndex: firstIdx, openTocPart: i });
   jumpToPoem = (idx) => this.setState({ poemIndex: idx, openTocPart: -1
 
-=== persistBooks #2 @ 256895 ===
+=== persistBooks #2 @ 262298 ===
 SavedToast = (msg) => {
     clearTimeout(this._savedToastTimer);
     this.setState({ savedToast: msg || 'Gespeichert ✓' });
@@ -1245,7 +1266,7 @@ SavedToast = (msg) => {
         if (data.ok && data.adminToken) {
           localStorage.setItem('ajk_author_admin', '1');
           localStorage.setItem('ajk_admin_token', data.adminToken);
-          this.setState({ isAdmin: true, adminToken: data.adminToken, showAdminLogin: false, adminPasswordInput: '' }, () => { this.fetchAccessList(); this.fetchRevisionNovels(); });
+          this.setState({ isAdmin: true, adminToken: data.adminToken, showAdminLogin: false, adminPasswordInput: '' }, () => { this.fetchBooksAdmin(data.adminToken); this.fetchAccessList(); this.fetchRevisionNovels(); });
         } else {
           this.setState({ adminError: 'Incorrect password.' });
         }
@@ -1256,14 +1277,12 @@ SavedToast = (msg) => {
   signOut = () => {
     localStorage.removeItem('ajk_author_admin');
     localStorage.removeItem('ajk_admin_token');
-    this.setState({ isAdmin: false, adminToken: '', editingIndex: null });
-  };
-  lockPage = () => {
-    localStorage.removeItem('ajk_author_unlocked');
-    localStorage.removeItem('ajk_
+    try { localStorage.removeItem('ajk_author_books_draft'); } catch (e) {}
+    this._liveBooksLoaded = false;
+    this.setState({ isAdmin: false, 
 
-=== persistBooks #3 @ 260552 ===
-ken: '', editingIndex: null });
+=== persistBooks #3 @ 266130 ===
+ll }, () => this.fetchBooks());
   };
   lockPage = () => {
     localStorage.removeItem('ajk_author_unlocked');
@@ -1326,7 +1345,7 @@ ken: '', editingIndex: null });
   readFileAsBase64_(file) {
     return new Promise
 
-=== persistBooks #4 @ 267704 ===
+=== persistBooks #4 @ 273282 ===
  ihn ins Buch (State + Formular)
   // und speichert, bevor der eigentliche Upload wie gewohnt weiterlaeuft.
   // Findet die EPUB keinen Titel, bleibt alles unveraendert und der
