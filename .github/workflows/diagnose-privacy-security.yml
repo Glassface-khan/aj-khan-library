@@ -138,6 +138,15 @@ jobs:
               if 'unknown action' in err:
                   failures.append(f'{action} is not deployed in live Apps Script')
 
+          # 4b) Verify the exact deployed privacy-maintenance build.
+          build_payload, build_st = get_json('privacyBuildInfo')
+          print('PRIVACY_BUILD_STATUS=' + build_st)
+          print('PRIVACY_BUILD_PAYLOAD=' + (json.dumps(build_payload, ensure_ascii=False)[:500] if build_payload is not None else 'NONE'))
+          if not isinstance(build_payload, dict):
+              failures.append('privacyBuildInfo is not live/reachable as JSON')
+          elif build_payload.get('privacyBuild') != '2026-10-01-v2v3-permissions-fix':
+              failures.append('latest v2/v3 Drive-permission privacy build is not deployed')
+
           # 5) The legacy Drive-ID EPUB endpoint must be gone from the live
           # deployment, not merely unused by the frontend.
           legacy_payload, legacy_st = get_json(
