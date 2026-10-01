@@ -21,6 +21,7 @@ assert(edge.includes('reused: true'),'backend does not return reused marker');
 
 assert(worker.includes('HF_TOKEN: $'+'{{ secrets.HF_TOKEN }}'),'worker is not wired to repository HF_TOKEN secret');
 assert(worker.includes('HF_POCKET_TTS_ACCESS=PASS'),'gated model access preflight missing');
-assert(worker.includes('hf auth whoami'),'HF token validity preflight missing');
+assert(worker.includes('workerPreflightResult'),'missing graceful job block when HF access is unavailable');
+assert(worker.includes('https://huggingface.co/api/models/kyutai/pocket-tts'),'HF gated-model access preflight missing');
 
 console.log('AUDIOBOOK_STAGING_TESTS=PASS');
