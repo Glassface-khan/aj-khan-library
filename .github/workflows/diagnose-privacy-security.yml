@@ -144,8 +144,8 @@ jobs:
           print('PRIVACY_BUILD_PAYLOAD=' + (json.dumps(build_payload, ensure_ascii=False)[:500] if build_payload is not None else 'NONE'))
           if not isinstance(build_payload, dict):
               failures.append('privacyBuildInfo is not live/reachable as JSON')
-          elif build_payload.get('privacyBuild') != '2026-10-01-v2v3-permissions-fix':
-              failures.append('latest v2/v3 Drive-permission privacy build is not deployed')
+          elif build_payload.get('privacyBuild') != '2026-10-01-direct-ref-permissions-fix':
+              failures.append('latest direct-reference Drive-permission privacy build is not deployed')
 
           # 5) The legacy Drive-ID EPUB endpoint must be gone from the live
           # deployment, not merely unused by the frontend.
