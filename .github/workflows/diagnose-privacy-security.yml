@@ -28,7 +28,7 @@ jobs:
           live = pathlib.Path('books-live.json').read_text(encoding='utf-8', errors='replace')
           failures = []
 
-          urls = sorted(set(re.findall(r'https://script\\.google\\.com/macros/s/[A-Za-z0-9_-]+/exec', index)))
+          urls = sorted(set(re.findall(r'https://script[.]google[.]com/macros/s/[A-Za-z0-9_-]+/exec', index)))
           if len(urls) != 1:
               failures.append(f'Expected exactly one Apps Script URL in index.html, found {len(urls)}')
               gas = urls[0] if urls else ''
