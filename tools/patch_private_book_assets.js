@@ -81,6 +81,42 @@ replaceBlock(
   'private Alt-cover handler'
 );
 
+
+// The protected backend is live now. Remove the temporary EPUB fallback that
+// sent a client-supplied Drive URL/ID to the legacy getEpubData action.
+const legacyOpenFetch = String.raw`    const privateFetch = fetch(this.SCRIPT_URL, { method: 'POST', body: epubParams }).then(r => r.json()).then(data => {
+      // AJK private EPUB legacy fallback
+      if (data && !data.ok && /unknown action/i.test(String(data.error || '')) && /^https?:\\/\\/(?:drive|docs)\\.google\\.com\\//i.test(String(epubRef || ''))) {
+        const legacy = new URLSearchParams({ action: 'getEpubData', epubUrl: epubRef, bookTitle: title, intent: 'read', code: code, adminToken: this.state.adminToken || '' });
+        return fetch(this.SCRIPT_URL, { method: 'POST', body: legacy }).then(r => r.json());
+      }
+      return data;
+    });
+    Promise.all([
+      privateFetch,
+      bookmarkFetch
+    ])`;
+const cleanOpenFetch = String.raw`    Promise.all([
+      fetch(this.SCRIPT_URL, { method: 'POST', body: epubParams }).then(r => r.json()),
+      bookmarkFetch
+    ])`;
+if (app.includes(legacyOpenFetch)) app = app.replace(legacyOpenFetch, cleanOpenFetch);
+
+const legacyDownloadFetch = String.raw`    fetch(this.SCRIPT_URL, { method: 'POST', body: params })
+      .then(r => r.json())
+      .then(data => {
+        if (data && !data.ok && /unknown action/i.test(String(data.error || '')) && /^https?:\\/\\/(?:drive|docs)\\.google\\.com\\//i.test(String(epubRef || ''))) {
+          const legacy = new URLSearchParams({ action: 'getEpubData', epubUrl: epubRef, bookTitle: title, intent: 'download', code: this.state.visitorAccessCode || '', adminToken: this.state.adminToken || '' });
+          return fetch(this.SCRIPT_URL, { method: 'POST', body: legacy }).then(r => r.json());
+        }
+        return data;
+      })
+      .then(data => {`;
+const cleanDownloadFetch = String.raw`    fetch(this.SCRIPT_URL, { method: 'POST', body: params })
+      .then(r => r.json())
+      .then(data => {`;
+if (app.includes(legacyDownloadFetch)) app = app.replace(legacyDownloadFetch, cleanDownloadFetch);
+
 const required = [
   "action: 'getPrivateEpub'",
   "'listPrivateBookAssets'",
@@ -99,7 +135,8 @@ const forbidden = [
   "readHref: (canRead && effPdfUrl) ? effPdfUrl",
   "bgHref: (canRead && b.bgUrl) ? b.bgUrl",
   "videoHref: (canRead && b.videoUrl) ? b.videoUrl",
-  "downloadEpub(b.title, effEpubUrl);"
+  "downloadEpub(b.title, effEpubUrl);",
+  "getEpubData"
 ];
 for (const marker of forbidden) {
   if (app.includes(marker)) throw new Error('Legacy private-link marker still present: ' + marker);
