@@ -2126,6 +2126,9 @@ function syncDriveForAllBooks() {
             changed = true;
             logDriveSync(logSheet, b.title, 'Alt-Cover-Bilder aktualisiert: ' + newAltCovers.length + ' Bild(er).');
           }
+        } else {
+          if (b.altUrl) { b.altUrl = ''; changed = true; }
+          if (Array.isArray(b.altCovers) && b.altCovers.length) { b.altCovers = []; changed = true; }
         }
       } catch (err) {
         logDriveSync(logSheet, b.title, 'Alt-Cover-Fehler: ' + err.message);
@@ -2143,6 +2146,10 @@ function syncDriveForAllBooks() {
             changed = true;
             logDriveSync(logSheet, b.title, 'Background-Link (Extern-Ordner) aktualisiert.');
           }
+        } else if (b.bgUrl) {
+          b.bgUrl = '';
+          changed = true;
+          logDriveSync(logSheet, b.title, 'Stale Background-Referenz entfernt.');
         }
       } catch (err) {
         logDriveSync(logSheet, b.title, 'Background-Fehler: ' + err.message);
@@ -2161,6 +2168,10 @@ function syncDriveForAllBooks() {
             changed = true;
             logDriveSync(logSheet, b.title, 'Video übernommen: ' + videoFile.getName());
           }
+        } else if (b.videoUrl) {
+          b.videoUrl = '';
+          changed = true;
+          logDriveSync(logSheet, b.title, 'Stale Video-Referenz entfernt.');
         }
       } catch (err) {
         logDriveSync(logSheet, b.title, 'Video-Fehler: ' + err.message);
