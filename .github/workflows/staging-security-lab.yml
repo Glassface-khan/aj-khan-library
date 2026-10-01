@@ -1,0 +1,87 @@
+name: Staging security lab
+
+on:
+  push:
+    branches:
+      - staging/security-lab
+    paths:
+      - 'apps-script/Code.gs'
+      - 'audiobook-factory.html'
+      - 'audiobook-cloud/**'
+      - 'staging/supabase/audiobook-factory/**'
+      - 'tests/security_privacy_harness.test.js'
+      - 'tests/audiobook_factory_staging.test.js'
+      - '.github/workflows/audiobook-cloud-worker.yml'
+      - '.github/workflows/staging-security-lab.yml'
+  workflow_dispatch:
+
+jobs:
+  security-lab:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Syntax-check Apps Script
+        run: |
+          cp apps-script/Code.gs /tmp/Code.js
+          node --check /tmp/Code.js
+      - name: Run privacy permission harness
+        run: node tests/security_privacy_harness.test.js
+      - name: Check live GitHub Pages
+        run: |
+          set -euo pipefail
+          URL="https://glassface-khan.github.io/aj-khan-library/"
+          code="$(curl -L -sS -o /tmp/site.html -w '%{http_code}' "$URL")"
+          echo "LIVE_SITE_HTTP=$code"
+          test "$code" = "200"
+          grep -q "A. J. Khan" /tmp/site.html
+      - name: Check HF token secret presence
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        run: |
+          if [ -z "$HF_TOKEN" ]; then
+            echo "HF_SECRET_PRESENT=false"
+            echo "::warning::HF_TOKEN is still missing; John D./custom voice cloning remains blocked."
+          else
+            echo "HF_SECRET_PRESENT=true"
+          fi
+
+      - name: Verify HF Pocket TTS gated access
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [ -z "$HF_TOKEN" ]; then
+            echo "HF_POCKET_TTS_ACCESS=SKIPPED_NO_SECRET"
+            exit 0
+          fi
+          code="$(curl -sS -o /tmp/hf-model.json -w '%{http_code}'             -H "Authorization: Bearer $HF_TOKEN"             "https://huggingface.co/api/models/kyutai/pocket-tts")"
+          echo "HF_POCKET_TTS_HTTP=$code"
+          test "$code" = "200"
+          echo "HF_POCKET_TTS_ACCESS=PASS"
+
+      - name: Run audiobook staging regression tests
+        run: node tests/audiobook_factory_staging.test.js
+
+      - name: Check audiobook worker Python syntax
+        run: python -m py_compile audiobook-cloud/worker.py
+
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+
+      - name: Check staged Supabase Edge Function
+        run: deno check staging/supabase/audiobook-factory/index.ts
+
+      - name: Check audiobook factory HTML/JS syntax
+        run: |
+          node - <<'NODE'
+          const fs=require('fs');
+          const html=fs.readFileSync('audiobook-factory.html','utf8');
+          const m=html.match(/<script>([\s\S]*?)<\/script>/);
+          if(!m) throw new Error('inline script not found');
+          new Function(m[1]);
+          if(/\$\('#source'\)\.value\s*=\s*['"]{2}/.test(m[1])) throw new Error('source input is still cleared after upload');
+          if(!html.includes('sourceStatus')) throw new Error('persistent source upload status missing');
+          if(!html.includes('matchingExistingJob')) throw new Error('duplicate-job UI guard missing');
+          console.log('AUDIOBOOK_FACTORY_STATIC_TESTS=PASS');
+          NODE
