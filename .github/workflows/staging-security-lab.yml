@@ -1,0 +1,23 @@
+name: Staging security lab
+
+on:
+  push:
+    branches:
+      - staging/security-lab
+    paths:
+      - 'apps-script/Code.gs'
+      - 'tests/security_privacy_harness.test.js'
+      - '.github/workflows/staging-security-lab.yml'
+  workflow_dispatch:
+
+jobs:
+  security-lab:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Syntax-check Apps Script
+        run: |
+          cp apps-script/Code.gs /tmp/Code.js
+          node --check /tmp/Code.js
+      - name: Run privacy permission harness
+        run: node tests/security_privacy_harness.test.js
