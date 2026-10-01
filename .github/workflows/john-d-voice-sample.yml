@@ -1,0 +1,73 @@
+name: John D Voice Sample
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/john-d-voice-sample.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+env:
+  PYTHONUNBUFFERED: "1"
+  OMP_NUM_THREADS: "2"
+  MKL_NUM_THREADS: "2"
+  TOKENIZERS_PARALLELISM: "false"
+
+jobs:
+  sample:
+    name: Render John D sample
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      HF_TOKEN: ${{ secrets.HF_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+          cache-dependency-path: audiobook-cloud/requirements.txt
+
+      - name: Verify Pocket TTS gated access
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${HF_TOKEN:-}"
+          code="$(curl -sS -o /tmp/hf-model.json -w '%{http_code}'             -H "Authorization: Bearer $HF_TOKEN"             "https://huggingface.co/api/models/kyutai/pocket-tts")"
+          test "$code" = "200"
+
+      - name: System audio tools
+        shell: bash
+        run: |
+          set -euo pipefail
+          if command -v ffmpeg >/dev/null 2>&1 && ldconfig -p 2>/dev/null | grep -q 'libsndfile\.so'; then
+            echo "Audio dependencies already available."
+            exit 0
+          fi
+          export DEBIAN_FRONTEND=noninteractive
+          timeout 180s sudo apt-get -o Acquire::Retries=3 -o DPkg::Lock::Timeout=60 update -qq
+          timeout 180s sudo apt-get -o Acquire::Retries=3 -o DPkg::Lock::Timeout=60 install -y -qq --no-install-recommends ffmpeg libsndfile1
+
+      - name: Install CPU runtime
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install torch --index-url https://download.pytorch.org/whl/cpu
+          python -m pip install -r audiobook-cloud/requirements.txt
+
+      - name: Render isolated sample
+        run: |
+          cd audiobook-cloud
+          python voice_sample.py             --job-id "3fd7f558-71df-4e3e-b120-960d13e85db0"             --output-dir ../voice-sample
+
+      - name: Upload private review sample
+        uses: actions/upload-artifact@v4
+        with:
+          name: john-d-voice-sample
+          path: voice-sample/john_d_voice_sample.mp3
+          if-no-files-found: error
+          retention-days: 1
