@@ -5,6 +5,7 @@ on:
     branches: [main]
     paths:
       - ".github/workflows/john-d-voice-sample.yml"
+      - "audiobook-cloud/voice_sample.py"
   workflow_dispatch:
 
 permissions:
