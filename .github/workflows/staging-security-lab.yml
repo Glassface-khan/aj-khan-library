@@ -45,6 +45,20 @@ jobs:
             echo "HF_SECRET_PRESENT=true"
           fi
 
+      - name: Verify HF Pocket TTS gated access
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [ -z "$HF_TOKEN" ]; then
+            echo "HF_POCKET_TTS_ACCESS=SKIPPED_NO_SECRET"
+            exit 0
+          fi
+          code="$(curl -sS -o /tmp/hf-model.json -w '%{http_code}'             -H "Authorization: Bearer $HF_TOKEN"             "https://huggingface.co/api/models/kyutai/pocket-tts")"
+          echo "HF_POCKET_TTS_HTTP=$code"
+          test "$code" = "200"
+          echo "HF_POCKET_TTS_ACCESS=PASS"
+
       - name: Run audiobook staging regression tests
         run: node tests/audiobook_factory_staging.test.js
 
