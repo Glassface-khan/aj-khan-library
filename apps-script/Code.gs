@@ -855,31 +855,37 @@ function firstVideoFile_(folder) {
 // SECURITY: revoke public/domain link sharing from a Drive item while keeping
 // owner + explicitly named-user permissions intact. Security failures MUST
 // surface; they are never swallowed.
+function drivePermissionItems_(resp) {
+  // Advanced Drive service compatibility:
+  // v3 returns "permissions"; v2 returns "items".
+  if (!resp) return [];
+  if (Array.isArray(resp.permissions)) return resp.permissions;
+  if (Array.isArray(resp.items)) return resp.items;
+  return [];
+}
+
 function removeGeneralDrivePermissions_(fileId) {
   let pageToken = null;
+  let removed = 0;
   do {
-    const args = {
-      fields: 'nextPageToken,permissions(id,type,role)',
-      supportsAllDrives: true
-    };
+    const args = {};
     if (pageToken) args.pageToken = pageToken;
     const resp = Drive.Permissions.list(fileId, args);
-    const perms = (resp && resp.permissions) || [];
+    const perms = drivePermissionItems_(resp);
     perms.forEach(function(p) {
       if (p && (p.type === 'anyone' || p.type === 'domain')) {
-        Drive.Permissions.remove(fileId, p.id, { supportsAllDrives: true });
+        Drive.Permissions.remove(fileId, p.id);
+        removed++;
       }
     });
     pageToken = (resp && resp.nextPageToken) || null;
   } while (pageToken);
+  return removed;
 }
 
 function assertNoGeneralDrivePermissions_(fileId) {
-  const resp = Drive.Permissions.list(fileId, {
-    fields: 'permissions(id,type,role)',
-    supportsAllDrives: true
-  });
-  const leaked = ((resp && resp.permissions) || []).filter(function(p) {
+  const resp = Drive.Permissions.list(fileId);
+  const leaked = drivePermissionItems_(resp).filter(function(p) {
     return p && (p.type === 'anyone' || p.type === 'domain');
   });
   if (leaked.length) {
@@ -889,18 +895,16 @@ function assertNoGeneralDrivePermissions_(fileId) {
 }
 
 function makeDriveItemPrivate_(item) {
-  if (!item) return;
+  if (!item) return 0;
   const fileId = item.getId();
 
-  // Built-in Drive service first: switch the general-access class to PRIVATE.
-  // Google documents PRIVATE as "only explicitly granted users". Preserve the
-  // current sharing permission value because setSharing() expects both args.
-  item.setSharing(DriveApp.Access.PRIVATE, item.getSharingPermission());
+  // Built-in Drive service first.
+  item.setSharing(DriveApp.Access.PRIVATE, DriveApp.Permission.VIEW);
 
-  // Belt-and-suspenders: explicitly delete any stale anyone/domain permission
-  // objects through the Advanced Drive service, then verify the result.
-  removeGeneralDrivePermissions_(fileId);
+  // Explicitly delete stale anyone/domain permission objects and verify.
+  const removed = removeGeneralDrivePermissions_(fileId);
   assertNoGeneralDrivePermissions_(fileId);
+  return removed;
 }
 
 function makeFolderDirectContentsPrivate_(folder) {
@@ -913,12 +917,13 @@ function makeFolderDirectContentsPrivate_(folder) {
 }
 
 function makeFolderTreePrivate_(folder) {
-  if (!folder) return;
-  makeDriveItemPrivate_(folder);
+  if (!folder) return 0;
+  let removed = makeDriveItemPrivate_(folder) || 0;
   const files = folder.getFiles();
-  while (files.hasNext()) makeDriveItemPrivate_(files.next());
+  while (files.hasNext()) removed += (makeDriveItemPrivate_(files.next()) || 0);
   const folders = folder.getFolders();
-  while (folders.hasNext()) makeFolderTreePrivate_(folders.next());
+  while (folders.hasNext()) removed += (makeFolderTreePrivate_(folders.next()) || 0);
+  return removed;
 }
 
 // One-time/manual safety sweep for all private website assets. Main cover
@@ -929,6 +934,7 @@ function hardenPrivateAssetsNow() {
   const books = getBooksArray();
   let booksChecked = 0;
   let foldersChecked = 0;
+  let permissionsRemoved = 0;
   const hardenedIds = {};
 
   books.forEach(function(book) {
@@ -942,7 +948,7 @@ function hardenPrivateAssetsNow() {
       const it = bookFolder.getFoldersByName(name);
       while (it.hasNext()) {
         const folder = it.next();
-        makeFolderTreePrivate_(folder);
+        permissionsRemoved += makeFolderTreePrivate_(folder);
         hardenedIds[folder.getId()] = true;
         foldersChecked++;
       }
@@ -954,7 +960,7 @@ function hardenPrivateAssetsNow() {
       const altIt = bilder.getFoldersByName('Alt-Cover');
       while (altIt.hasNext()) {
         const alt = altIt.next();
-        makeFolderTreePrivate_(alt);
+        permissionsRemoved += makeFolderTreePrivate_(alt);
         hardenedIds[alt.getId()] = true;
         foldersChecked++;
       }
@@ -966,7 +972,8 @@ function hardenPrivateAssetsNow() {
     ok: true,
     booksChecked: booksChecked,
     privateRootFoldersChecked: foldersChecked,
-    verifiedPrivateRoots: Object.keys(hardenedIds).length
+    verifiedPrivateRoots: Object.keys(hardenedIds).length,
+    permissionsRemoved: permissionsRemoved
   };
   Logger.log(JSON.stringify(result));
   return result;
@@ -2338,6 +2345,14 @@ function setupDriveSyncTrigger() {
   syncDriveForAllBooks();
 }
 
+function privacyBuildInfo_() {
+  return {
+    ok: true,
+    privacyBuild: '2026-10-01-v2v3-permissions-fix',
+    legacyEpubRoute: false
+  };
+}
+
 function handle(e) {
   // --- Stil-Revisions-Modul: NEU hinzugefügt, siehe RevisionModule.gs ---
   const revisionResponse = handleRevisionAction(e);
@@ -2358,6 +2373,7 @@ function handle(e) {
 
   const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Ratings') || SpreadsheetApp.getActiveSpreadsheet().insertSheet('Ratings');
   const action = (e.parameter.action || '').trim();
+  if (action === 'privacyBuildInfo') return jsonOut(privacyBuildInfo_());
 
   if (action === 'submit') {
     sheet.appendRow([
