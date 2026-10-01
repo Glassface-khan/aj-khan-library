@@ -2718,9 +2718,9 @@ function handle(e) {
  * wird) — hier aber NICHT erneut gegen das Access-Sheet validiert, sondern
  * nur als opaker Schlüssel benutzt, um Bookmarks pro Nutzer zu trennen.
  * Grund: Der Bookmark selbst (eine CFI, eine Positions-Referenz innerhalb
- * einer EPUB, die der Nutzer ohnehin per getEpubData/downloadEpub schon
- * bekommen haben muss) ist kein schützenswerter Inhalt — anders als das
- * EPUB selbst, das über epubAccess (Abschnitt 17) hart geprüft wird.
+ * einer EPUB, die der Nutzer ohnehin über den geschützten Reader bekommen
+ * haben muss) ist kein schützenswerter Inhalt — anders als das EPUB selbst,
+ * das über den privaten EPUB-Endpunkt und epubAccess hart geprüft wird.
  * Schlimmstenfalls mit falschem/geratenem Code: jemand liest oder
  * überschreibt eine fremde Leseposition — kein Zugriff auf Buchinhalte.
  * Wer das strenger will: assertKnownAccessCode_() unten einkommentieren
