@@ -20,6 +20,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Syntax-check Apps Script backend
+        run: |
+          cp apps-script/Code.gs /tmp/Code.js
+          node --check /tmp/Code.js
+
       - name: Check public catalogue and live Apps Script privacy boundary
         run: |
           python - <<'PY'
