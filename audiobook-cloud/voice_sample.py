@@ -31,7 +31,8 @@ def render_voice(section, voice_key: str, outdir: Path) -> Path:
     rendered = []
     for chunk in chunks_for(section):
         rendered.append(gen_audio(model, state, chunk.text))
-        rendered.append(silence(0.22, model.sample_rate))
+        if chunk.pause_after > 0:
+            rendered.append(silence(chunk.pause_after, model.sample_rate))
     audio = np.concatenate(rendered) if rendered else np.zeros(1, dtype=np.float32)
     wav = work / (voice_key + ".wav")
     mp3 = outdir / ("THE_TESTIMONY_OF_SAND_CH01_" + voice_key.upper() + ".mp3")

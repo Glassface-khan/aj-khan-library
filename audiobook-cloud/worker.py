@@ -23,6 +23,9 @@ OIDC_AUDIENCE = "ajk-audiobook-factory"
 SHARD_COUNT_DEFAULT = 4
 MAX_CHUNK_WORDS = 16
 MAX_CHUNK_CHARS = 120
+TECHNICAL_CHUNK_PAUSE = 0.03
+PARAGRAPH_PAUSE = 0.32
+SCENE_PAUSE = 0.90
 MODEL_RELOAD_EVERY_SECTIONS = 4
 MAX_CHUNK_RETRIES = 3
 
@@ -294,13 +297,51 @@ def split_sentences(text: str) -> list[str]:
     return [p.strip() for p in pieces if p.strip()]
 
 
+def split_long_part(text: str) -> list[str]:
+    """Split oversized text at natural punctuation before falling back to word limits."""
+    text = text.strip()
+    if not text:
+        return []
+    if len(words(text)) <= MAX_CHUNK_WORDS and len(text) <= MAX_CHUNK_CHARS:
+        return [text]
+
+    clauses = [x.strip() for x in re.split(r"(?<=[,;:—–])\\s+", text) if x.strip()]
+    if len(clauses) > 1:
+        packed: list[str] = []
+        current = ""
+        for clause in clauses:
+            candidate = (current + " " + clause).strip()
+            if current and (len(words(candidate)) > MAX_CHUNK_WORDS or len(candidate) > MAX_CHUNK_CHARS):
+                packed.append(current)
+                current = clause
+            else:
+                current = candidate
+        if current:
+            packed.append(current)
+        if all(len(words(x)) <= MAX_CHUNK_WORDS and len(x) <= MAX_CHUNK_CHARS for x in packed):
+            return packed
+
+    out: list[str] = []
+    ws = text.split()
+    for k in range(0, len(ws), MAX_CHUNK_WORDS):
+        segment = " ".join(ws[k:k + MAX_CHUNK_WORDS])
+        if len(segment) <= MAX_CHUNK_CHARS:
+            out.append(segment)
+        else:
+            for c0 in range(0, len(segment), MAX_CHUNK_CHARS):
+                piece = segment[c0:c0 + MAX_CHUNK_CHARS].strip()
+                if piece:
+                    out.append(piece)
+    return out
+
+
 def chunks_for(section: Section) -> list[Chunk]:
     chunks: list[Chunk] = []
     current: list[str] = []
     current_words = 0
     current_chars = 0
 
-    def flush(pause: float = 0.28):
+    def flush(pause: float = TECHNICAL_CHUNK_PAUSE):
         nonlocal current, current_words, current_chars
         text = " ".join(current).strip()
         if text:
@@ -319,31 +360,27 @@ def chunks_for(section: Section) -> list[Chunk]:
         if not p:
             continue
         if SCENE_RE.match(p):
-            flush(0.9)
+            flush(SCENE_PAUSE)
             if chunks:
-                chunks[-1].pause_after = max(chunks[-1].pause_after, 0.9)
+                chunks[-1].pause_after = max(chunks[-1].pause_after, SCENE_PAUSE)
             continue
+
+        paragraph_first_chunk = len(chunks)
         parts = split_sentences(p) or [p]
         for part in parts:
-            pw = len(words(part))
-            pc = len(part)
-            if pw > MAX_CHUNK_WORDS or pc > MAX_CHUNK_CHARS:
-                flush()
-                ws = part.split()
-                for k in range(0, len(ws), MAX_CHUNK_WORDS):
-                    segment = " ".join(ws[k:k + MAX_CHUNK_WORDS])
-                    if len(segment) <= MAX_CHUNK_CHARS:
-                        chunks.append(Chunk(segment, 0.28))
-                    else:
-                        for c0 in range(0, len(segment), MAX_CHUNK_CHARS):
-                            chunks.append(Chunk(segment[c0:c0 + MAX_CHUNK_CHARS], 0.28))
-                continue
-            if current and (current_words + pw > MAX_CHUNK_WORDS or current_chars + pc + 1 > MAX_CHUNK_CHARS):
-                flush()
-            current.append(part)
-            current_words += pw
-            current_chars += pc + 1
-    flush(0.0)
+            for segment in split_long_part(part):
+                pw = len(words(segment))
+                pc = len(segment)
+                if current and (current_words + pw > MAX_CHUNK_WORDS or current_chars + pc + 1 > MAX_CHUNK_CHARS):
+                    flush(TECHNICAL_CHUNK_PAUSE)
+                current.append(segment)
+                current_words += pw
+                current_chars += pc + 1
+
+        flush(PARAGRAPH_PAUSE)
+        if len(chunks) > paragraph_first_chunk:
+            chunks[-1].pause_after = max(chunks[-1].pause_after, PARAGRAPH_PAUSE)
+
     if chunks:
         chunks[-1].pause_after = 0.0
     return chunks
