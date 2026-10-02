@@ -6,6 +6,7 @@ on:
     paths:
       - ".github/workflows/john-d-voice-sample.yml"
       - "audiobook-cloud/voice_sample.py"
+      - "audiobook-cloud/arne_voice_sample.py"
   workflow_dispatch:
 
 permissions:
@@ -63,10 +64,23 @@ jobs:
           cd audiobook-cloud
           python voice_sample.py             --job-id "3fd7f558-71df-4e3e-b120-960d13e85db0"             --section-index 1             --output-dir ../voice-sample
 
+      - name: Render Arne German validation
+        run: |
+          cd audiobook-cloud
+          python arne_voice_sample.py --output-dir ../arne-validation
+
       - name: Upload private review sample
         uses: actions/upload-artifact@v4
         with:
           name: audiobook-voice-validation
           path: voice-sample/THE_TESTIMONY_OF_SAND_CH01_*.mp3
+          if-no-files-found: error
+          retention-days: 1
+
+      - name: Upload Arne German validation
+        uses: actions/upload-artifact@v4
+        with:
+          name: arne-german-voice-validation
+          path: arne-validation/ARNE_DE_VALIDATION.mp3
           if-no-files-found: error
           retention-days: 1
