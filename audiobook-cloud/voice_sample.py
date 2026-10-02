@@ -3,11 +3,12 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 import tempfile
+import subprocess
 
 import numpy as np
 import soundfile as sf
 
-from worker import download, parse_docx, chunks_for, load_tts, gen_audio, silence, write_mp3, api
+from worker import download, parse_docx, chunks_for, load_tts, gen_audio, silence, write_mp3, api, AsrChecker, transcript_scores
 
 VOICES = {
     "mary": {"name": "Mary", "ttsLanguage": "english", "source": "mary"},
@@ -61,6 +62,26 @@ def main() -> int:
     print(f"SECTION_INDEX={args.section_index}")
     print(f"SECTION_TITLE={section.title}")
     print(f"SECTION_WORDS={section.word_count}")
+
+    ref_mp3 = Path(__file__).resolve().parent / "RPReplay_Final1790927108.mp3"
+    ref_wav = Path(__file__).resolve().parent / "tommy_reference_24k.wav"
+    subprocess.run(["ffmpeg", "-y", "-hide_banner", "-loglevel", "error", "-i", str(ref_mp3), "-ac", "1", "-ar", "24000", "-c:a", "pcm_s16le", str(ref_wav)], check=True)
+
+    work = outdir / "work_tommy_preflight"
+    work.mkdir(parents=True, exist_ok=True)
+    model, state = load_tts("english", str(ref_wav), work)
+    test_text = "The desert was quiet before the first light reached the ridge."
+    test_audio = gen_audio(model, state, test_text)
+    test_wav = work / "tommy_preflight.wav"
+    test_mp3 = outdir / "TOMMY_PREFLIGHT.mp3"
+    sf.write(test_wav, test_audio, model.sample_rate, subtype="PCM_16")
+    write_mp3(test_wav, test_mp3)
+    transcript = AsrChecker("EN").transcribe(test_wav)
+    scores = transcript_scores(test_text, transcript)
+    print(f"TOMMY_PREFLIGHT_TRANSCRIPT={transcript}")
+    print(f"TOMMY_PREFLIGHT_SCORES={scores}")
+    if scores["word_recall"] < 0.55 or scores["sequence_similarity"] < 0.45:
+        raise SystemExit("Tommy preflight failed intelligibility gate; chapter render blocked")
 
     render_voice(section, "tommy", outdir)
 
