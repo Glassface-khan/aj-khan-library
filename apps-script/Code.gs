@@ -796,18 +796,12 @@ function allImageFiles_(folder) {
   return files;
 }
 
-function publicViewUrlFor(file) {
-  try {
-    file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
-  } catch (err) {
-    // Freigabe evtl. durch Domain-Richtlinie eingeschränkt — Cover-URL
-    // wird trotzdem gesetzt, könnte dann aber ohne Zugriffsrecht sein.
-  }
-  // lh3.googleusercontent.com/d/… — sowohl uc?export=view als auch
-  // thumbnail?id= haben bei eingebetteten <img>-Tags in der Praxis
-  // kaputte Bilder geliefert. lh3 ist Googles eigene Bild-CDN-Domain,
-  // liefert direkt die Rohdaten ohne Zwischenseite.
-  return 'https://lh3.googleusercontent.com/d/' + file.getId() + '=w1000';
+// Public book covers are delivered from same-origin GitHub Pages assets
+// (assets/covers/...). Drive cover files are reference/runtime inputs only and
+// must remain private. Never turn them into browser-facing Drive/lh3 URLs.
+function secureDriveCoverReference_(file) {
+  makeDriveItemPrivate_(file);
+  return file.getId();
 }
 
 function ensureBookFolders(rootFolder, bookTitle) {
@@ -2208,14 +2202,14 @@ function syncDriveForAllBooks() {
 
     if (coverFile) {
       try {
-        const url = publicViewUrlFor(coverFile);
-        if (url !== b.coverUrl) {
-          b.coverUrl = url;
-          changed = true;
-          logDriveSync(logSheet, b.title, 'Cover übernommen: ' + coverFile.getName());
-        }
+        secureDriveCoverReference_(coverFile);
+        // IMPORTANT: b.coverUrl is intentionally NOT changed here.
+        // Final/public covers are deployed to assets/covers/ during BOOK CLOSE.
+        // This prevents "Jetzt aus Drive synchronisieren" from reintroducing
+        // private Drive/lh3 URLs into BooksData after a clean website deploy.
+        logDriveSync(logSheet, b.title, 'Cover in Drive erkannt und privat belassen: ' + coverFile.getName());
       } catch (err) {
-        logDriveSync(logSheet, b.title, 'Cover-Fehler: ' + err.message);
+        logDriveSync(logSheet, b.title, 'Cover-Sicherheitsfehler: ' + err.message);
       }
     }
 
