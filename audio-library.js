@@ -368,7 +368,7 @@
         display:flex; align-items:center; gap:8px;
       }
       #ajk-audio-launch[hidden]{display:none!important}
-      #${ROOT_ID}{position:fixed; inset:0; z-index:9998; display:none}
+      #${ROOT_ID}{position:fixed; inset:0; z-index:100000; display:none}
       #${ROOT_ID}.open{display:block}
       .ajka-backdrop{position:absolute; inset:0; background:rgba(19,27,36,.64); backdrop-filter:blur(5px)}
       .ajka-panel{
@@ -452,15 +452,23 @@
     .normalize('NFKD').replace(/[\u0300-\u036f]/g, '')
     .replace(/[’‘]/g, "'").replace(/[^a-z0-9]+/g, ' ').trim();
 
-  function audioBookForTitle_(title, languageCode) {
-    const wanted = normAudioTitle_(title);
+  function audioBookFor_(siteBookId, title, languageCode) {
+    const id = String(siteBookId || '').trim();
     const lang = String(languageCode || '').toUpperCase();
-    let matches = state.catalog.filter((b) => normAudioTitle_(b.title) === wanted);
+    let matches = id ? state.catalog.filter((b) => String(b.site_book_id || '') === id) : [];
+    if (!matches.length) {
+      const wanted = normAudioTitle_(title);
+      matches = state.catalog.filter((b) => normAudioTitle_(b.title) === wanted);
+    }
     if (lang) {
       const exact = matches.find((b) => String(b.language_code || '').toUpperCase() === lang);
       if (exact) return exact;
     }
     return matches[0] || null;
+  }
+
+  function audioBookForTitle_(title, languageCode) {
+    return audioBookFor_('', title, languageCode);
   }
 
   function publishAudioCatalog_() {
@@ -657,10 +665,10 @@
     updatePlayerUi();
   }
 
-  async function openBookByTitle(title, languageCode) {
+  async function openBook(siteBookId, title, languageCode) {
     if (!isEligible()) return false;
     if (!state.catalog.length) await loadCatalog({ silent: true });
-    const book = audioBookForTitle_(title, languageCode);
+    const book = audioBookFor_(siteBookId, title, languageCode);
     if (!book) return false;
 
     state.open = true;
@@ -671,6 +679,10 @@
     document.documentElement.style.overflow = 'hidden';
     await startBook(book.id);
     return true;
+  }
+
+  async function openBookByTitle(title, languageCode) {
+    return openBook('', title, languageCode);
   }
 
   async function startBook(bookId) {
@@ -1013,6 +1025,8 @@
     refresh: () => loadCatalog({ silent: true }),
     getCatalog: () => state.catalog.slice(),
     findByTitle: (title, languageCode) => audioBookForTitle_(title, languageCode),
+    findByBook: (siteBookId, title, languageCode) => audioBookFor_(siteBookId, title, languageCode),
+    openBook,
     openBookByTitle,
     openRights: openRightsPanel
   };
