@@ -995,11 +995,26 @@
     if (isEligible()) loadCatalog({ silent: true });
   });
 
+  async function openRightsPanel() {
+    if (!isEligible()) return false;
+    const creds = credentials();
+    if (!creds.isAdmin || !creds.adminToken) return false;
+    state.open = true;
+    state.adminMode = true;
+    const root = ensureShell();
+    root.classList.add('open');
+    root.setAttribute('aria-hidden', 'false');
+    document.documentElement.style.overflow = 'hidden';
+    await openAdmin();
+    return true;
+  }
+
   window.AJKAudioLibrary = {
     refresh: () => loadCatalog({ silent: true }),
     getCatalog: () => state.catalog.slice(),
     findByTitle: (title, languageCode) => audioBookForTitle_(title, languageCode),
-    openBookByTitle
+    openBookByTitle,
+    openRights: openRightsPanel
   };
 
   if (document.readyState === 'loading') {
@@ -1068,7 +1083,30 @@
         'padding:8px 14px',
         'cursor:pointer'
       ].join(';');
-      actions.insertBefore(a, actions.firstChild);
+
+      const rights = document.createElement('button');
+      rights.type = 'button';
+      rights.setAttribute('data-ajk-audio-rights-launch', '1');
+      rights.textContent = 'Audio-Rechte';
+      rights.style.cssText = [
+        'display:inline-block',
+        'background:transparent',
+        'border:1px solid #9F7A34',
+        'color:#9F7A34',
+        'font:600 11px/1.2 Archivo,sans-serif',
+        'letter-spacing:.06em',
+        'text-transform:uppercase',
+        'padding:8px 14px',
+        'cursor:pointer'
+      ].join(';');
+      rights.addEventListener('click', function () {
+        if (window.AJKAudioLibrary && typeof window.AJKAudioLibrary.openRights === 'function') {
+          window.AJKAudioLibrary.openRights();
+        }
+      });
+
+      actions.insertBefore(rights, actions.firstChild);
+      actions.insertBefore(a, rights);
     } catch (_) {}
   }
 
