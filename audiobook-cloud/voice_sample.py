@@ -59,7 +59,7 @@ def main() -> int:
     print(f"BOOK={title}")
     print(f"SECTION_INDEX={args.section_index}")
     print(f"SECTION_TITLE={section.title}")
-    print(f"SECTION_WORDS={len(section.text.split())}")
+    print(f"SECTION_WORDS={section.word_count}")
 
     render_voice(section, "mary", outdir)
     render_voice(section, "narration_us_f", outdir)
