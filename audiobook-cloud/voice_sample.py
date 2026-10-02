@@ -8,33 +8,52 @@ import subprocess
 import numpy as np
 import soundfile as sf
 
-from worker import download, parse_docx, chunks_for, load_tts, gen_audio, silence, write_mp3, api, AsrChecker, transcript_scores
+from worker import Section, download, parse_docx, chunks_for, load_tts, gen_audio, silence, write_mp3, api, AsrChecker, transcript_scores
 
 # Uses shared worker synthesis/QC pipeline. Tommy validation: intelligibility + crackle-safe onset.
 
 VOICES = {
+    "peter_yearsley": {"name": "Peter Yearsley", "ttsLanguage": "english", "source": "peter_yearsley"},
     "mary": {"name": "Mary", "ttsLanguage": "english", "source": "mary"},
     "bill_boerst": {"name": "Bill Boerst", "ttsLanguage": "english", "source": "bill_boerst"},
     "stuart_bell": {"name": "Stuart Bell", "ttsLanguage": "english", "source": "stuart_bell"},
     "george": {"name": "George", "ttsLanguage": "english", "source": "george"},
     "tommy": {"name": "Tommy", "ttsLanguage": "english", "source": "https://raw.githubusercontent.com/Glassface-khan/aj-khan-library/main/audiobook-cloud/RPReplay_Final1790942161.mp3"},
     "narration_us_f": {
-        "name": "Narration (US, f)",
+        "name": "Maggie",
         "ttsLanguage": "english",
         "source": "hf://kyutai/tts-voices/unmute-prod-website/ex04_narration_longform_00001.wav",
     },
 }
 
-def render_voice(section, voice_key: str, outdir: Path) -> Path:
+def render_voice(section, voice_key: str, outdir: Path, local_retry_phrase: str | None = None) -> Path:
     voice = VOICES[voice_key]
     work = outdir / ("work_" + voice_key)
     work.mkdir(parents=True, exist_ok=True)
     model, state = load_tts(voice["ttsLanguage"], voice["source"], work)
+
+    retry_model = retry_state = None
+    if local_retry_phrase:
+        retry_model, retry_state = load_tts(
+            voice["ttsLanguage"], voice["source"], work / "local_retry", temp=0.20
+        )
+
     rendered = []
+    retry_hits = 0
     for chunk in chunks_for(section):
-        rendered.append(gen_audio(model, state, chunk.text))
+        if local_retry_phrase and local_retry_phrase.lower() in chunk.text.lower():
+            audio = gen_audio(retry_model, retry_state, chunk.text)
+            retry_hits += 1
+            print(f"LOCAL_RETRY_{voice_key.upper()}={chunk.text[:220]}")
+        else:
+            audio = gen_audio(model, state, chunk.text)
+        rendered.append(audio)
         if chunk.pause_after > 0:
             rendered.append(silence(chunk.pause_after, model.sample_rate))
+
+    if local_retry_phrase:
+        print(f"LOCAL_RETRY_HITS_{voice_key.upper()}={retry_hits}")
+
     audio = np.concatenate(rendered) if rendered else np.zeros(1, dtype=np.float32)
     wav = work / (voice_key + ".wav")
     mp3 = outdir / ("THE_TESTIMONY_OF_SAND_CH01_" + voice_key.upper() + ".mp3")
@@ -88,7 +107,23 @@ def main() -> int:
     if scores["word_recall"] < 0.55 or scores["sequence_similarity"] < 0.45:
         raise SystemExit("Tommy preflight failed intelligibility gate; chapter render blocked")
 
-    render_voice(section, "tommy", outdir)
+    # Keep the stable Tommy engine. Only the one user-flagged Y passage is
+    # re-synthesized locally at lower temperature.
+    render_voice(section, "tommy", outdir, local_retry_phrase="sectors")
+
+    # Short same-text control for generic voices using the exact shared pipeline.
+    compare_paragraphs = []
+    compare_words = 0
+    for para in section.paragraphs:
+        compare_paragraphs.append(para)
+        compare_words += len(para.split())
+        if compare_words >= 180:
+            break
+    compare_section = Section(
+        section.index, section.kind, section.label, section.title, compare_paragraphs
+    )
+    render_voice(compare_section, "peter_yearsley", outdir)
+    render_voice(compare_section, "narration_us_f", outdir)
 
     return 0
 
