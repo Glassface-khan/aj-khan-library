@@ -139,7 +139,7 @@
     // that request before reading books-live.json caused Covers mode to hide
     // the native list while the replacement grid still contained zero books.
     try {
-      var fallbackRes = await fetch('./books-live.json?cover-order=20260929b', { cache: 'no-store' });
+      var fallbackRes = await fetch('./books-live.json?cover-order=20261002c', { cache: 'no-store' });
       if (fallbackRes && fallbackRes.ok) {
         var fallbackPayload = await fallbackRes.json();
         var fallbackRaw = fallbackPayload && fallbackPayload.books;
