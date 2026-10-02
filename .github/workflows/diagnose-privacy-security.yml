@@ -8,6 +8,7 @@ on:
       - 'apps-script/Code.gs'
       - 'index.html'
       - 'books-live.json'
+      - 'assets/covers/**'
       - 'tools/patch_author_site.js'
       - 'tools/patch_live_books.js'
 
@@ -67,6 +68,51 @@ jobs:
               print(f'STATIC_{needle}=COUNT:{n}')
               if n:
                   failures.append(f'books-live.json exposes {needle} ({n} occurrence(s))')
+
+          # 1b) Every public cover must be self-contained: either an embedded
+          # public data image or a same-origin file below assets/covers/.
+          # This prevents a future book-close from silently reintroducing
+          # Drive-thumbnail dependencies.
+          try:
+              live_payload = json.loads(live)
+              raw_books = live_payload.get('books', [])
+              static_books = json.loads(raw_books) if isinstance(raw_books, str) else raw_books
+          except Exception as e:
+              static_books = []
+              failures.append(f'books-live.json is not parseable for cover validation: {e!r}')
+
+          if not isinstance(static_books, list):
+              failures.append('books-live.json books payload is not a list for cover validation')
+              static_books = []
+
+          local_cover_count = 0
+          embedded_cover_count = 0
+          for book in static_books:
+              if not isinstance(book, dict):
+                  continue
+              title = str(book.get('title', '')).strip() or '<untitled>'
+              cover = str(book.get('coverUrl', '')).strip()
+              if not cover:
+                  failures.append(f'{title}: missing coverUrl')
+                  continue
+              if cover.startswith('data:image/'):
+                  embedded_cover_count += 1
+                  continue
+              if re.match(r'^https?://', cover, re.I):
+                  failures.append(f'{title}: remote coverUrl is forbidden; use assets/covers/: {cover[:160]}')
+                  continue
+              normalized = cover[2:] if cover.startswith('./') else cover
+              if not normalized.startswith('assets/covers/'):
+                  failures.append(f'{title}: coverUrl must be under assets/covers/: {cover}')
+                  continue
+              cover_path = pathlib.Path(normalized)
+              if not cover_path.is_file():
+                  failures.append(f'{title}: cover file does not exist: {normalized}')
+                  continue
+              local_cover_count += 1
+
+          print('STATIC_LOCAL_COVER_COUNT=' + str(local_cover_count))
+          print('STATIC_EMBEDDED_COVER_COUNT=' + str(embedded_cover_count))
 
           # 2) Frontend must contain the protected private routes.
           for needle in ('getPrivateEpub', 'listPrivateBookAssets', 'getPrivateBookAsset'):
