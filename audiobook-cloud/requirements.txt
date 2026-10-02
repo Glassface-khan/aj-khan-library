@@ -1,4 +1,4 @@
-pocket-tts==3.3.0
+pocket-tts @ git+https://github.com/kyutai-labs/pocket-tts.git@80d24a3
 python-docx==1.2.0
 faster-whisper==1.2.1
 av<19

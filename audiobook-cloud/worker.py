@@ -501,20 +501,18 @@ def load_tts_from_prepared(language: str, state_path: Path, temp: float = 0.3):
 
 
 def gen_audio(model, state, text: str) -> np.ndarray:
-    """Render through Pocket TTS's tokenizer-aware stream and suppress chunk-onset clicks."""
-    rendered: list[np.ndarray] = []
-    fade_samples = max(1, int(0.005 * model.sample_rate))
-    for tensor in model.generate_audio_stream(state, text, copy_state=True):
-        try:
-            tensor = tensor.detach().cpu()
-        except Exception:
-            pass
-        audio = ensure_mono_float(tensor.numpy())
-        if audio.size:
-            n = min(fade_samples, audio.size)
-            audio[:n] *= np.linspace(0.0, 1.0, n, dtype=np.float32)
-            rendered.append(audio)
-    return np.concatenate(rendered) if rendered else np.zeros(1, dtype=np.float32)
+    """Render through Pocket TTS's tokenizer-aware long-text path.
+
+    The pinned Pocket TTS revision applies its own 5 ms fade only at the start
+    of each logical synthesis chunk. Do not fade every streamed decoder frame:
+    doing so creates audible crackle/flutter across continuous speech.
+    """
+    tensor = model.generate_audio(state, text, copy_state=True)
+    try:
+        tensor = tensor.detach().cpu()
+    except Exception:
+        pass
+    return ensure_mono_float(tensor.numpy())
 
 
 def silence(seconds: float, sr: int) -> np.ndarray:
