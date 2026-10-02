@@ -973,30 +973,66 @@
 })();
 
 
-/* A. J. Khan · Admin-only Cloud Audiobook Factory launcher */
+/* A. J. Khan · Admin-panel Audiobook Factory launcher */
 (() => {
   'use strict';
   const FLAG = 'data-ajk-audiobook-factory-launch';
-  function installFactoryLaunch() {
+
+  function installFactoryLink() {
     try {
       if (localStorage.getItem('ajk_author_admin') !== '1') return;
+      if (!localStorage.getItem('ajk_admin_token')) return;
       if (document.querySelector('[' + FLAG + ']')) return;
-      const b = document.createElement('button');
-      b.type = 'button';
-      b.setAttribute(FLAG, '1');
-      b.textContent = 'Audiobook Factory';
-      b.style.cssText = [
-        'position:fixed','right:max(18px,env(safe-area-inset-right))',
-        'bottom:calc(68px + env(safe-area-inset-bottom))','z-index:9997',
-        'border:1px solid #9F7A34','background:#16140F','color:#E6E2D7',
-        'font:600 10px/1.2 Archivo,sans-serif','letter-spacing:.12em',
-        'text-transform:uppercase','padding:11px 14px','cursor:pointer'
+
+      const headings = Array.from(document.querySelectorAll('h1,h2,h3,h4'));
+      const heading = headings.find((el) => String(el.textContent || '').trim() === 'Manage site');
+      if (!heading || !heading.parentElement) return;
+
+      const header = heading.parentElement;
+      let actions = Array.from(header.children).find((el) =>
+        el !== heading && el.tagName === 'DIV'
+      );
+
+      if (!actions) {
+        actions = document.createElement('div');
+        actions.style.cssText = 'display:flex;gap:8px;align-items:center;flex-wrap:wrap';
+        const close = Array.from(header.querySelectorAll('button')).find((b) =>
+          String(b.textContent || '').trim().toLowerCase() === 'close'
+        );
+        if (close) {
+          actions.appendChild(close);
+          header.appendChild(actions);
+        } else {
+          header.appendChild(actions);
+        }
+      }
+
+      const a = document.createElement('a');
+      a.setAttribute(FLAG, '1');
+      a.href = './audiobook-factory.html';
+      a.textContent = 'Audiobook Factory';
+      a.style.cssText = [
+        'display:inline-block',
+        'background:#9F7A34',
+        'border:1px solid #9F7A34',
+        'color:#E6E2D7',
+        'font:600 11px/1.2 Archivo,sans-serif',
+        'letter-spacing:.06em',
+        'text-transform:uppercase',
+        'text-decoration:none',
+        'padding:8px 14px',
+        'cursor:pointer'
       ].join(';');
-      b.addEventListener('click', () => { window.location.href = './audiobook-factory.html'; });
-      document.body.appendChild(b);
+      actions.insertBefore(a, actions.firstChild);
     } catch (_) {}
   }
-  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', installFactoryLaunch);
-  else installFactoryLaunch();
-  window.addEventListener('storage', installFactoryLaunch);
+
+  const observer = new MutationObserver(installFactoryLink);
+  observer.observe(document.documentElement, { childList: true, subtree: true });
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', installFactoryLink);
+  } else {
+    installFactoryLink();
+  }
+  window.addEventListener('storage', installFactoryLink);
 })();
