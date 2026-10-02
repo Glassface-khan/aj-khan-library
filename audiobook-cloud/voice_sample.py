@@ -15,7 +15,7 @@ VOICES = {
     "bill_boerst": {"name": "Bill Boerst", "ttsLanguage": "english", "source": "bill_boerst"},
     "stuart_bell": {"name": "Stuart Bell", "ttsLanguage": "english", "source": "stuart_bell"},
     "george": {"name": "George", "ttsLanguage": "english", "source": "george"},
-    "tommy": {"name": "Tommy", "ttsLanguage": "english", "source": "https://raw.githubusercontent.com/Glassface-khan/aj-khan-library/main/audiobook-cloud/RPReplay_Final1790927108.mp3"},
+    "tommy": {"name": "Tommy", "ttsLanguage": "english", "source": "https://raw.githubusercontent.com/Glassface-khan/aj-khan-library/main/audiobook-cloud/RPReplay_Final1790942161.mp3"},
     "narration_us_f": {
         "name": "Narration (US, f)",
         "ttsLanguage": "english",
