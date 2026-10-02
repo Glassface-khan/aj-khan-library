@@ -21,8 +21,8 @@ import soundfile as sf
 API = "https://ipoqyjrojljmbqslmxxf.supabase.co/functions/v1/audiobook-factory"
 OIDC_AUDIENCE = "ajk-audiobook-factory"
 SHARD_COUNT_DEFAULT = 4
-MAX_CHUNK_WORDS = 16
-MAX_CHUNK_CHARS = 120
+MAX_CHUNK_WORDS = 28
+MAX_CHUNK_CHARS = 220
 TECHNICAL_CHUNK_PAUSE = 0.03
 PARAGRAPH_PAUSE = 0.32
 SCENE_PAUSE = 0.90
@@ -321,17 +321,24 @@ def split_long_part(text: str) -> list[str]:
         if all(len(words(x)) <= MAX_CHUNK_WORDS and len(x) <= MAX_CHUNK_CHARS for x in packed):
             return packed
 
+    # Final fallback: split only at word boundaries. Never cut through a word,
+    # because partial tokens can produce audible artifacts at chunk joins.
     out: list[str] = []
-    ws = text.split()
-    for k in range(0, len(ws), MAX_CHUNK_WORDS):
-        segment = " ".join(ws[k:k + MAX_CHUNK_WORDS])
-        if len(segment) <= MAX_CHUNK_CHARS:
-            out.append(segment)
-        else:
-            for c0 in range(0, len(segment), MAX_CHUNK_CHARS):
-                piece = segment[c0:c0 + MAX_CHUNK_CHARS].strip()
-                if piece:
-                    out.append(piece)
+    current_words: list[str] = []
+    current_chars = 0
+    for word in text.split():
+        extra = len(word) + (1 if current_words else 0)
+        if current_words and (
+            len(current_words) + 1 > MAX_CHUNK_WORDS
+            or current_chars + extra > MAX_CHUNK_CHARS
+        ):
+            out.append(" ".join(current_words))
+            current_words = []
+            current_chars = 0
+        current_words.append(word)
+        current_chars += len(word) + (1 if len(current_words) > 1 else 0)
+    if current_words:
+        out.append(" ".join(current_words))
     return out
 
 
@@ -488,7 +495,7 @@ def transcript_pass(scores: dict[str, float], language_code: str, source_words: 
     return not reasons, reasons
 
 
-def load_tts(language: str, voice_source: str, workdir: Path, temp: float = 0.7):
+def load_tts(language: str, voice_source: str, workdir: Path, temp: float = 0.3):
     from pocket_tts import TTSModel
     model = TTSModel.load_model(language=language, temp=temp)
     voice_path = voice_source
@@ -514,7 +521,7 @@ def load_tts(language: str, voice_source: str, workdir: Path, temp: float = 0.7)
     return model, state
 
 
-def load_tts_from_prepared(language: str, state_path: Path, temp: float = 0.7):
+def load_tts_from_prepared(language: str, state_path: Path, temp: float = 0.3):
     from pocket_tts import TTSModel
     model = TTSModel.load_model(language=language, temp=temp)
     state = model.get_state_for_audio_prompt(str(state_path))
@@ -736,7 +743,7 @@ def produce_section(job: dict[str, Any], section: Section, model, state, asr: As
                 break
             model, state = load_tts_from_prepared(
                 job["tts_language"], Path(job["voice_state_path"]),
-                temp=max(0.45, 0.7 - 0.1 * attempt),
+                temp=max(0.20, 0.30 - 0.05 * attempt),
             )
             sr = model.sample_rate
         if not success:
