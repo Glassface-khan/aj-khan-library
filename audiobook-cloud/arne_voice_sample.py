@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# Dedicated German narration validation for Arne B.
 from pathlib import Path
 import argparse
 
