@@ -433,15 +433,8 @@
 
   function ensureShell() {
     ensureStyles();
-    let launch = document.getElementById('ajk-audio-launch');
-    if (!launch) {
-      launch = document.createElement('button');
-      launch.id = 'ajk-audio-launch';
-      launch.type = 'button';
-      launch.innerHTML = '<span aria-hidden="true">◉</span><span>' + esc(tr('Hören', 'Listen')) + '</span>';
-      launch.addEventListener('click', open);
-      document.body.appendChild(launch);
-    }
+    const oldLaunch = document.getElementById('ajk-audio-launch');
+    if (oldLaunch) oldLaunch.remove();
 
     let root = document.getElementById(ROOT_ID);
     if (!root) {
@@ -452,14 +445,38 @@
       root.querySelector('[data-close]').addEventListener('click', close);
       document.body.appendChild(root);
     }
-    launch.hidden = !isEligible();
     return root;
   }
 
-  async function loadCatalog() {
+  const normAudioTitle_ = (v) => String(v || '').toLowerCase()
+    .normalize('NFKD').replace(/[\u0300-\u036f]/g, '')
+    .replace(/[’‘]/g, "'").replace(/[^a-z0-9]+/g, ' ').trim();
+
+  function audioBookForTitle_(title, languageCode) {
+    const wanted = normAudioTitle_(title);
+    const lang = String(languageCode || '').toUpperCase();
+    let matches = state.catalog.filter((b) => normAudioTitle_(b.title) === wanted);
+    if (lang) {
+      const exact = matches.find((b) => String(b.language_code || '').toUpperCase() === lang);
+      if (exact) return exact;
+    }
+    return matches[0] || null;
+  }
+
+  function publishAudioCatalog_() {
+    try {
+      window.__ajkAudioCatalog = state.catalog.slice();
+      window.dispatchEvent(new CustomEvent('ajk-audio-catalog-updated', {
+        detail: { books: state.catalog.slice() }
+      }));
+    } catch (_) {}
+  }
+
+  async function loadCatalog(options = {}) {
+    const silent = options && options.silent === true;
     state.loading = true;
     state.error = '';
-    render();
+    if (!silent && state.open) render();
     try {
       const data = await api({ op: 'catalog' });
       state.catalog = data.books || [];
@@ -467,11 +484,13 @@
       if (state.activeBook) {
         state.activeBook = state.catalog.find((b) => b.id === state.activeBook.id) || null;
       }
+      publishAudioCatalog_();
     } catch (err) {
       state.error = friendlyError(err);
+      if (!silent) publishAudioCatalog_();
     } finally {
       state.loading = false;
-      render();
+      if (!silent && state.open) render();
     }
   }
 
@@ -636,6 +655,22 @@
     });
 
     updatePlayerUi();
+  }
+
+  async function openBookByTitle(title, languageCode) {
+    if (!isEligible()) return false;
+    if (!state.catalog.length) await loadCatalog({ silent: true });
+    const book = audioBookForTitle_(title, languageCode);
+    if (!book) return false;
+
+    state.open = true;
+    state.adminMode = false;
+    const root = ensureShell();
+    root.classList.add('open');
+    root.setAttribute('aria-hidden', 'false');
+    document.documentElement.style.overflow = 'hidden';
+    await startBook(book.id);
+    return true;
   }
 
   async function startBook(bookId) {
@@ -872,9 +907,7 @@
 
   function syncVisibility() {
     const root = ensureShell();
-    const launch = document.getElementById('ajk-audio-launch');
     const epubReaderOpen = !!document.getElementById('epub-reader-viewport');
-    if (launch) launch.hidden = !isEligible() || epubReaderOpen;
     if (!epubReaderOpen) {
       document.querySelectorAll('[data-ajk-page-nav]').forEach((el) => el.remove());
     }
@@ -957,17 +990,29 @@
 
   window.addEventListener('pagehide', () => saveProgress(false, true));
   window.addEventListener('beforeunload', () => saveProgress(false, true));
-  window.addEventListener('storage', syncVisibility);
+  window.addEventListener('storage', () => {
+    syncVisibility();
+    if (isEligible()) loadCatalog({ silent: true });
+  });
+
+  window.AJKAudioLibrary = {
+    refresh: () => loadCatalog({ silent: true }),
+    getCatalog: () => state.catalog.slice(),
+    findByTitle: (title, languageCode) => audioBookForTitle_(title, languageCode),
+    openBookByTitle
+  };
 
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', () => {
       ensureShell();
       syncVisibility();
+      if (isEligible()) loadCatalog({ silent: true });
       setInterval(syncVisibility, 2000);
     });
   } else {
     ensureShell();
     syncVisibility();
+    if (isEligible()) loadCatalog({ silent: true });
     setInterval(syncVisibility, 2000);
   }
 })();

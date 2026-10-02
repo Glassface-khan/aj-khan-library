@@ -223,7 +223,9 @@
       '#books.ajk-cover-mode .book-list-wrap{display:none!important}' +
       '#books.ajk-cover-mode .book-card{display:none!important}' +
       '.ajk-cover-thumb{appearance:none;border:0;background:none;padding:0;cursor:pointer;min-width:0;text-align:left}' +
-      '.ajk-cover-frame{display:block;width:100%;aspect-ratio:2/3;overflow:hidden;background:var(--bone-deep,#e9e3d7);border:1px solid var(--rule,#cfc6b5);box-shadow:0 8px 22px rgba(0,0,0,.10);transition:transform .18s ease,box-shadow .18s ease,border-color .18s ease}' +
+      '.ajk-cover-frame{display:block;position:relative;width:100%;aspect-ratio:2/3;overflow:hidden;background:var(--bone-deep,#e9e3d7);border:1px solid var(--rule,#cfc6b5);box-shadow:0 8px 22px rgba(0,0,0,.10);transition:transform .18s ease,box-shadow .18s ease,border-color .18s ease}' +
+      '.ajk-cover-audio-badge{position:absolute;right:7px;top:7px;width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;background:rgba(70,70,70,.54);color:rgba(255,255,255,.92);backdrop-filter:blur(3px);-webkit-backdrop-filter:blur(3px);box-shadow:0 2px 8px rgba(0,0,0,.16);pointer-events:none}' +
+      '.ajk-cover-audio-badge svg{width:15px;height:15px;display:block;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}' +
       '.ajk-cover-thumb:hover .ajk-cover-frame,.ajk-cover-thumb:focus-visible .ajk-cover-frame{transform:translateY(-4px);border-color:var(--gold,#b89448);box-shadow:0 14px 30px rgba(0,0,0,.16)}' +
       '.ajk-cover-frame img{width:100%;height:100%;object-fit:cover;display:block}' +
       '.ajk-cover-placeholder{height:100%;display:flex;align-items:center;justify-content:center;box-sizing:border-box;padding:12px;font-family:"Cormorant Garamond",serif;font-size:15px;line-height:1.15;color:var(--ink-2,#555);text-align:center}' +
@@ -386,6 +388,41 @@
     return result;
   }
 
+  function audioForBook_(book) {
+    try {
+      if (!window.AJKAudioLibrary || typeof window.AJKAudioLibrary.findByTitle !== 'function') return null;
+      return window.AJKAudioLibrary.findByTitle(book.title || book.baseTitle || '', book.selectedLang || '') ||
+        window.AJKAudioLibrary.findByTitle(book.baseTitle || '', book.selectedLang || '');
+    } catch (_) { return null; }
+  }
+
+  function audioBadge_() {
+    var badge = document.createElement('span');
+    badge.className = 'ajk-cover-audio-badge';
+    badge.setAttribute('aria-hidden', 'true');
+    badge.innerHTML = '<svg viewBox="0 0 24 24"><path d="M4 13v-2a8 8 0 0 1 16 0v2"/><path d="M5 13h2v6H5a2 2 0 0 1-2-2v-2a2 2 0 0 1 2-2Z"/><path d="M19 13h-2v6h2a2 2 0 0 0 2-2v-2a2 2 0 0 0-2-2Z"/></svg>';
+    return badge;
+  }
+
+  function refreshAudioBadges_() {
+    var grid = document.getElementById(GRID_ID);
+    if (!grid) return;
+    Array.prototype.forEach.call(grid.querySelectorAll('.ajk-cover-thumb'), function (thumb) {
+      var title = thumb.dataset.bookTitle || '';
+      var frame = thumb.querySelector('.ajk-cover-frame');
+      if (!frame) return;
+      var existing = frame.querySelector('.ajk-cover-audio-badge');
+      var hasAudio = false;
+      try {
+        hasAudio = !!(window.AJKAudioLibrary &&
+          typeof window.AJKAudioLibrary.findByTitle === 'function' &&
+          window.AJKAudioLibrary.findByTitle(title, ''));
+      } catch (_) {}
+      if (hasAudio && !existing) frame.appendChild(audioBadge_());
+      if (!hasAudio && existing) existing.remove();
+    });
+  }
+
   function dataForTitle_(title, wrap) {
     var entry = catalogEntryForTitle_(title) || {};
     var card = cardForTitle_(wrap, title);
@@ -492,13 +529,25 @@
 
     if (book.hook) { var p = document.createElement('p'); p.className = 'ajk-cover-detail-hook'; p.textContent = book.hook; info.appendChild(p); }
 
-    if (book.actions.length) {
+    var audioBook = audioForBook_(book);
+    if (book.actions.length || audioBook) {
       var actions = document.createElement('div'); actions.className = 'ajk-cover-detail-actions';
       book.actions.forEach(function (original) {
         var bt = document.createElement('button'); bt.type = 'button'; bt.className = 'ajk-cover-detail-action'; bt.textContent = original.textContent.trim();
         bt.addEventListener('click', function () { closeDetail(); original.click(); });
         actions.appendChild(bt);
       });
+      if (audioBook) {
+        var audioBt = document.createElement('button');
+        audioBt.type = 'button';
+        audioBt.className = 'ajk-cover-detail-action';
+        audioBt.textContent = audioBook.progress && audioBook.progress.chapter_id ? t('Weiterhören', 'Continue listening') : t('Hörbuch', 'Audiobook');
+        audioBt.addEventListener('click', function () {
+          closeDetail();
+          if (window.AJKAudioLibrary) window.AJKAudioLibrary.openBookByTitle(book.title || book.baseTitle, book.selectedLang || '');
+        });
+        actions.appendChild(audioBt);
+      }
       info.appendChild(actions);
     }
 
@@ -508,6 +557,19 @@
     document.body.appendChild(modal);
     close.focus();
   }
+
+  window.addEventListener('ajk-audio-catalog-updated', function () {
+    refreshAudioBadges_();
+    var modal = document.getElementById(MODAL_ID);
+    if (modal) {
+      var titleNode = modal.querySelector('.ajk-cover-detail-title');
+      if (titleNode) {
+        var title = String(titleNode.textContent || '').trim();
+        var wrap = listWrap();
+        if (title && wrap) openDetail(dataForTitle_(title, wrap));
+      }
+    }
+  });
 
   function visibleTitleSet_(wrap) {
     var set = {};
@@ -1093,6 +1155,7 @@
       } else {
         var fb = document.createElement('span'); fb.className = 'ajk-cover-placeholder'; fb.textContent = book.title; frame.appendChild(fb);
       }
+      if (audioForBook_(book)) frame.appendChild(audioBadge_());
       thumb.appendChild(frame);
       thumb.addEventListener('click', function () {
         if (Date.now() < suppressCoverClickUntil_) return;
