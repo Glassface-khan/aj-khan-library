@@ -148,7 +148,7 @@
         seen[key] = true;
         var fallback = fallbackByTitle[key] || {};
         var entry = Object.assign({}, fallback, live);
-        if (!live.coverUrl && fallback.coverUrl) entry.coverUrl = fallback.coverUrl;
+        if (fallback.coverUrl) entry.coverUrl = fallback.coverUrl;
         merged.push(entry);
       });
       fallbackBooks.forEach(function (b) {
@@ -164,31 +164,6 @@
     if (merged.length) canonicalCatalog_ = merged;
     canonicalCatalogLoaded_ = true;
     return canonicalCatalog_;
-  }
-
-  function legacyCoverFallbacks_(src) {
-    var text = String(src || '');
-    var m = text.match(/^https:\/\/lh3\.googleusercontent\.com\/d\/([^=\/?]+)=w\d+$/i);
-    if (!m) return [];
-    var id = encodeURIComponent(m[1]);
-    return [
-      'https://drive.google.com/thumbnail?id=' + id + '&sz=w1000',
-      'https://drive.google.com/uc?export=view&id=' + id
-    ];
-  }
-
-  function setCoverImageSource_(img, src) {
-    var fallbacks = legacyCoverFallbacks_(src);
-    var next = 0;
-    img.referrerPolicy = 'no-referrer';
-    img.onerror = function () {
-      if (next >= fallbacks.length) {
-        img.onerror = null;
-        return;
-      }
-      img.src = fallbacks[next++];
-    };
-    img.src = src;
   }
 
   function lang() {
@@ -434,7 +409,7 @@
     body.className = 'ajk-cover-detail-body';
     var visual = document.createElement('div');
     if (book.src) {
-      var im = document.createElement('img'); im.className = 'ajk-cover-detail-img'; setCoverImageSource_(im, book.src); im.alt = book.title + ' cover'; visual.appendChild(im);
+      var im = document.createElement('img'); im.className = 'ajk-cover-detail-img'; im.src = book.src; im.alt = book.title + ' cover'; visual.appendChild(im);
     } else {
       var ph = document.createElement('div'); ph.className = 'ajk-cover-frame ajk-cover-placeholder'; ph.style.aspectRatio = '2/3'; ph.textContent = book.title; visual.appendChild(ph);
     }
@@ -1074,7 +1049,7 @@
       thumb.setAttribute('aria-label', book.title + ' — ' + t('Details', 'Details'));
       var frame = document.createElement('span'); frame.className = 'ajk-cover-frame';
       if (book.src) {
-        var img = document.createElement('img'); setCoverImageSource_(img, book.src); img.alt = book.title + ' cover'; img.loading = 'lazy'; frame.appendChild(img);
+        var img = document.createElement('img'); img.src = book.src; img.alt = book.title + ' cover'; img.loading = 'lazy'; frame.appendChild(img);
       } else {
         var fb = document.createElement('span'); fb.className = 'ajk-cover-placeholder'; fb.textContent = book.title; frame.appendChild(fb);
       }
