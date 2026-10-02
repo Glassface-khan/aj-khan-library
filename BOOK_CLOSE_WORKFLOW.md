@@ -2,6 +2,17 @@
 
 This is the required workflow for **BUCH ABSCHLIESSEN – KOMPLETT**.
 
+## Trigger
+
+When the author says **"bitte abschließen"**, **"Buch abschließen"**, **"finalisieren"**,
+or an equivalent unambiguous instruction to close/finalize a book, this full workflow
+is mandatory unless the author explicitly excludes a step.
+
+A manuscript/package is **not** considered fully closed merely because the prose,
+DOCX, EPUB, ZIP, Drive archive, catalogue row, or GitHub commit exists.
+
+---
+
 ## Human-facing source of truth
 
 There is exactly one canonical location for all final book materials:
@@ -25,15 +36,62 @@ Every completed title has one private book folder there containing the complete 
 
 This is the only authoritative location for final documents.
 
+---
+
+## Website delivery architecture
+
+### Public cover
+
+The website cover is a deliberately public, non-sensitive delivery asset.
+
+For every closed book, the final approved cover must be copied into this repository:
+
+```
+assets/covers/<stable-slug>.<jpg|png|webp>
+```
+
+The public catalogue must reference the **same-origin GitHub Pages path**, e.g.:
+
+```
+assets/covers/the-ledger-of-the-dead.png
+```
+
+### Hard cover rule
+
+**Never use a Google Drive / Google Docs / Drive thumbnail URL as `coverUrl`.**
+
+Forbidden public-cover patterns include:
+
+```
+drive.google.com/...
+docs.google.com/...
+https://drive.google.com/thumbnail?id=...
+drive-private://...
+```
+
+The cover must not depend on Drive sharing state, Google authentication, or a
+browser-specific Drive thumbnail endpoint.
+
+### Private book content
+
+EPUBs, manuscripts, internal files, audits, production packages and private
+reference material remain private and must be accessed only through the protected
+private-asset architecture.
+
+The website must not expose direct private Drive IDs/URLs for these assets.
+
+---
+
 ## Website runtime cache
 
 The folder with ID `1wCKKVMexGWRPTWx2yQrnb2b4-fLhKLAU` is named:
 
 **_WEBSITE_RUNTIME – AUTO (NICHT BEARBEITEN)**
 
-It is public and exists only because the website needs browser-readable assets.
+It is a generated/runtime staging area only. It is **not** the source of truth and
+must not be used as the public cover-delivery mechanism.
 
-It may contain only generated/runtime copies required by the site:
+It may contain only generated/runtime copies required by backend/private delivery:
 
 ```
 /_WEBSITE_RUNTIME – AUTO (NICHT BEARBEITEN)/<Book title>/
@@ -43,10 +101,10 @@ It may contain only generated/runtime copies required by the site:
     EPUB_<Book title>.epub
     KLAPPENTEXT_<Book title>.txt|docx
   Bilder/
-    Cover/<final cover>
+    Cover/        # optional runtime/reference copy; NOT the website cover URL
     Alt-Cover/
-  Intern/      # runtime placeholder only; no confidential audit package
-  Extern/      # only material intentionally exposed via Background
+  Intern/         # runtime placeholder only; no confidential audit package
+  Extern/         # only material intentionally exposed via Background
   Video/
 ```
 
@@ -56,58 +114,95 @@ website runtime.
 
 The runtime cache is disposable and is **not** a second archive or source of truth.
 
+---
+
 ## Required close sequence
 
 1. Freeze the prose/publication master.
-2. Build and QA the final EPUB.
-3. Build the complete release package locally.
-4. Store **all authoritative final files** only in
+2. Run final continuity/timeline/logic/theology/craft checks required by the project.
+3. Build and QA the final DOCX / manuscript deliverables.
+4. Build and QA the final premium EPUB.
+5. Build the complete release package locally, including required front/backmatter,
+   metadata, JSON, cover, notes and supporting documents.
+6. Store **all authoritative final files** only in
    `AJ Khan Bücher – FINAL ARCHIVE/<BOOK TITLE>`.
-5. Create/update only the minimum website runtime copies in
-   `_WEBSITE_RUNTIME – AUTO (NICHT BEARBEITEN)/<Book title>`.
-6. Verify the runtime cover is public (`anyone -> reader`).
-7. Update `BooksData` using only runtime asset IDs.
-8. Keep `books-live.json` synchronized as fallback using the same runtime IDs.
-9. Run/allow `syncDriveForAllBooks()` and verify the current `DriveSyncLog`.
-10. Run the live-asset diagnostic:
-    - exactly one BooksData row for the title
-    - cover URL returns an actual image
-    - EPUB URL resolves
-11. Perform the website smoke test:
-    - book card appears
-    - cover renders
-    - title/genre/word count/chapter count are correct
-    - Read works when permitted
-    - EPUB works
-12. Only then report **WEBSITE COMPLETE**.
+7. Create/update only the minimum private website-runtime copies required for
+   protected EPUB/manuscript/background delivery.
+8. Copy the **final approved cover** to GitHub under `assets/covers/` with a stable,
+   title-derived slug.
+9. Set the book's public `coverUrl` to that same-origin `assets/covers/...` path.
+   Do **not** publish a Drive cover URL.
+10. Update/synchronize `BooksData` and `books-live.json` while preserving the
+    privacy boundary:
+    - public metadata and local public cover path may be visible;
+    - private EPUB/manuscript/background locations must not be exposed as direct
+      Drive URLs or IDs.
+11. Ensure the new title is present exactly once in the public catalogue.
+12. If catalogue/shell assets changed, bump or invalidate the PWA/service-worker
+    generation as needed so iPhone/Safari cannot keep a stale cover/catalogue.
+13. Run the privacy/security diagnostic. It must confirm that public catalogue data
+    contains **zero** `drive.google.com`, `docs.google.com`, and
+    `drive-private://` references.
+14. Run the live-asset diagnostic:
+    - exactly one catalogue row for the title;
+    - local cover path exists in the repository;
+    - cover URL returns an actual image;
+    - protected EPUB route resolves for an authorized reader;
+    - unauthenticated private-asset requests remain denied.
+15. Perform the live website smoke test:
+    - book card appears;
+    - cover renders on desktop and mobile/iPhone;
+    - cover view/grid renders without a broken-image icon;
+    - title/genre/word count/chapter count are correct;
+    - Read works when permitted;
+    - EPUB opens when permitted.
+16. Only then report **WEBSITE COMPLETE** and **BOOK CLOSED**.
+
+---
 
 ## Hard completion gate
 
-A Drive upload, GitHub commit, Pages deployment, or BooksData row alone is never
-sufficient.
+A Drive upload, GitHub commit, Pages deployment, BooksData row, final DOCX, EPUB,
+or ZIP alone is never sufficient.
 
-A title may be called `WEBSITE COMPLETE` only when:
+A title may be called `BOOK CLOSED` / `WEBSITE COMPLETE` only when:
 
-- the complete private final package exists in the FINAL ARCHIVE,
-- the runtime contains only the minimum public delivery copies,
-- BooksData points to those runtime copies,
-- the cover is publicly readable and renders,
-- the EPUB resolves,
+- the complete private final package exists in the FINAL ARCHIVE;
+- the protected runtime contains only the minimum necessary delivery copies;
+- the final cover exists under `assets/covers/`;
+- the public catalogue uses the local GitHub cover path and contains no Drive cover URL;
+- public catalogue data exposes no private Drive locations;
+- the cover renders on the live site, including mobile/iPhone;
+- the protected EPUB route works for authorized access;
+- unauthorized private access is denied;
 - and the live website card passes the smoke test.
+
+---
 
 ## Safety rule
 
-The private final archive and the public website runtime must never be confused.
+The private final archive, protected runtime, and public website assets must never
+be confused.
+
+- **FINAL ARCHIVE:** complete authoritative private package.
+- **Protected runtime/backend:** minimum private delivery copies.
+- **GitHub `assets/covers/`:** final approved public cover only.
+- **Public catalogue:** sanitized metadata + same-origin public cover path; never
+  direct private Drive locations.
 
 If a file contains internal audit material, submission strategy, checksums,
 private reference material, or a full release package, it belongs in
-**AJ Khan Bücher – FINAL ARCHIVE**, not in the runtime cache.
+**AJ Khan Bücher – FINAL ARCHIVE**, not in the public website.
 
-## Migration status — 24 September 2026
+---
 
-- Existing production archives are back in the private FINAL ARCHIVE.
-- `The Mountain That Doesn't Answer` was promoted from the old book-close test
-  location into the normal FINAL ARCHIVE.
-- Complete `Release Package` folders were removed from the public runtime for
-  `The Pen Was Still Warm` and `The Mountain That Doesn't Answer`.
-- The runtime currently contains no complete `Release Package` folders.
+## Migration status — 2 October 2026
+
+- Legacy Drive-thumbnail cover delivery has been removed from `books-live.json`.
+- All current catalogue covers resolve through same-origin GitHub assets or embedded
+  public image data.
+- The public catalogue contains no Drive cover references.
+- The service-worker generation was bumped to force clients away from stale
+  Drive-based cover data.
+- Future book closes must follow the GitHub-cover rule above so this regression
+  cannot recur.
