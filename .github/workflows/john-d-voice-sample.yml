@@ -42,6 +42,16 @@ jobs:
           code="$(curl -sS -o /tmp/hf-model.json -w '%{http_code}'             -H "Authorization: Bearer $HF_TOKEN"             "https://huggingface.co/api/models/kyutai/pocket-tts")"
           test "$code" = "200"
 
+      - name: System audio tools
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! command -v ffmpeg >/dev/null 2>&1; then
+            sudo apt-get update -qq
+            sudo apt-get install -y -qq --no-install-recommends ffmpeg
+          fi
+          ffmpeg -version | head -n 1
+
       - name: Install CPU runtime
         run: |
           python -m pip install --upgrade pip
