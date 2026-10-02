@@ -1,4 +1,4 @@
-name: Female Voice A-B Sample
+name: Audiobook Voice Validation
 
 on:
   push:
@@ -20,7 +20,7 @@ env:
 
 jobs:
   sample:
-    name: Render Mary and Narration chapter sample
+    name: Render audiobook voice validation samples
     runs-on: ubuntu-24.04
     timeout-minutes: 45
     env:
@@ -66,7 +66,7 @@ jobs:
       - name: Upload private review sample
         uses: actions/upload-artifact@v4
         with:
-          name: female-voice-ab-test
+          name: audiobook-voice-validation
           path: voice-sample/THE_TESTIMONY_OF_SAND_CH01_*.mp3
           if-no-files-found: error
           retention-days: 1
