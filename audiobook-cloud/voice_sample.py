@@ -10,7 +10,7 @@ import soundfile as sf
 
 from worker import download, parse_docx, chunks_for, load_tts, gen_audio, silence, write_mp3, api, AsrChecker, transcript_scores
 
-# Uses shared worker synthesis/QC pipeline.
+# Uses shared worker synthesis/QC pipeline. Tommy validation: intelligibility + crackle-safe onset.
 
 VOICES = {
     "mary": {"name": "Mary", "ttsLanguage": "english", "source": "mary"},
