@@ -34,6 +34,46 @@
     return String(value || '').replace(/\s+/g, ' ').trim().toLocaleLowerCase();
   }
 
+  // Stable same-origin cover assets take precedence over legacy Drive image URLs.
+  // For titles not yet migrated, convert the old lh3 /d/<id> form to Drive's
+  // thumbnail endpoint, which is more reliable on mobile Safari.
+  var STATIC_COVER_BY_TITLE_ = {
+    "the mountain that doesn't answer": "assets/covers/the-mountain-that-doesnt-answer.jpg",
+    "the weight of the air": "assets/covers/the-weight-of-the-air.jpg",
+    "the second ledger": "assets/covers/the-second-ledger.jpg",
+    "the pen was still warm": "assets/covers/the-pen-was-still-warm.jpg",
+    "the book of seven thieves": "assets/covers/the-book-of-seven-thieves.jpg",
+    "the physician of ashes": "assets/covers/the-physician-of-ashes.png",
+    "the blue hour": "assets/covers/the-blue-hour.jpg",
+    "the low wall": "assets/covers/the-low-wall.jpg",
+    "die rückführung": "assets/covers/die-rueckfuehrung.jpg",
+    "the erasure broker": "assets/covers/the-erasure-broker.jpg",
+    "the treasury of unanswered prayers": "assets/covers/the-treasury-of-unanswered-prayers.jpg",
+    "begin with water": "assets/covers/begin-with-water.jpg",
+    "the niche of light": "assets/covers/the-niche-of-light.jpg",
+    "die form des lichts": "assets/covers/die-form-des-lichts.jpg",
+    "what the clockmaker kept": "assets/covers/what-the-clockmaker-kept.jpg",
+    "what the ash remembers": "assets/covers/what-the-ash-remembers.jpg",
+    "the lamp keeper": "assets/covers/the-lamp-keeper.jpg",
+    "the drop": "assets/covers/the-drop.jpg",
+    "written in water": "assets/covers/written-in-water.jpg",
+    "the proof": "assets/covers/the-proof.jpg",
+    "arche": "assets/covers/arche.jpg",
+    "the glass ladder": "assets/covers/the-glass-ladder.jpg",
+    "the missing cover": "assets/covers/the-missing-cover.jpg",
+    "the covenant of light — the forgetting": "assets/covers/the-covenant-of-light-the-forgetting.jpg",
+    "the ledger of the dead": "assets/covers/the-ledger-of-the-dead.png"
+  };
+
+  function coverSrc_(title, url) {
+    var local = STATIC_COVER_BY_TITLE_[normTitle_(title)];
+    if (local) return local;
+    var value = String(url || '').trim();
+    var m = value.match(/^https:\/\/lh3\.googleusercontent\.com\/d\/([^=/?]+)=w\d+$/i);
+    if (m) return 'https://drive.google.com/thumbnail?id=' + encodeURIComponent(m[1]) + '&sz=w1000';
+    return value;
+  }
+
   function orderKey_(item) {
     if (!item) return '';
     var id = String(item.id || '').trim();
@@ -366,7 +406,7 @@
       entryId: choiceKey,
       baseTitle: title,
       title: edition.title || entry.title || title,
-      src: edition.coverUrl || entry.coverUrl || dom.src || '',
+      src: coverSrc_(edition.title || entry.title || title, edition.coverUrl || entry.coverUrl || dom.src || ''),
       hook: edition.hook || entry.hook || dom.hook || '',
       meta: entry.kind || dom.meta || '',
       actions: dom.actions || [],
@@ -691,7 +731,7 @@
         card: card,
         id: entry.id || (card && card.id) || ('book-card-' + encodeURIComponent(entry.title)),
         title: entry.title,
-        src: entry.coverUrl || '',
+        src: coverSrc_(entry.title, entry.coverUrl || ''),
         hook: entry.hook || dom.hook || '',
         meta: entry.kind || dom.meta || '',
         actions: dom.actions || []
