@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Dedicated German narration validation for Arne B.
+# Dedicated German narration validation for Arne B. — asset restored.
 from pathlib import Path
 import argparse
 
