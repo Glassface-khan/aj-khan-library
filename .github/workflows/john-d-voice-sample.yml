@@ -1,4 +1,4 @@
-name: John D Voice Sample
+name: Female Voice A-B Sample
 
 on:
   push:
@@ -20,7 +20,7 @@ env:
 
 jobs:
   sample:
-    name: Render John D sample
+    name: Render Mary and Narration chapter sample
     runs-on: ubuntu-24.04
     timeout-minutes: 45
     env:
@@ -51,12 +51,12 @@ jobs:
       - name: Render isolated sample
         run: |
           cd audiobook-cloud
-          python voice_sample.py             --job-id "3fd7f558-71df-4e3e-b120-960d13e85db0"             --output-dir ../voice-sample
+          python voice_sample.py             --job-id "3fd7f558-71df-4e3e-b120-960d13e85db0"             --section-index 1             --output-dir ../voice-sample
 
       - name: Upload private review sample
         uses: actions/upload-artifact@v4
         with:
-          name: john-d-voice-sample
-          path: voice-sample/john_d_voice_sample.wav
+          name: female-voice-ab-test
+          path: voice-sample/THE_TESTIMONY_OF_SAND_CH01_*.mp3
           if-no-files-found: error
           retention-days: 1
