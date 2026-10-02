@@ -14,6 +14,7 @@ VOICES = {
     "bill_boerst": {"name": "Bill Boerst", "ttsLanguage": "english", "source": "bill_boerst"},
     "stuart_bell": {"name": "Stuart Bell", "ttsLanguage": "english", "source": "stuart_bell"},
     "george": {"name": "George", "ttsLanguage": "english", "source": "george"},
+    "tommy": {"name": "Tommy", "ttsLanguage": "english", "source": "https://raw.githubusercontent.com/Glassface-khan/aj-khan-library/main/audiobook-cloud/RPReplay_Final1790927108.mp3"},
     "narration_us_f": {
         "name": "Narration (US, f)",
         "ttsLanguage": "english",
@@ -61,11 +62,8 @@ def main() -> int:
     print(f"SECTION_TITLE={section.title}")
     print(f"SECTION_WORDS={section.word_count}")
 
-    render_voice(section, "mary", outdir)
-    render_voice(section, "narration_us_f", outdir)
-    render_voice(section, "bill_boerst", outdir)
-    render_voice(section, "stuart_bell", outdir)
-    render_voice(section, "george", outdir)
+    render_voice(section, "tommy", outdir)
+
     return 0
 
 if __name__ == "__main__":
