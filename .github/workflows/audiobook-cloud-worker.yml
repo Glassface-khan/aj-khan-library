@@ -108,7 +108,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.cache/huggingface
-          key: audiobook-models-${{ runner.os }}-pocket-tts-80d24a3-whisper-base-v1
+          key: audiobook-models-${{ runner.os }}-pocket-tts-3.3.0-whisper-base-v1
 
       - name: System audio tools
         if: steps.hf_gate.outputs.continue == 'true'
@@ -175,7 +175,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.cache/huggingface
-          key: audiobook-models-${{ runner.os }}-pocket-tts-80d24a3-whisper-base-v1
+          key: audiobook-models-${{ runner.os }}-pocket-tts-3.3.0-whisper-base-v1
 
       - name: System audio tools
         shell: bash
