@@ -148,7 +148,7 @@
         seen[key] = true;
         var fallback = fallbackByTitle[key] || {};
         var entry = Object.assign({}, fallback, live);
-        if (fallback.coverUrl) entry.coverUrl = fallback.coverUrl;
+        if (!live.coverUrl && fallback.coverUrl) entry.coverUrl = fallback.coverUrl;
         merged.push(entry);
       });
       fallbackBooks.forEach(function (b) {
