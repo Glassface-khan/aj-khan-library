@@ -343,55 +343,27 @@ def split_long_part(text: str) -> list[str]:
 
 
 def chunks_for(section: Section) -> list[Chunk]:
+    """Preserve manuscript structure; Pocket TTS handles tokenizer-aware sentence splitting."""
     chunks: list[Chunk] = []
-    current: list[str] = []
-    current_words = 0
-    current_chars = 0
 
-    def flush(pause: float = TECHNICAL_CHUNK_PAUSE):
-        nonlocal current, current_words, current_chars
-        text = " ".join(current).strip()
-        if text:
-            chunks.append(Chunk(text, pause))
-        current = []
-        current_words = 0
-        current_chars = 0
-
-    paragraphs: list[str] = []
     if section.title and not section.title.lower().startswith("chapter "):
-        paragraphs.append(section.title.strip().rstrip(".:") + ".")
-    paragraphs += section.paragraphs
+        title = section.title.strip().rstrip(".:") + "."
+        if title:
+            chunks.append(Chunk(title, PARAGRAPH_PAUSE))
 
-    for p in paragraphs:
-        p = p.strip()
+    for raw in section.paragraphs:
+        p = raw.strip()
         if not p:
             continue
         if SCENE_RE.match(p):
-            flush(SCENE_PAUSE)
             if chunks:
                 chunks[-1].pause_after = max(chunks[-1].pause_after, SCENE_PAUSE)
             continue
-
-        paragraph_first_chunk = len(chunks)
-        parts = split_sentences(p) or [p]
-        for part in parts:
-            for segment in split_long_part(part):
-                pw = len(words(segment))
-                pc = len(segment)
-                if current and (current_words + pw > MAX_CHUNK_WORDS or current_chars + pc + 1 > MAX_CHUNK_CHARS):
-                    flush(TECHNICAL_CHUNK_PAUSE)
-                current.append(segment)
-                current_words += pw
-                current_chars += pc + 1
-
-        flush(PARAGRAPH_PAUSE)
-        if len(chunks) > paragraph_first_chunk:
-            chunks[-1].pause_after = max(chunks[-1].pause_after, PARAGRAPH_PAUSE)
+        chunks.append(Chunk(p, PARAGRAPH_PAUSE))
 
     if chunks:
         chunks[-1].pause_after = 0.0
     return chunks
-
 
 def ensure_mono_float(audio: np.ndarray) -> np.ndarray:
     x = np.asarray(audio, dtype=np.float32)
@@ -529,12 +501,20 @@ def load_tts_from_prepared(language: str, state_path: Path, temp: float = 0.3):
 
 
 def gen_audio(model, state, text: str) -> np.ndarray:
-    tensor = model.generate_audio(state, text, copy_state=True)
-    try:
-        tensor = tensor.detach().cpu()
-    except Exception:
-        pass
-    return ensure_mono_float(tensor.numpy())
+    """Render through Pocket TTS's tokenizer-aware stream and suppress chunk-onset clicks."""
+    rendered: list[np.ndarray] = []
+    fade_samples = max(1, int(0.005 * model.sample_rate))
+    for tensor in model.generate_audio_stream(state, text, copy_state=True):
+        try:
+            tensor = tensor.detach().cpu()
+        except Exception:
+            pass
+        audio = ensure_mono_float(tensor.numpy())
+        if audio.size:
+            n = min(fade_samples, audio.size)
+            audio[:n] *= np.linspace(0.0, 1.0, n, dtype=np.float32)
+            rendered.append(audio)
+    return np.concatenate(rendered) if rendered else np.zeros(1, dtype=np.float32)
 
 
 def silence(seconds: float, sr: int) -> np.ndarray:

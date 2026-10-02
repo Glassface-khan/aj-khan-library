@@ -67,6 +67,8 @@ def main() -> int:
     ref_mp3 = Path(__file__).resolve().parent / "RPReplay_Final1790942161.mp3"
     ref_wav = Path(__file__).resolve().parent / "tommy_reference_24k.wav"
     subprocess.run(["ffmpeg", "-y", "-hide_banner", "-loglevel", "error", "-i", str(ref_mp3), "-ac", "1", "-ar", "24000", "-c:a", "pcm_s16le", str(ref_wav)], check=True)
+    # Use exactly the same normalized reference for preflight and the chapter render.
+    VOICES["tommy"]["source"] = str(ref_wav)
 
     work = outdir / "work_tommy_preflight"
     work.mkdir(parents=True, exist_ok=True)
