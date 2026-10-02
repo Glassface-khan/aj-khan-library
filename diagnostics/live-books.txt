@@ -159,9 +159,9 @@ BOOK|FOLLOWER: FORTY-SIX SECONDS|status=Fertig|finished=True
 ASSET|FOLLOWER: FORTY-SIX SECONDS|cover|status=200|content-type=text/html; charset=utf-8|ok=False
 ASSET|FOLLOWER: FORTY-SIX SECONDS|epub|ERROR|URLError('unknown url type: private-epub')
 BOOK|THE LEDGER OF THE DEAD|status=Fertig|finished=True
-ASSET|THE LEDGER OF THE DEAD|cover|status=200|content-type=text/html; charset=utf-8|ok=False
+ASSET|THE LEDGER OF THE DEAD|cover|status=200|content-type=image/png|ok=True
 ASSET|THE LEDGER OF THE DEAD|epub|ERROR|URLError('unknown url type: private-epub')
-asset_failure_count=77
+asset_failure_count=76
 FAIL|The Road it came by: epub request failed: URLError('unknown url type: private-epub')
 FAIL|The Mountain That Doesn't Answer: epub request failed: URLError('unknown url type: private-epub')
 FAIL|The Low Wall: epub request failed: URLError('unknown url type: private-epub')
@@ -237,5 +237,4 @@ FAIL|THE HOUSE OF BORROWED MEMORIES: bad cover response status=200 content-type=
 FAIL|THE HOUSE OF BORROWED MEMORIES: epub request failed: URLError('unknown url type: private-epub')
 FAIL|FOLLOWER: FORTY-SIX SECONDS: bad cover response status=200 content-type=text/html; charset=utf-8
 FAIL|FOLLOWER: FORTY-SIX SECONDS: epub request failed: URLError('unknown url type: private-epub')
-FAIL|THE LEDGER OF THE DEAD: bad cover response status=200 content-type=text/html; charset=utf-8
 FAIL|THE LEDGER OF THE DEAD: epub request failed: URLError('unknown url type: private-epub')
