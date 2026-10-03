@@ -31,7 +31,7 @@ jobs:
   claim:
     name: Check queue
     runs-on: ubuntu-24.04
-    timeout-minutes: 5
+    timeout-minutes: 6
     outputs:
       has_job: ${{ steps.claim.outputs.has_job }}
       job_id: ${{ steps.claim.outputs.job_id }}
@@ -43,8 +43,18 @@ jobs:
           set -euo pipefail
           OIDC_JSON="$(curl --fail --silent --show-error             -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN"             "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=ajk-audiobook-factory")"
           OIDC_TOKEN="$(printf '%s' "$OIDC_JSON" | jq -r '.value')"
-          curl --fail --silent --show-error             -H "Authorization: Bearer $OIDC_TOKEN"             -H "Content-Type: application/json"             -d '{"op":"workerClaim"}'             "https://ipoqyjrojljmbqslmxxf.supabase.co/functions/v1/audiobook-factory"             > claim.json
-          JOB_ID="$(jq -r '.job.id // empty' claim.json)"
+          JOB_ID=""
+          for attempt in 1 2 3 4 5 6 7 8 9 10; do
+            curl --fail --silent --show-error               -H "Authorization: Bearer $OIDC_TOKEN"               -H "Content-Type: application/json"               -d '{"op":"workerClaim"}'               "https://ipoqyjrojljmbqslmxxf.supabase.co/functions/v1/audiobook-factory"               > claim.json
+            JOB_ID="$(jq -r '.job.id // empty' claim.json)"
+            if [ -n "$JOB_ID" ]; then
+              break
+            fi
+            if [ "$attempt" -lt 10 ]; then
+              echo "Queue empty; waiting 20s before check $((attempt + 1))/10."
+              sleep 20
+            fi
+          done
           if [ -n "$JOB_ID" ]; then
             echo "has_job=true" >> "$GITHUB_OUTPUT"
             echo "job_id=$JOB_ID" >> "$GITHUB_OUTPUT"
