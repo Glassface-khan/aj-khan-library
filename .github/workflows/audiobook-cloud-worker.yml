@@ -19,6 +19,7 @@ concurrency:
 
 permissions:
   contents: read
+  actions: write
   id-token: write
 
 env:
@@ -246,3 +247,20 @@ jobs:
       - name: Final QC gate and publish only if every section passed
         run: |
           python audiobook-cloud/worker.py finalize --job-id "${{ needs.claim.outputs.job_id }}"
+
+
+  drain_queue:
+    name: Continue audiobook queue
+    needs: [claim, prepare, produce, finalize]
+    if: always() && needs.claim.outputs.has_job == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 3
+    steps:
+      - name: Dispatch next queue check
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --fail --silent --show-error             -X POST             -H "Authorization: Bearer $GH_TOKEN"             -H "Accept: application/vnd.github+json"             -H "X-GitHub-Api-Version: 2022-11-28"             "https://api.github.com/repos/$GITHUB_REPOSITORY/actions/workflows/audiobook-cloud-worker.yml/dispatches"             -d '{"ref":"main"}'
+          echo "Next audiobook queue check dispatched."
