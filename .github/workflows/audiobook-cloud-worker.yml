@@ -1,4 +1,5 @@
 name: Audiobook Cloud Worker
+# retry wake: mike-jordan-preflight
 # queue wake-up: mike-jordan-search
 # queue wake-up: 2026-10-03
 
