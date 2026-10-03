@@ -1060,6 +1060,25 @@
     openRights: openRightsPanel
   };
 
+  // data-ajk-audio-rights-capture-v1
+  document.addEventListener('click', (event) => {
+    const raw = event && event.target;
+    const el = raw && raw.closest ? raw.closest('[data-ajk-audio-rights-launch]') : null;
+    if (!el) return;
+    event.preventDefault();
+    event.stopPropagation();
+    if (event.stopImmediatePropagation) event.stopImmediatePropagation();
+    Promise.resolve(openRightsPanel()).catch((err) => {
+      state.error = friendlyError(err);
+      state.open = true;
+      state.adminMode = true;
+      const root = ensureShell();
+      root.classList.add('open');
+      root.setAttribute('aria-hidden', 'false');
+      render();
+    });
+  }, true);
+
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', () => {
       ensureShell();
