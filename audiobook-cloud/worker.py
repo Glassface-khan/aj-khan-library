@@ -30,7 +30,7 @@ MODEL_RELOAD_EVERY_SECTIONS = 4
 MAX_CHUNK_RETRIES = 3
 
 SCENE_RE = re.compile(r"^(?:[◆◇◊*]+|[-–—]{1,3})$")
-LABEL_RE = re.compile(r"^(PROLOGUE|EPILOGUE|CODA|CHAPTER(?:\s+.+)?)$", re.I)
+LABEL_RE = re.compile(r"^(PROLOGUE|PROLOG|EPILOGUE|EPILOG|CODA|CHAPTER(?:\\s+.+)?|KAPITEL(?:\\s+.+)?|INTERLUDE(?:\\s+.+)?|ZWISCHENSPIEL(?:\\s+.+)?)$", re.I)
 BACKMATTER_RE = re.compile(
     r"^(HISTORICAL\s+NOTE|AUTHOR(?:'|’)?S\s+NOTE|AFTERWORD|GLOSSARY|ACKNOWLEDG(?:E)?MENTS?|ABOUT\s+THE\s+AUTHOR|IMPRINT)$",
     re.I,
