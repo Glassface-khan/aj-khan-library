@@ -1015,18 +1015,38 @@
   });
 
   async function openRightsPanel() {
-    if (!isEligible()) return false;
     const creds = credentials();
-    if (!creds.isAdmin || !creds.adminToken) return false;
+    if (!creds.isAdmin || !creds.adminToken) {
+      window.alert(tr('Admin-Sitzung fehlt. Bitte die Autorenseite neu als Admin öffnen.', 'Admin session missing. Please reopen the author site as admin.'));
+      return false;
+    }
     state.open = true;
     state.adminMode = true;
     const root = ensureShell();
     root.classList.add('open');
     root.setAttribute('aria-hidden', 'false');
     document.documentElement.style.overflow = 'hidden';
+    render();
     await openAdmin();
     return true;
   }
+
+  window.addEventListener('ajk-open-audio-rights', (event) => {
+    try {
+      if (event && event.detail && typeof event.detail === 'object') event.detail.handled = true;
+      Promise.resolve(openRightsPanel()).catch((err) => {
+        state.error = friendlyError(err);
+        state.open = true;
+        state.adminMode = true;
+        const root = ensureShell();
+        root.classList.add('open');
+        root.setAttribute('aria-hidden', 'false');
+        render();
+      });
+    } catch (err) {
+      window.alert(friendlyError(err));
+    }
+  });
 
   window.AJKAudioLibrary = {
     refresh: () => loadCatalog({ silent: true }),
@@ -1122,9 +1142,17 @@
         'padding:8px 14px',
         'cursor:pointer'
       ].join(';');
-      rights.addEventListener('click', function () {
-        if (window.AJKAudioLibrary && typeof window.AJKAudioLibrary.openRights === 'function') {
-          window.AJKAudioLibrary.openRights();
+      rights.addEventListener('click', function (event) {
+        event.preventDefault();
+        event.stopPropagation();
+        const detail = { handled: false };
+        window.dispatchEvent(new CustomEvent('ajk-open-audio-rights', { detail }));
+        if (!detail.handled && window.AJKAudioLibrary && typeof window.AJKAudioLibrary.openRights === 'function') {
+          Promise.resolve(window.AJKAudioLibrary.openRights()).catch((err) => {
+            window.alert(String((err && err.message) || err || 'Audio-Rechte konnten nicht geöffnet werden.'));
+          });
+        } else if (!detail.handled) {
+          window.alert('Audio-Rechte konnten nicht geöffnet werden. Bitte die Seite einmal neu laden.');
         }
       });
 
