@@ -12,6 +12,8 @@
   var canonicalCatalog_ = [];
   var canonicalCatalogLoaded_ = false;
   var GAS_URL = 'https://script.google.com/macros/s/AKfycbwcbRDaWkM1wf3MV_dj4RPw9jQl2Fgc4YfGcmFrGU1S243yvh8WGW7mbyXLbSeVJKI/exec';
+  var AUDIO_AVAIL_URL = 'https://ipoqyjrojljmbqslmxxf.supabase.co/functions/v1/audio-library';
+  var audioAvailableBookIds_ = new Set();
   var dragState_ = null;
   var suppressCoverClickUntil_ = 0;
   var searchTimer_ = null;
@@ -428,6 +430,24 @@
     return badge;
   }
 
+  async function loadAudioAvailability_() {
+    try {
+      var res = await fetch(AUDIO_AVAIL_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        cache: 'no-store',
+        body: JSON.stringify({ op: 'availability' })
+      });
+      if (!res.ok) return;
+      var data = await res.json();
+      var rows = data && data.ok && Array.isArray(data.books) ? data.books : [];
+      audioAvailableBookIds_ = new Set(rows.map(function (x) {
+        return String(x && x.site_book_id || '').trim();
+      }).filter(Boolean));
+      refreshAudioBadges_();
+    } catch (_) {}
+  }
+
   function refreshAudioBadges_() {
     var grid = document.getElementById(GRID_ID);
     if (!grid) return;
@@ -436,16 +456,19 @@
       var frame = thumb.querySelector('.ajk-cover-frame');
       if (!frame) return;
       var existing = frame.querySelector('.ajk-cover-audio-badge');
-      var hasAudio = false;
-      try {
-        hasAudio = !!(window.AJKAudioLibrary &&
-          ((typeof window.AJKAudioLibrary.findAllByBook === 'function' &&
-            window.AJKAudioLibrary.findAllByBook(thumb.dataset.bookId || '', title, '').length) ||
-           (typeof window.AJKAudioLibrary.findByBook === 'function' &&
-            window.AJKAudioLibrary.findByBook(thumb.dataset.bookId || '', title, '')) ||
-           (typeof window.AJKAudioLibrary.findByTitle === 'function' &&
-            window.AJKAudioLibrary.findByTitle(title, ''))));
-      } catch (_) {}
+      var bookId = String(thumb.dataset.bookId || '').trim();
+      var hasAudio = audioAvailableBookIds_.has(bookId);
+      if (!hasAudio) {
+        try {
+          hasAudio = !!(window.AJKAudioLibrary &&
+            ((typeof window.AJKAudioLibrary.findAllByBook === 'function' &&
+              window.AJKAudioLibrary.findAllByBook(bookId, title, '').length) ||
+             (typeof window.AJKAudioLibrary.findByBook === 'function' &&
+              window.AJKAudioLibrary.findByBook(bookId, title, '')) ||
+             (typeof window.AJKAudioLibrary.findByTitle === 'function' &&
+              window.AJKAudioLibrary.findByTitle(title, ''))));
+        } catch (_) {}
+      }
       if (hasAudio && !existing) frame.appendChild(audioBadge_());
       if (!hasAudio && existing) existing.remove();
     });
@@ -1429,6 +1452,7 @@
     // request. The UI must not wait for that request: show controls now, then
     // refresh thumbnails once catalogue data is available.
     startUi_();
+    loadAudioAvailability_();
     loadCanonicalCatalog_().then(refreshGridAfterCatalog_, refreshGridAfterCatalog_);
   }
 
