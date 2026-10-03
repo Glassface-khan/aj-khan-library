@@ -452,7 +452,7 @@
     .normalize('NFKD').replace(/[\u0300-\u036f]/g, '')
     .replace(/[’‘]/g, "'").replace(/[^a-z0-9]+/g, ' ').trim();
 
-  function audioBookFor_(siteBookId, title, languageCode) {
+  function audioBooksFor_(siteBookId, title, languageCode) {
     const id = String(siteBookId || '').trim();
     const lang = String(languageCode || '').toUpperCase();
     let matches = id ? state.catalog.filter((b) => String(b.site_book_id || '') === id) : [];
@@ -460,11 +460,12 @@
       const wanted = normAudioTitle_(title);
       matches = state.catalog.filter((b) => normAudioTitle_(b.title) === wanted);
     }
-    if (lang) {
-      const exact = matches.find((b) => String(b.language_code || '').toUpperCase() === lang);
-      if (exact) return exact;
-    }
-    return matches[0] || null;
+    if (lang) matches = matches.filter((b) => String(b.language_code || '').toUpperCase() === lang);
+    return matches.slice().sort((x, y) => String(x.narrator_name || '').localeCompare(String(y.narrator_name || '')));
+  }
+
+  function audioBookFor_(siteBookId, title, languageCode) {
+    return audioBooksFor_(siteBookId, title, languageCode)[0] || null;
   }
 
   function audioBookForTitle_(title, languageCode) {
@@ -665,10 +666,10 @@
     updatePlayerUi();
   }
 
-  async function openBook(siteBookId, title, languageCode) {
+  async function openAudioBook(bookId) {
     if (!isEligible()) return false;
     if (!state.catalog.length) await loadCatalog({ silent: true });
-    const book = audioBookFor_(siteBookId, title, languageCode);
+    const book = state.catalog.find((b) => String(b.id) === String(bookId));
     if (!book) return false;
 
     state.open = true;
@@ -679,6 +680,12 @@
     document.documentElement.style.overflow = 'hidden';
     await startBook(book.id);
     return true;
+  }
+
+  async function openBook(siteBookId, title, languageCode) {
+    if (!state.catalog.length) await loadCatalog({ silent: true });
+    const book = audioBookFor_(siteBookId, title, languageCode);
+    return book ? openAudioBook(book.id) : false;
   }
 
   async function openBookByTitle(title, languageCode) {
@@ -1026,6 +1033,8 @@
     getCatalog: () => state.catalog.slice(),
     findByTitle: (title, languageCode) => audioBookForTitle_(title, languageCode),
     findByBook: (siteBookId, title, languageCode) => audioBookFor_(siteBookId, title, languageCode),
+    findAllByBook: (siteBookId, title, languageCode) => audioBooksFor_(siteBookId, title, languageCode),
+    openAudioBook,
     openBook,
     openBookByTitle,
     openRights: openRightsPanel

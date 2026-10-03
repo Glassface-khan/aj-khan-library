@@ -388,23 +388,36 @@
     return result;
   }
 
-  function audioForBook_(book) {
+  function audioBooksForBook_(book) {
     try {
-      if (!window.AJKAudioLibrary) return null;
+      if (!window.AJKAudioLibrary) return [];
+      if (typeof window.AJKAudioLibrary.findAllByBook === 'function') {
+        var all = window.AJKAudioLibrary.findAllByBook(
+          book.entryId || book.id || '',
+          book.title || book.baseTitle || '',
+          book.selectedLang || ''
+        );
+        if (all && all.length) return all;
+      }
       if (typeof window.AJKAudioLibrary.findByBook === 'function') {
         var exact = window.AJKAudioLibrary.findByBook(
           book.entryId || book.id || '',
           book.title || book.baseTitle || '',
           book.selectedLang || ''
         );
-        if (exact) return exact;
+        if (exact) return [exact];
       }
       if (typeof window.AJKAudioLibrary.findByTitle === 'function') {
-        return window.AJKAudioLibrary.findByTitle(book.title || book.baseTitle || '', book.selectedLang || '') ||
+        var byTitle = window.AJKAudioLibrary.findByTitle(book.title || book.baseTitle || '', book.selectedLang || '') ||
           window.AJKAudioLibrary.findByTitle(book.baseTitle || '', book.selectedLang || '');
+        return byTitle ? [byTitle] : [];
       }
-      return null;
-    } catch (_) { return null; }
+      return [];
+    } catch (_) { return []; }
+  }
+
+  function audioForBook_(book) {
+    return audioBooksForBook_(book)[0] || null;
   }
 
   function audioBadge_() {
@@ -426,7 +439,9 @@
       var hasAudio = false;
       try {
         hasAudio = !!(window.AJKAudioLibrary &&
-          ((typeof window.AJKAudioLibrary.findByBook === 'function' &&
+          ((typeof window.AJKAudioLibrary.findAllByBook === 'function' &&
+            window.AJKAudioLibrary.findAllByBook(thumb.dataset.bookId || '', title, '').length) ||
+           (typeof window.AJKAudioLibrary.findByBook === 'function' &&
             window.AJKAudioLibrary.findByBook(thumb.dataset.bookId || '', title, '')) ||
            (typeof window.AJKAudioLibrary.findByTitle === 'function' &&
             window.AJKAudioLibrary.findByTitle(title, ''))));
@@ -542,31 +557,32 @@
 
     if (book.hook) { var p = document.createElement('p'); p.className = 'ajk-cover-detail-hook'; p.textContent = book.hook; info.appendChild(p); }
 
-    var audioBook = audioForBook_(book);
-    if (book.actions.length || audioBook) {
+    var audioBooks = audioBooksForBook_(book);
+    if (book.actions.length || audioBooks.length) {
       var actions = document.createElement('div'); actions.className = 'ajk-cover-detail-actions';
       book.actions.forEach(function (original) {
         var bt = document.createElement('button'); bt.type = 'button'; bt.className = 'ajk-cover-detail-action'; bt.textContent = original.textContent.trim();
         bt.addEventListener('click', function () { closeDetail(); original.click(); });
         actions.appendChild(bt);
       });
-      if (audioBook) {
+      audioBooks.forEach(function (audioBook) {
         var audioBt = document.createElement('button');
         audioBt.type = 'button';
         audioBt.className = 'ajk-cover-detail-action';
-        audioBt.textContent = audioBook.progress && audioBook.progress.chapter_id ? t('Weiterhören', 'Continue listening') : t('Hörbuch', 'Audiobook');
+        var baseLabel = audioBook.progress && audioBook.progress.chapter_id ? t('Weiterhören', 'Continue listening') : t('Hörbuch', 'Audiobook');
+        var narrator = String(audioBook.narrator_name || '').trim();
+        audioBt.textContent = narrator ? (baseLabel + ' · ' + narrator) : baseLabel;
         audioBt.addEventListener('click', function () {
           closeDetail();
-          if (window.AJKAudioLibrary) {
-            if (typeof window.AJKAudioLibrary.openBook === 'function') {
-              window.AJKAudioLibrary.openBook(book.entryId || book.id || '', book.title || book.baseTitle, book.selectedLang || '');
-            } else {
-              window.AJKAudioLibrary.openBookByTitle(book.title || book.baseTitle, book.selectedLang || '');
-            }
+          if (!window.AJKAudioLibrary) return;
+          if (typeof window.AJKAudioLibrary.openAudioBook === 'function') {
+            window.AJKAudioLibrary.openAudioBook(audioBook.id);
+          } else if (typeof window.AJKAudioLibrary.openBook === 'function') {
+            window.AJKAudioLibrary.openBook(book.entryId || book.id || '', book.title || book.baseTitle, book.selectedLang || '');
           }
         });
         actions.appendChild(audioBt);
-      }
+      });
       info.appendChild(actions);
     }
 
