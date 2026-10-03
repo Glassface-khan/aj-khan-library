@@ -786,6 +786,8 @@ def produce(args: argparse.Namespace) -> int:
     tts_language = {
         "peter_yearsley": "english",
         "narration_us_f": "english",
+        "tommy": "english",
+        "mike_jordan": "english",
         "john_d": "english",
         "arne_b": "german_24l",
     }[job["voice_key"]]
