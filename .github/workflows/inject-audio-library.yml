@@ -20,13 +20,13 @@ jobs:
           from pathlib import Path
           p = Path("index.html")
           text = p.read_text(encoding="utf-8")
-          tag = '<script src="audio-library.js?v=20261003c" defer></script>'
+          tag = '<script src="audio-library.js?v=20261003d" defer></script>'
           # index.html contains an embedded template string with its own </body>.
           # Remove any previous loader insertion and place it before the LAST
           # closing body tag, which is the real outer document body.
           import re
           text = re.sub(r'\s*<script src="audio-library\.js(?:\?[^"]*)?" defer></script>\s*', '\n', text)
-          text = re.sub(r'<script src="cover-grid-v3\.js(?:\?[^"]*)?"></script>', '<script src="cover-grid-v3.js?v=20261003c"></script>', text)
+          text = re.sub(r'<script src="cover-grid-v3\.js(?:\?[^"]*)?"></script>', '<script src="cover-grid-v3.js?v=20261003d"></script>', text)
           pos = text.rfind("</body>")
           if pos < 0:
               raise SystemExit("index.html has no </body> tag")
