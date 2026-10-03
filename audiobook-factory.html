@@ -63,7 +63,7 @@ pre{white-space:pre-wrap;word-break:break-word;font-size:11px;background:#11100d
         <div id="voiceInfo" class="muted"></div>
       </div>
       <div class="full hidden" id="voiceUploadBox">
-        <label>Einmalige Referenzstimme hochladen</label>
+        <label id="voiceUploadLabel">Referenzstimme hochladen</label>
         <input id="voiceFile" type="file" accept=".wav,.mp3,audio/wav,audio/mpeg">
         <label style="text-transform:none;letter-spacing:0"><input id="voiceRights" type="checkbox"> Ich bestätige, dass ich die erforderliche Einwilligung/Rechte zur Nutzung dieser Referenzstimme für Voice Cloning habe.</label>
         <button id="uploadVoice">Referenzstimme speichern</button>
@@ -114,21 +114,27 @@ async function loadVoices(){
  const d=await api({op:'voices'});voices=d.voices||[];renderVoices();
 }
 function renderVoices(){
- const lang=$('#lang').value,s=$('#voice'),prev=s.value;s.innerHTML='';
- voices.filter(v=>v.languageCode===lang).forEach(v=>{
-   const o=document.createElement('option');o.value=v.key;o.textContent=v.name+(v.ready?'':' · Referenz fehlt');o.disabled=!v.ready;s.appendChild(o);
- });
- if([...s.options].some(o=>o.value===prev&&!o.disabled))s.value=prev;
- const preferred=localStorage.getItem('ajk_factory_voice_'+lang);
- if(preferred&&[...s.options].some(o=>o.value===preferred&&!o.disabled))s.value=preferred;
- if(!s.value){const first=[...s.options].find(o=>!o.disabled);if(first)s.value=first.value}
- updateVoiceInfo();
+function renderVoices(){
+  const lang=$('#lang').value,s=$('#voice'),prev=s.value;s.innerHTML='';
+  voices.filter(v=>v.languageCode===lang).forEach(v=>{
+    const o=document.createElement('option');o.value=v.key;o.textContent=v.name+(v.ready?'':' · Referenz fehlt');s.appendChild(o);
+  });
+  if([...s.options].some(o=>o.value===prev))s.value=prev;
+  const preferred=localStorage.getItem('ajk_factory_voice_'+lang);
+  if(preferred&&[...s.options].some(o=>o.value===preferred))s.value=preferred;
+  if(!s.value&&s.options.length)s.value=s.options[0].value;
+  updateVoiceInfo();
+}
 }
 function updateVoiceInfo(){
- const v=voices.find(x=>x.key===$('#voice').value);
- $('#voiceInfo').textContent=v?(v.ready?'Bereit · '+v.name:'Referenzstimme fehlt'):'';
- const missingForLang=voices.filter(v=>v.languageCode===$('#lang').value&&v.sourceType==='asset'&&!v.ready);
- $('#voiceUploadBox').classList.toggle('hidden',missingForLang.length===0);
+  const v=voices.find(x=>x.key===$('#voice').value);
+  $('#voiceInfo').textContent=v?(v.ready?'Bereit · '+v.name:(v.name+' · Referenz fehlt')):'';
+  const canUpload=!!(v&&v.sourceType==='asset');
+  $('#voiceUploadBox').classList.toggle('hidden',!canUpload);
+  if(canUpload){
+    $('#voiceUploadLabel').textContent=v.ready?('Referenzstimme ersetzen · '+v.name):('Referenzstimme hochladen · '+v.name);
+    $('#uploadVoice').textContent=v.ready?'REFERENZSTIMME ERSETZEN':'REFERENZSTIMME SPEICHERN';
+  }
 }
 function chooseBookFromFilename(name){
  const n=norm(name.replace(/\.docx$/i,'').replace(/\b(final|publication|master|candidate|locked|working|complete|v\d+(?:_\d+)*)\b/gi,' '));
@@ -149,19 +155,22 @@ function syncBookLanguage(){
  renderVoices();
 }
 async function uploadMissingVoice(){
- $('#error').textContent='';
- try{
-   const file=$('#voiceFile').files[0];if(!file)throw new Error('Bitte WAV- oder MP3-Datei auswählen.');
-   if(!$('#voiceRights').checked)throw new Error('Bitte Nutzungsrechte/Einwilligung bestätigen.');
-   const lang=$('#lang').value;
-   const missing=voices.find(v=>v.languageCode===lang&&v.sourceType==='asset'&&!v.ready);
-   if(!missing)throw new Error('Keine fehlende Referenzstimme für diese Sprache.');
-   const r=await fetch(API,{method:'POST',headers:{
-     'x-ajk-op':'upload-voice','x-admin-token':token,'x-voice-key':missing.key,'x-voice-format':(file.name.toLowerCase().endsWith('.mp3')?'mp3':'wav'),'Content-Type':file.type||'application/octet-stream'
-   },body:file});
-   const d=await r.json();if(!r.ok||!d.ok)throw new Error(d.error||'Upload fehlgeschlagen');
-   await loadVoices();
- }catch(e){$('#error').textContent=e.message}
+  $('#error').textContent='';
+  try{
+    const file=$('#voiceFile').files[0];if(!file)throw new Error('Bitte WAV- oder MP3-Datei auswählen.');
+    if(!$('#voiceRights').checked)throw new Error('Bitte Nutzungsrechte/Einwilligung bestätigen.');
+    const selected=voices.find(v=>v.key===$('#voice').value&&v.sourceType==='asset');
+    if(!selected)throw new Error('Bitte eine Stimme mit eigener Referenz auswählen.');
+    const r=await fetch(API,{method:'POST',headers:{
+      'x-ajk-op':'upload-voice','x-admin-token':token,'x-voice-key':selected.key,'x-voice-format':(file.name.toLowerCase().endsWith('.mp3')?'mp3':'wav'),'Content-Type':file.type||'application/octet-stream'
+    },body:file});
+    const d=await r.json();if(!r.ok||!d.ok)throw new Error(d.error||'Upload fehlgeschlagen');
+    $('#voiceFile').value='';
+    $('#voiceRights').checked=false;
+    await loadVoices();
+    $('#voice').value=selected.key;
+    updateVoiceInfo();
+  }catch(e){$('#error').textContent=e.message}
 }
 function selectedJobKey(file,b,voice){
  return [file.name,file.size,file.lastModified,b.id,$('#lang').value,voice.key].join('|');
