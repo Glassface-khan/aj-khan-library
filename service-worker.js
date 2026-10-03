@@ -1,3 +1,4 @@
+// v52 -> v53 (03.10.2026): force fresh audiobook/cover-grid runtime so headphone badges and multi-voice UI appear on iOS.
 // v51 -> v52 (02.10.2026): force all clients onto same-origin cover assets after complete Drive-cover migration.
 // v50 -> v51 (02.10.2026): refresh cover-grid after legacy Drive cover delivery repair.
 // v49 -> v50 (29.09.2026): Safari/WebKit hardening — no-store HTML, pageshow/visibility
@@ -49,8 +50,8 @@
 // payloads in IndexedDB for fast reopening; force clients to fetch the new JS.
 // v26 -> v27 (24.09.2026): books-live.json is the immediate catalog fallback;
 // BooksData remains canonical and replaces it whenever the live request succeeds.
-// v37 -> v38 (28.09.2026): force iOS to reload the exact-order cover grid.\n// v39 -> v40 (28.09.2026): deploy THE GUEST catalog entry, cover and EPUB; force clients to refresh the catalog fallback.\n// v40 -> v41 (28.09.2026): deploy THE NIGHT SIDE catalog entry, cover and EPUB; force clients to refresh the catalog fallback.\nconst SHELL_CACHE = 'ajk-shell-v52';
-const DATA_CACHE = 'ajk-data-v52';
+// v37 -> v38 (28.09.2026): force iOS to reload the exact-order cover grid.\n// v39 -> v40 (28.09.2026): deploy THE GUEST catalog entry, cover and EPUB; force clients to refresh the catalog fallback.\n// v40 -> v41 (28.09.2026): deploy THE NIGHT SIDE catalog entry, cover and EPUB; force clients to refresh the catalog fallback.\nconst SHELL_CACHE = 'ajk-shell-v53';
+const DATA_CACHE = 'ajk-data-v53';
 const SHELL_FILES = ['./', './index.html', './books-live.json', './cover-grid-v3.js', './manifest.webmanifest', './icons/icon-192.png', './icons/icon-512.png'];
 
 // Aktionen, deren Antwort für Offline-Nutzung zwischengespeichert werden
@@ -136,7 +137,7 @@ async function injectAudioLibrary_(response) {
     if (now - lastCheck < 30000) return;
     lastCheck = now;
 
-    navigator.serviceWorker.register('./service-worker.js?v=52', {
+    navigator.serviceWorker.register('./service-worker.js?v=53', {
       scope: './',
       updateViaCache: 'none'
     }).then(function (reg) {
