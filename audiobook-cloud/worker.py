@@ -487,6 +487,8 @@ def load_tts(language: str, voice_source: str, workdir: Path, temp: float = 0.3)
     model = TTSModel.load_model(language=language, temp=temp)
     voice_path = voice_source
     downloaded_voice: Path | None = None
+    normalized_voice: Path | None = None
+
     if voice_source.startswith("http://") or voice_source.startswith("https://"):
         lower = voice_source.lower()
         if ".safetensors" in lower:
@@ -495,16 +497,33 @@ def load_tts(language: str, voice_source: str, workdir: Path, temp: float = 0.3)
             ext = ".mp3"
         else:
             ext = ".wav"
-        vp = workdir / ("voice" + ext)
+
+        vp = workdir / ("voice_source" + ext)
         download(voice_source, vp)
-        voice_path = str(vp)
         downloaded_voice = vp
+
+        if ext == ".safetensors":
+            voice_path = str(vp)
+        else:
+            normalized_voice = workdir / "voice_reference_24k_mono.wav"
+            subprocess.run([
+                "ffmpeg", "-y", "-hide_banner", "-loglevel", "error",
+                "-i", str(vp),
+                "-ac", "1",
+                "-ar", "24000",
+                "-c:a", "pcm_s16le",
+                str(normalized_voice),
+            ], check=True)
+            voice_path = str(normalized_voice)
+
     state = model.get_state_for_audio_prompt(voice_path)
-    if downloaded_voice is not None and downloaded_voice.suffix.lower() in {".mp3", ".wav"}:
-        try:
-            downloaded_voice.unlink(missing_ok=True)
-        except Exception:
-            pass
+
+    for temp_path in (downloaded_voice, normalized_voice):
+        if temp_path is not None:
+            try:
+                temp_path.unlink(missing_ok=True)
+            except Exception:
+                pass
     return model, state
 
 
