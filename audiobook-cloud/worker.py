@@ -30,9 +30,9 @@ MODEL_RELOAD_EVERY_SECTIONS = 4
 MAX_CHUNK_RETRIES = 3
 
 SCENE_RE = re.compile(r"^(?:[◆◇◊*]+|[-–—]{1,3})$")
-LABEL_RE = re.compile(r"^(PROLOGUE|PROLOG|EPILOGUE|EPILOG|CODA|CHAPTER(?:\\s+.+)?|KAPITEL(?:\\s+.+)?|INTERLUDE(?:\\s+.+)?|ZWISCHENSPIEL(?:\\s+.+)?)$", re.I)
+LABEL_RE = re.compile(r"^(PROLOGUE|PROLOG|EPILOGUE|EPILOG|CODA|CHAPTER(?:\s+.+)?|KAPITEL(?:\s+.+)?|[A-ZÄÖÜ][A-Za-zÄÖÜäöüß-]+\s+KAPITEL|INTERLUDE(?:\s+.+)?|ZWISCHENSPIEL(?:\s+.+)?)$", re.I)
 BACKMATTER_RE = re.compile(
-    r"^(HISTORICAL\s+NOTE|AUTHOR(?:'|’)?S\s+NOTE|AFTERWORD|GLOSSARY|ACKNOWLEDG(?:E)?MENTS?|ABOUT\s+THE\s+AUTHOR|IMPRINT)$",
+    r"^(HISTORICAL\s+NOTE|HISTORISCHE\s+NOTIZ|AUTHOR.*NOTE|ANMERKUNG\s+DES\s+AUTORS|AFTERWORD|NACHWORT|GLOSSARY|GLOSSAR(?:\s+.+)?|ANHANG|ACKNOWLEDG(?:E)?MENTS?|DANKSAGUNG|ABOUT\s+THE\s+AUTHOR|UEBER\s+DEN\s+AUTOR|IMPRINT|IMPRESSUM)$",
     re.I,
 )
 
@@ -48,7 +48,8 @@ class Section:
     @property
     def spoken_text(self) -> str:
         parts: list[str] = []
-        if self.title and not self.title.lower().startswith("chapter "):
+        chapter_label = bool(re.match(r"^(?:CHAPTER|KAPITEL)\s+|^[A-ZÄÖÜ][A-Za-zÄÖÜäöüß-]+\s+KAPITEL$", self.title, re.I))
+        if self.title and not chapter_label:
             parts.append(self.title.strip().rstrip(".:") + ".")
         for p in self.paragraphs:
             if SCENE_RE.match(p.strip()):
@@ -243,8 +244,8 @@ def parse_docx(path: Path) -> tuple[str, list[Section], dict[str, Any]]:
             body_from = start + 1
             kind = "chapter"
         else:
-            kind = "prologue" if label.upper().startswith("PROLOGUE") else (
-                "epilogue" if label.upper().startswith("EPILOGUE") else ("coda" if label.upper().startswith("CODA") else "chapter")
+            kind = "prologue" if label.upper().startswith(("PROLOGUE", "PROLOG")) else (
+                "epilogue" if label.upper().startswith(("EPILOGUE", "EPILOG")) else ("coda" if label.upper().startswith("CODA") else "chapter")
             )
             chapter_title = label.title()
             body_from = start + 1
