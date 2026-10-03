@@ -20,7 +20,7 @@ import soundfile as sf
 
 API = "https://ipoqyjrojljmbqslmxxf.supabase.co/functions/v1/audiobook-factory"
 OIDC_AUDIENCE = "ajk-audiobook-factory"
-SHARD_COUNT_DEFAULT = 4  # bilingual parser retry
+SHARD_COUNT_DEFAULT = 4  # German parser retry v2
 MAX_CHUNK_WORDS = 28
 MAX_CHUNK_CHARS = 220
 TECHNICAL_CHUNK_PAUSE = 0.03
