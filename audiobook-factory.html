@@ -180,14 +180,15 @@ function resetJobSubmitState(){
  const file=$('#source').files[0];
  $('#sourceStatus').textContent=file?('Ausgewählt: '+file.name):'Auf dem iPhone kannst du hier direkt Google Drive oder iCloud Drive auswählen.';
 }
-function matchingExistingJob(file,b){
+function matchingExistingJob(file,b,voice){
  const lang=$('#lang').value;
  return currentJobs.find(j=>{
    const sameFile=String(j.source_file_name||'')===file.name;
    const sameTitle=norm(j.requested_title||j.detected_title||'')===norm(b.title);
    const sameLang=String(j.language_code||'').toUpperCase()===lang;
    const reusable=['uploading','queued','preflight','qc_running','production','finalizing','needs_attention','failed'].includes(String(j.status||''));
-   return sameFile&&sameTitle&&sameLang&&reusable;
+   const sameVoice=String(j.voice_key||'')===String(voice.key||'');
+   return sameFile&&sameTitle&&sameLang&&sameVoice&&reusable;
  });
 }
 async function startJob(){
@@ -202,13 +203,20 @@ async function startJob(){
    if(lastSubmittedKey===key)throw new Error('Für diese Auswahl wurde bereits ein Job angelegt.');
    jobSubmitLocked=true;
    $('#start').disabled=true;$('#start').textContent='PRÜFE BESTEHENDE JOBS …';
-   const existing=matchingExistingJob(file,b);
+   const existing=matchingExistingJob(file,b,voice);
    if(existing){
-     throw new Error('Für diese Datei existiert bereits ein Cloud-Job ('+statusLabel(existing)+'). Bitte den vorhandenen Job verwenden bzw. „Automatisch erneut versuchen“.');
+      throw new Error('Für dieses Buch und diese Stimme existiert bereits ein Cloud-Job ('+statusLabel(existing)+'). Bitte den vorhandenen Job verwenden bzw. „Automatisch erneut versuchen“.');
    }
+    const edition=await api({op:'editionStatus',siteBookId:b.id,voiceKey:voice.key});
+    let replaceExisting=false;
+    if(edition.exists){
+      const narrator=(edition.edition&&edition.edition.narrator_name)||voice.name;
+      replaceExisting=confirm('Für dieses Buch existiert bereits eine fertige Hörbuchfassung mit „'+narrator+'“.\n\nWirklich ersetzen?\n\nAndere Stimmenfassungen bleiben unverändert.');
+      if(!replaceExisting)return;
+    }
    localStorage.setItem('ajk_factory_voice_'+$('#lang').value,voice.key);
    $('#start').textContent='JOB WIRD ANGELEGT …';
-   const created=await api({op:'createJob',fileName:file.name,title:b.title,siteBookId:b.id,coverUrl:b.coverUrl||'',languageCode:$('#lang').value,voiceKey:voice.key,publishAutomatically:$('#autoPublish').checked});
+   const created=await api({op:'createJob',fileName:file.name,title:b.title,siteBookId:b.id,coverUrl:b.coverUrl||'',languageCode:$('#lang').value,voiceKey:voice.key,replaceExisting:replaceExisting,publishAutomatically:$('#autoPublish').checked});
    $('#start').textContent='MANUSKRIPT WIRD IN DIE CLOUD GELADEN …';
    const r=await fetch(API,{method:'POST',headers:{
      'x-ajk-op':'upload-source','x-admin-token':token,'x-job-id':created.jobId,
