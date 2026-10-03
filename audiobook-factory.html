@@ -114,7 +114,6 @@ async function loadVoices(){
  const d=await api({op:'voices'});voices=d.voices||[];renderVoices();
 }
 function renderVoices(){
-function renderVoices(){
   const lang=$('#lang').value,s=$('#voice'),prev=s.value;s.innerHTML='';
   voices.filter(v=>v.languageCode===lang).forEach(v=>{
     const o=document.createElement('option');o.value=v.key;o.textContent=v.name+(v.ready?'':' · Referenz fehlt');s.appendChild(o);
@@ -124,7 +123,6 @@ function renderVoices(){
   if(preferred&&[...s.options].some(o=>o.value===preferred))s.value=preferred;
   if(!s.value&&s.options.length)s.value=s.options[0].value;
   updateVoiceInfo();
-}
 }
 function updateVoiceInfo(){
   const v=voices.find(x=>x.key===$('#voice').value);
