@@ -249,8 +249,8 @@ function renderJob(j){
 }
 async function loadJobs(){
  try{
-  const d=await api({op:'listJobs'});const js=d.jobs||[];currentJobs=js;
-  $('#jobs').innerHTML=js.length?js.map(renderJob).join(''):'<p class="muted">Noch keine Cloud-Jobs.</p>';
+   const d=await api({op:'listJobs'});const all=d.jobs||[];const js=all.filter(j=>j.status!=='cancelled');currentJobs=js;
+   $('#jobs').innerHTML=js.length?js.map(renderJob).join(''):'<p class="muted">Noch keine aktiven Cloud-Jobs.</p>';
   document.querySelectorAll('[data-retry]').forEach(b=>b.onclick=async()=>{await api({op:'retryJob',jobId:b.dataset.retry});loadJobs()});
   document.querySelectorAll('[data-cancel]').forEach(b=>b.onclick=async()=>{if(confirm('Job wirklich abbrechen?')){await api({op:'cancelJob',jobId:b.dataset.cancel});loadJobs()}});
  }catch(e){$('#jobs').innerHTML='<p class="bad">'+esc(e.message)+'</p>'}
