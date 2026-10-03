@@ -344,10 +344,15 @@ def split_long_part(text: str) -> list[str]:
 
 
 def chunks_for(section: Section) -> list[Chunk]:
-    """Preserve manuscript structure; Pocket TTS handles tokenizer-aware sentence splitting."""
+    """Preserve paragraph rhythm while splitting long text at natural boundaries."""
     chunks: list[Chunk] = []
 
-    if section.title and not section.title.lower().startswith("chapter "):
+    chapter_label = bool(re.match(
+        r"^(?:CHAPTER|KAPITEL)\\s+|^[A-ZÄÖÜ][A-Za-zÄÖÜäöüß-]+\\s+KAPITEL$",
+        section.title or "",
+        re.I,
+    ))
+    if section.title and not chapter_label:
         title = section.title.strip().rstrip(".:") + "."
         if title:
             chunks.append(Chunk(title, PARAGRAPH_PAUSE))
@@ -360,7 +365,16 @@ def chunks_for(section: Section) -> list[Chunk]:
             if chunks:
                 chunks[-1].pause_after = max(chunks[-1].pause_after, SCENE_PAUSE)
             continue
-        chunks.append(Chunk(p, PARAGRAPH_PAUSE))
+
+        pieces: list[str] = []
+        for sentence in split_sentences(p):
+            pieces.extend(split_long_part(sentence))
+        if not pieces:
+            pieces = split_long_part(p)
+
+        for pi, piece in enumerate(pieces):
+            pause_after = PARAGRAPH_PAUSE if pi == len(pieces) - 1 else TECHNICAL_CHUNK_PAUSE
+            chunks.append(Chunk(piece, pause_after))
 
     if chunks:
         chunks[-1].pause_after = 0.0
