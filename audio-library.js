@@ -1060,14 +1060,26 @@
     openRights: openRightsPanel
   };
 
-  // data-ajk-audio-rights-capture-v1
-  document.addEventListener('click', (event) => {
+  // data-ajk-audio-rights-capture-v2
+  // iOS Safari can occasionally suppress the synthetic click after a tap in
+  // a dynamically inserted admin header. Handle pointerup as an additional
+  // native path, then swallow the follow-up click with a short debounce.
+  let lastRightsLaunchAt_ = 0;
+  function launchRightsFromControl_(event) {
     const raw = event && event.target;
     const el = raw && raw.closest ? raw.closest('[data-ajk-audio-rights-launch]') : null;
     if (!el) return;
-    event.preventDefault();
-    event.stopPropagation();
-    if (event.stopImmediatePropagation) event.stopImmediatePropagation();
+
+    if (event) {
+      event.preventDefault();
+      event.stopPropagation();
+      if (event.stopImmediatePropagation) event.stopImmediatePropagation();
+    }
+
+    const now = Date.now();
+    if (now - lastRightsLaunchAt_ < 450) return;
+    lastRightsLaunchAt_ = now;
+
     Promise.resolve(openRightsPanel()).catch((err) => {
       state.error = friendlyError(err);
       state.open = true;
@@ -1077,7 +1089,10 @@
       root.setAttribute('aria-hidden', 'false');
       render();
     });
-  }, true);
+  }
+
+  document.addEventListener('pointerup', launchRightsFromControl_, true);
+  document.addEventListener('click', launchRightsFromControl_, true);
 
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', () => {
@@ -1159,7 +1174,11 @@
         'letter-spacing:.06em',
         'text-transform:uppercase',
         'padding:8px 14px',
-        'cursor:pointer'
+        'cursor:pointer',
+        'position:relative',
+        'z-index:3',
+        'touch-action:manipulation',
+        '-webkit-tap-highlight-color:transparent'
       ].join(';');
       rights.addEventListener('click', function (event) {
         event.preventDefault();
