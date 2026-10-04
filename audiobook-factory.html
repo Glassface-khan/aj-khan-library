@@ -158,10 +158,26 @@ function chooseBookFromFilename(name){
  if(best&&score>=0.65){$('#book').value=best.id;syncBookLanguage()}
 }
 function syncBookLanguage(){
- const b=books.find(x=>x.id===$('#book').value);if(!b)return;
- const langs=Object.keys(b.langs||{});
- if(langs.length===1&&['EN','DE'].includes(langs[0]))$('#lang').value=langs[0];
+ const b=books.find(x=>x.id===$('#book').value);
+ const langSelect=$('#lang');
+ if(!b){
+   langSelect.disabled=false;
+   renderVoices();
+   updateStartAvailability();
+   return;
+ }
+ const langs=Object.keys(b.langs||{}).filter(x=>['EN','DE'].includes(String(x).toUpperCase())).map(x=>String(x).toUpperCase());
+ if(langs.length===1){
+   langSelect.value=langs[0];
+   langSelect.disabled=true;
+   langSelect.title='Sprache ist durch die vorhandene Buchfassung festgelegt.';
+ }else{
+   langSelect.disabled=false;
+   langSelect.title='';
+   if(langs.length>1&&!langs.includes(langSelect.value))langSelect.value=langs[0];
+ }
  renderVoices();
+ updateStartAvailability();
 }
 async function uploadMissingVoice(){
   $('#error').textContent='';
@@ -184,12 +200,19 @@ async function uploadMissingVoice(){
 function selectedJobKey(file,b,voice){
  return [file.name,file.size,file.lastModified,b.id,$('#lang').value,voice.key].join('|');
 }
+function selectedBookLanguageMismatch_(){
+ const b=books.find(x=>x.id===$('#book').value);
+ if(!b)return false;
+ const langs=Object.keys(b.langs||{}).map(x=>String(x).toUpperCase()).filter(x=>['EN','DE'].includes(x));
+ return langs.length>0&&!langs.includes(String($('#lang').value||'').toUpperCase());
+}
 function updateStartAvailability(){
  if(jobSubmitLocked)return;
  const ack=$('#replaceEditionAck');
  const replacementBlocked=!!(currentEdition&&(!ack||!ack.checked));
  const activeJobBlocked=!!currentEditionJob;
- $('#start').disabled=editionCheckPending||replacementBlocked||activeJobBlocked;
+ const languageBlocked=selectedBookLanguageMismatch_();
+ $('#start').disabled=editionCheckPending||replacementBlocked||activeJobBlocked||languageBlocked;
 }
 async function checkExistingEdition(){
  const seq=++editionCheckSeq;
@@ -278,6 +301,10 @@ async function startJob(){
  try{
    const file=$('#source').files[0];if(!file)throw new Error('Bitte DOCX auswählen.');
    const b=books.find(x=>x.id===$('#book').value);if(!b)throw new Error('Bitte Buch auf der Autorenseite auswählen.');
+   const availableBookLangs=Object.keys(b.langs||{}).map(x=>String(x).toUpperCase()).filter(x=>['EN','DE'].includes(x));
+   if(availableBookLangs.length&&!availableBookLangs.includes(String($('#lang').value||'').toUpperCase())){
+     throw new Error('Die gewählte Sprache passt nicht zur Buchfassung. Verfügbar: '+availableBookLangs.join(', ')+'.');
+   }
    const voice=voices.find(v=>v.key===$('#voice').value);if(!voice||!voice.ready)throw new Error('Bitte verfügbare Stimme auswählen.');
    const key=selectedJobKey(file,b,voice);
    if(lastSubmittedKey===key)throw new Error('Für diese Auswahl wurde bereits ein Job angelegt.');
@@ -429,7 +456,7 @@ async function init(){
 }
 $('#source').onchange=()=>{resetJobSubmitState();const f=$('#source').files[0];if(f)chooseBookFromFilename(f.name);void checkExistingEdition()};
 $('#book').onchange=()=>{resetJobSubmitState();syncBookLanguage();void checkExistingEdition()};
-$('#lang').onchange=()=>{resetJobSubmitState();renderVoices();void checkExistingEdition()};
+$('#lang').onchange=()=>{resetJobSubmitState();renderVoices();updateStartAvailability();void checkExistingEdition()};
 $('#voice').onchange=()=>{resetJobSubmitState();updateVoiceInfo();void checkExistingEdition()};
 $('#replaceEditionAck').onchange=updateStartAvailability;
 $('#start').onclick=startJob;
