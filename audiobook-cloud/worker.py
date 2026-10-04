@@ -654,7 +654,9 @@ def prepare(args: argparse.Namespace) -> int:
     voice = claim["voice"]
     requested = normalize_text(job.get("requested_title") or "")
     detected = normalize_text(detected_title)
+    source_name_text = normalize_text(re.sub(r"[_-]+", " ", job.get("source_file_name") or ""))
     title_similarity = difflib.SequenceMatcher(None, requested, detected).ratio() if requested and detected else 1.0
+    title_in_filename = bool(requested and source_name_text and requested in source_name_text)
 
     try:
         model, state = load_tts(voice["ttsLanguage"], voice["source"], workdir)
@@ -674,7 +676,7 @@ def prepare(args: argparse.Namespace) -> int:
 
         samples_pass = all(x["passed"] for x in sample_results)
         structure_pass = diagnostics.get("toc_count", 0) in (0, len(sections))
-        title_pass = title_similarity >= 0.45
+        title_pass = title_similarity >= 0.45 or title_in_filename
         passed = samples_pass and structure_pass and title_pass
         quality_values = [
             (r["sequence_similarity"] + r["word_recall"] + r["wer_similarity"]) / 3.0
@@ -684,6 +686,7 @@ def prepare(args: argparse.Namespace) -> int:
         summary = {
             "structure": diagnostics,
             "title_similarity": title_similarity,
+            "title_in_filename": title_in_filename,
             "sample_sections": sample_results,
             "samples_pass": samples_pass,
             "structure_pass": structure_pass,
