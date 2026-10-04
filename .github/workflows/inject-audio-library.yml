@@ -20,7 +20,7 @@ jobs:
           from pathlib import Path
           p = Path("index.html")
           text = p.read_text(encoding="utf-8")
-          tag = '<script src="audio-library.js?v=20261004d" defer></script>'
+          tag = '<script src="audio-library.js?v=20261004e" defer></script>'
           # index.html contains an embedded template string with its own </body>.
           # Remove any previous loader insertion and place it before the LAST
           # closing body tag, which is the real outer document body.
