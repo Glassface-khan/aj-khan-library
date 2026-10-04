@@ -54,8 +54,8 @@
 // payloads in IndexedDB for fast reopening; force clients to fetch the new JS.
 // v26 -> v27 (24.09.2026): books-live.json is the immediate catalog fallback;
 // BooksData remains canonical and replaces it whenever the live request succeeds.
-// v37 -> v38 (28.09.2026): force iOS to reload the exact-order cover grid.\n// v39 -> v40 (28.09.2026): deploy THE GUEST catalog entry, cover and EPUB; force clients to refresh the catalog fallback.\n// v40 -> v41 (28.09.2026): deploy THE NIGHT SIDE catalog entry, cover and EPUB; force clients to refresh the catalog fallback.\nconst SHELL_CACHE = 'ajk-shell-v57';
-const DATA_CACHE = 'ajk-data-v57';
+// v37 -> v38 (28.09.2026): force iOS to reload the exact-order cover grid.\n// v39 -> v40 (28.09.2026): deploy THE GUEST catalog entry, cover and EPUB; force clients to refresh the catalog fallback.\n// v40 -> v41 (28.09.2026): deploy THE NIGHT SIDE catalog entry, cover and EPUB; force clients to refresh the catalog fallback.\nconst SHELL_CACHE = 'ajk-shell-v58';
+const DATA_CACHE = 'ajk-data-v58';
 const SHELL_FILES = ['./', './index.html', './books-live.json', './cover-grid-v3.js', './manifest.webmanifest', './icons/icon-192.png', './icons/icon-512.png'];
 
 // Aktionen, deren Antwort für Offline-Nutzung zwischengespeichert werden
@@ -121,7 +121,7 @@ async function injectAudioLibrary_(response) {
   const pos = text.lastIndexOf('</body>');
 
   if (pos >= 0 && text.indexOf('audio-library.js') === -1) {
-    text = text.slice(0, pos) + '  <script src="./audio-library.js?v=20261004a" defer></script>\\n' + text.slice(pos);
+    text = text.slice(0, pos) + '  <script src="./audio-library.js?v=20261004b" defer></script>\\n' + text.slice(pos);
   }
 
   // Safari/WebKit can restore a page from the back-forward cache while keeping
@@ -141,7 +141,7 @@ async function injectAudioLibrary_(response) {
     if (now - lastCheck < 30000) return;
     lastCheck = now;
 
-    navigator.serviceWorker.register('./service-worker.js?v=57', {
+    navigator.serviceWorker.register('./service-worker.js?v=58', {
       scope: './',
       updateViaCache: 'none'
     }).then(function (reg) {
