@@ -296,7 +296,7 @@ def parse_docx(path: Path) -> tuple[str, list[Section], dict[str, Any]]:
     expected = (
         len(toc_section_entries)
         if len(toc_section_entries) >= 2
-        else (len(toc_entries) if len(toc_entries) >= 2 else len(sections))
+        else len(sections)
     )
     diagnostics = {
         "toc_count": len(toc_entries),
@@ -712,7 +712,14 @@ def prepare(args: argparse.Namespace) -> int:
             api("workerHeartbeat", {"jobId": job_id})
 
         samples_pass = all(x["passed"] for x in sample_results)
-        structure_pass = diagnostics.get("toc_count", 0) in (0, len(sections))
+        structure_pass = (
+            bool(diagnostics.get("toc_count_advisory_only"))
+            or diagnostics.get("toc_count", 0) in (0, len(sections))
+            or (
+                diagnostics.get("toc_section_count", 0) >= 2
+                and diagnostics.get("toc_section_count") == len(sections)
+            )
+        )
         title_pass = title_similarity >= 0.45 or title_in_filename
         passed = samples_pass and structure_pass and title_pass
         quality_values = [
