@@ -180,6 +180,10 @@ function resetJobSubmitState(){
  const file=$('#source').files[0];
  $('#sourceStatus').textContent=file?('Ausgewählt: '+file.name):'Auf dem iPhone kannst du hier direkt Google Drive oder iCloud Drive auswählen.';
 }
+function isSourceProblem(j){
+ return ['SOURCE_TITLE_MISMATCH','SOURCE_STRUCTURE_MISMATCH'].includes(String(j&&j.error_code||'')) ||
+        ['source_title_mismatch','source_structure_mismatch'].includes(String(j&&j.stage||''));
+}
 function matchingExistingJob(file,b,voice){
  const lang=$('#lang').value;
  return currentJobs.find(j=>{
@@ -188,7 +192,7 @@ function matchingExistingJob(file,b,voice){
    const sameLang=String(j.language_code||'').toUpperCase()===lang;
    const reusable=['uploading','queued','preflight','qc_running','production','finalizing','needs_attention','failed'].includes(String(j.status||''));
    const sameVoice=String(j.voice_key||'')===String(voice.key||'');
-   return sameFile&&sameTitle&&sameLang&&sameVoice&&reusable;
+   return sameFile&&sameTitle&&sameLang&&sameVoice&&reusable&&!isSourceProblem(j);
  });
 }
 async function startJob(){
@@ -239,36 +243,93 @@ async function startJob(){
  }
 }
 const esc=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-function statusLabel(j){
+function queuePositionMap_(jobs){
+ const queued=jobs.filter(j=>j.status==='queued').sort((a,b)=>new Date(a.created_at||0)-new Date(b.created_at||0));
+ const m=new Map();queued.forEach((j,i)=>m.set(j.id,i+1));return m;
+}
+function jobRank_(j){
+ if(['production','preflight','qc_running','finalizing','uploading'].includes(j.status))return 0;
+ if(j.status==='queued')return 1;
+ if(['needs_attention','failed'].includes(j.status))return 2;
+ if(j.status==='ready')return 3;
+ return 4;
+}
+function sourceProblemText_(j){
+ if(String(j.error_code||'')==='SOURCE_TITLE_MISMATCH'||String(j.stage||'')==='source_title_mismatch'){
+   const requested=String(j.requested_title||'').trim();
+   const detected=String(j.detected_title||'').trim();
+   return 'Falsches Manuskript für die gewählte Buchkarte: ausgewählt „'+requested+'“, erkannt „'+detected+'“. Bitte die richtige DOCX auswählen.';
+ }
+ if(String(j.error_code||'')==='SOURCE_STRUCTURE_MISMATCH'||String(j.stage||'')==='source_structure_mismatch'){
+   return 'Die Kapitelstruktur der Quelle konnte nicht eindeutig zugeordnet werden. Bitte die korrigierte DOCX auswählen; dieser Job wird nicht automatisch erneut gestartet.';
+ }
+ return String(j.error_detail||'Quelle prüfen.');
+}
+function statusLabel(j,queuePos){
  const complete=Number(j.progress_total||0)>0&&Number(j.progress_done||0)>=Number(j.progress_total||0);
+ if(isSourceProblem(j))return 'Quelle korrigieren';
+ if(j.status==='queued'){
+   const p=queuePos?(' · Position '+queuePos):'';
+   return j.stage==='storage_path_rebuild'?('Sicherheits-Neuaufbau'+p):('Warteschlange'+p);
+ }
  if(j.status==='production'&&complete&&j.qc_status==='passed')return 'Finalisierung';
- const map={uploading:'Upload',queued:'Wartet auf Cloud-Worker',preflight:'Vorprüfung',qc_running:'Qualitätsprüfung',production:'Produktion',finalizing:'Finalisierung',ready:'Fertig',needs_attention:'Prüfung nötig',failed:'Fehler',cancelled:'Abgebrochen'};
+ const map={uploading:'Upload',preflight:'Vorprüfung',qc_running:'Qualitätsprüfung',production:'Produktion',finalizing:'Finalisierung',ready:'Fertig',needs_attention:'Prüfung nötig',failed:'Fehler',cancelled:'Abgebrochen'};
  return map[j.status]||j.status;
 }
-function renderJob(j){
+function renderJob(j,queuePos){
+ const sourceProblem=isSourceProblem(j);
  const pct=j.progress_total?Math.round(100*j.progress_done/j.progress_total):0;
  const complete=Number(j.progress_total||0)>0&&Number(j.progress_done||0)>=Number(j.progress_total||0);
- const q=j.qc_status==='passed'?'<span class="badge good">QC PASS</span>':j.qc_status==='failed'?'<span class="badge bad">QC FAIL</span>':'<span class="badge">QC '+esc(j.qc_status)+'</span>';
- const actions=(j.status==='needs_attention'||j.status==='failed')?'<button data-retry="'+j.id+'">Automatisch erneut versuchen</button>':'';
- const cancel=!complete&&!['ready','failed','cancelled'].includes(j.status)?'<button data-cancel="'+j.id+'">Abbrechen</button>':'';
  const title=j.requested_title||j.detected_title||j.source_file_name;
- const detected=String(j.detected_title||'').trim();
- const requested=String(j.requested_title||'').trim();
- const titleConflict=!!(detected&&requested&&norm(detected)!==norm(requested)&&j.qc_summary&&j.qc_summary.title_pass===false);
- const conflict=titleConflict?'<p class="bad">Titelkonflikt: ausgewählt „'+esc(requested)+'“, im Manuskript erkannt „'+esc(detected)+'“. Bitte nicht erneut versuchen – richtige DOCX/Buchauswahl verwenden.</p>':'';
+ const q=sourceProblem
+   ?'<span class="badge bad">QUELLE PRÜFEN</span>'
+   :(j.qc_status==='passed'?'<span class="badge good">QC PASS</span>':j.qc_status==='failed'?'<span class="badge bad">QC FAIL</span>':'<span class="badge">QC '+esc(j.qc_status)+'</span>');
+ let actions='';
+ if(sourceProblem){
+   actions='<button data-fix-source="'+j.id+'">KORRIGIERTE DOCX AUSWÄHLEN</button><button data-dismiss="'+j.id+'">Aus Liste ausblenden</button>';
+ }else{
+   if(j.status==='needs_attention'||j.status==='failed')actions+='<button data-retry="'+j.id+'">Automatisch erneut versuchen</button>';
+   if(['uploading','queued','preflight','qc_running','production','finalizing'].includes(j.status)&&!complete)actions+='<button data-cancel="'+j.id+'">Abbrechen</button>';
+ }
+ const progress=sourceProblem
+   ?''
+   :'<progress max="100" value="'+pct+'"></progress><div class="muted">'+j.progress_done+' / '+(j.progress_total||'?')+' Abschnitte · '+pct+'%</div>';
+ const score=(!sourceProblem&&j.qc_score!=null)?'<span class="badge">QC '+Math.round(Number(j.qc_score))+'%</span>':'';
+ const err=sourceProblem?'<p class="bad">'+esc(sourceProblemText_(j))+'</p>':(j.error_detail?'<p class="bad">'+esc(j.error_detail)+'</p>':'');
  return '<div class="job"><div class="job-title">'+esc(title)+'</div>'+
- '<div class="job-meta">'+esc(j.voice_name)+' · '+esc(j.language_code)+' · '+esc(statusLabel(j))+'</div>'+q+
- (j.qc_score!=null?'<span class="badge">QC '+Math.round(Number(j.qc_score))+'%</span>':'')+
- '<progress max="100" value="'+pct+'"></progress><div class="muted">'+j.progress_done+' / '+(j.progress_total||'?')+' Abschnitte · '+pct+'%</div>'+
- conflict+(j.error_detail?'<p class="bad">'+esc(j.error_detail)+'</p>':'')+
- '<div class="row">'+actions+cancel+'</div></div>';
+ '<div class="job-meta">'+esc(j.voice_name)+' · '+esc(j.language_code)+' · '+esc(statusLabel(j,queuePos))+'</div>'+q+score+
+ progress+err+'<div class="row">'+actions+'</div></div>';
+}
+function prepareSourceReplacement_(jobId){
+ const j=currentJobs.find(x=>x.id===jobId);if(!j)return;
+ if(j.site_book_id&&[...$('#book').options].some(o=>o.value===j.site_book_id))$('#book').value=j.site_book_id;
+ if(['EN','DE'].includes(String(j.language_code||'').toUpperCase()))$('#lang').value=String(j.language_code).toUpperCase();
+ renderVoices();
+ if(j.voice_key&&[...$('#voice').options].some(o=>o.value===j.voice_key))$('#voice').value=j.voice_key;
+ updateVoiceInfo();
+ $('#source').value='';
+ $('#sourceStatus').textContent='Bitte jetzt die korrigierte DOCX für „'+(j.requested_title||'dieses Buch')+'“ auswählen.';
+ $('#newJob').scrollIntoView({behavior:'smooth',block:'start'});
 }
 async function loadJobs(){
  try{
-   const d=await api({op:'listJobs'});const all=d.jobs||[];const js=all.filter(j=>j.status!=='cancelled');currentJobs=js;
-   $('#jobs').innerHTML=js.length?js.map(renderJob).join(''):'<p class="muted">Noch keine aktiven Cloud-Jobs.</p>';
-  document.querySelectorAll('[data-retry]').forEach(b=>b.onclick=async()=>{await api({op:'retryJob',jobId:b.dataset.retry});loadJobs()});
-  document.querySelectorAll('[data-cancel]').forEach(b=>b.onclick=async()=>{if(confirm('Job wirklich abbrechen?')){await api({op:'cancelJob',jobId:b.dataset.cancel});loadJobs()}});
+   const d=await api({op:'listJobs'});const all=d.jobs||[];
+   currentJobs=all.filter(j=>j.status!=='cancelled');
+   const qpos=queuePositionMap_(currentJobs);
+   const visible=currentJobs.filter(j=>!(j.status==='ready'&&j.stage==='published'));
+   visible.sort((a,b)=>{
+     const ra=jobRank_(a),rb=jobRank_(b);if(ra!==rb)return ra-rb;
+     if(a.status==='queued'&&b.status==='queued')return new Date(a.created_at||0)-new Date(b.created_at||0);
+     if(ra===2)return new Date(b.created_at||0)-new Date(a.created_at||0);
+     return new Date(a.created_at||0)-new Date(b.created_at||0);
+   });
+   const published=currentJobs.filter(j=>j.status==='ready'&&j.stage==='published').length;
+   $('#jobs').innerHTML=(visible.length?visible.map(j=>renderJob(j,qpos.get(j.id))).join(''):'<p class="muted">Keine aktiven Cloud-Jobs.</p>')+
+     (published?'<p class="muted" style="margin-top:18px">✓ '+published+' abgeschlossene/veröffentlichte Jobs sind hier ausgeblendet und in der Audio-Bibliothek verfügbar.</p>':'');
+   document.querySelectorAll('[data-retry]').forEach(b=>b.onclick=async()=>{try{await api({op:'retryJob',jobId:b.dataset.retry});await loadJobs()}catch(e){$('#error').textContent=e.message}});
+   document.querySelectorAll('[data-cancel]').forEach(b=>b.onclick=async()=>{if(confirm('Job wirklich abbrechen?')){await api({op:'cancelJob',jobId:b.dataset.cancel});await loadJobs()}});
+   document.querySelectorAll('[data-dismiss]').forEach(b=>b.onclick=async()=>{if(confirm('Diesen fehlerhaften Job aus der Liste ausblenden?')){await api({op:'cancelJob',jobId:b.dataset.dismiss});await loadJobs()}});
+   document.querySelectorAll('[data-fix-source]').forEach(b=>b.onclick=()=>prepareSourceReplacement_(b.dataset.fixSource));
  }catch(e){$('#jobs').innerHTML='<p class="bad">'+esc(e.message)+'</p>'}
 }
 async function init(){
