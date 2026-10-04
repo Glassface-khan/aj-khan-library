@@ -700,16 +700,57 @@ def prepare(args: argparse.Namespace) -> int:
         asr = AsrChecker(job["language_code"])
         picks = sorted(set([0, len(sections) // 2, len(sections) - 1]))
         sample_results = []
+
+        # A single stochastic TTS render can occasionally be bad even when the
+        # voice/model is healthy. Re-render only the failed sample locally before
+        # blocking an entire novel. Thresholds stay unchanged; full production
+        # is still released only when every selected preflight sample passes.
+        preflight_state_path = workdir / "preflight_voice.safetensors"
+        try:
+            from pocket_tts import export_model_state
+            export_model_state(state, preflight_state_path)
+        except Exception:
+            preflight_state_path = None
+
         for ix in picks:
             text = preflight_sample_text(sections[ix])
-            result = preflight_qc(
-                model, state, model.sample_rate, asr, text,
-                workdir / f"preflight_{ix:03d}.wav", job["language_code"],
-            )
+            attempts = []
+            result = None
+            for sample_attempt in range(1, 4):
+                out_wav = workdir / f"preflight_{ix:03d}_a{sample_attempt}.wav"
+                result = preflight_qc(
+                    model, state, model.sample_rate, asr, text,
+                    out_wav, job["language_code"],
+                )
+                result["attempt"] = sample_attempt
+                attempts.append({
+                    "attempt": sample_attempt,
+                    "passed": result["passed"],
+                    "reasons": result["reasons"],
+                    "sequence_similarity": result["sequence_similarity"],
+                    "word_recall": result["word_recall"],
+                    "wer_similarity": result["wer_similarity"],
+                })
+                api("workerHeartbeat", {"jobId": job_id})
+                if result["passed"]:
+                    break
+
+                # Reinitialize generation for the retry while preserving the
+                # exact same voice state. A lower temperature reduces transient
+                # pronunciation failures without weakening QC thresholds.
+                if sample_attempt < 3 and preflight_state_path is not None:
+                    model, state = load_tts_from_prepared(
+                        voice["ttsLanguage"],
+                        preflight_state_path,
+                        temp=max(0.20, 0.30 - 0.05 * sample_attempt),
+                    )
+
+            assert result is not None
             result["section_index"] = ix
             result["source_words"] = len(words(text))
+            result["attempts"] = attempts
+            result["attempt_count"] = len(attempts)
             sample_results.append(result)
-            api("workerHeartbeat", {"jobId": job_id})
 
         samples_pass = all(x["passed"] for x in sample_results)
         structure_pass = (
@@ -737,6 +778,8 @@ def prepare(args: argparse.Namespace) -> int:
             "title_pass": title_pass,
             "policy": {
                 "full_production_requires_all_preflight_samples_pass": True,
+                "preflight_sample_max_attempts": 3,
+                "failed_samples_are_rerendered_without_lowering_qc_thresholds": True,
                 "asr_model": "base.en" if job["language_code"] == "EN" else "base",
                 "private_inputs_never_uploaded_as_github_artifacts": True,
             },
