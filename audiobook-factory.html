@@ -279,8 +279,8 @@ function isSourceProblem(j){
  const stage=String(j&&j.stage||'');
  const detail=String(j&&j.error_detail||'');
  const summaryError=String(j&&j.qc_summary&&j.qc_summary.error||'');
- return ['SOURCE_TITLE_MISMATCH','SOURCE_STRUCTURE_MISMATCH'].includes(code) ||
-        ['source_title_mismatch','source_structure_mismatch'].includes(stage) ||
+ return ['SOURCE_TITLE_MISMATCH','SOURCE_STRUCTURE_MISMATCH','SOURCE_LANGUAGE_MISMATCH'].includes(code) ||
+        ['source_title_mismatch','source_structure_mismatch','source_language_mismatch'].includes(stage) ||
         (code==='PREPRODUCTION_QC_FAILED' && /TOC\/body mismatch|has no body text|No chapter\/prologue structure/i.test(detail+' '+summaryError));
 }
 function matchingExistingJob(file,b,voice){
@@ -368,6 +368,11 @@ function sourceProblemText_(j){
  if(String(j.error_code||'')==='SOURCE_STRUCTURE_MISMATCH'||String(j.stage||'')==='source_structure_mismatch'){
    return 'Die Kapitelstruktur der Quelle konnte nicht eindeutig zugeordnet werden. Bitte die korrigierte DOCX auswählen; dieser Job wird nicht automatisch erneut gestartet.';
  }
+ if(String(j.error_code||'')==='SOURCE_LANGUAGE_MISMATCH'||String(j.stage||'')==='source_language_mismatch'){
+   const detected=String(j.qc_summary&&j.qc_summary.detected_language||'').toUpperCase();
+   const selected=String(j.qc_summary&&j.qc_summary.selected_language||j.language_code||'').toUpperCase();
+   return 'Sprache/Stimme passt nicht zum Manuskript'+(detected?(': Manuskript '+detected):'')+(selected?(', gewählt '+selected):'')+'. Bitte die Buchsprache bzw. Stimme korrigieren; ein erneuter Lauf mit derselben Auswahl würde wieder fehlschlagen.';
+ }
  return String(j.error_detail||'Quelle prüfen.');
 }
 function statusLabel(j,queuePos){
@@ -391,7 +396,10 @@ function renderJob(j,queuePos){
    :(j.qc_status==='passed'?'<span class="badge good">QC PASS</span>':j.qc_status==='failed'?'<span class="badge bad">QC FAIL</span>':'<span class="badge">QC '+esc(j.qc_status)+'</span>');
  let actions='';
  if(sourceProblem){
-   actions='<button data-fix-source="'+j.id+'">KORRIGIERTE DOCX AUSWÄHLEN</button><button data-dismiss="'+j.id+'">Aus Liste ausblenden</button>';
+   const fixLabel=(String(j.error_code||'')==='SOURCE_LANGUAGE_MISMATCH'||String(j.stage||'')==='source_language_mismatch')
+     ?'SPRACHE / STIMME KORRIGIEREN'
+     :'KORRIGIERTE DOCX AUSWÄHLEN';
+   actions='<button data-fix-source="'+j.id+'">'+fixLabel+'</button><button data-dismiss="'+j.id+'">Aus Liste ausblenden</button>';
  }else{
    if(j.status==='needs_attention'||j.status==='failed')actions+='<button data-retry="'+j.id+'">Automatisch erneut versuchen</button>';
    if(['uploading','queued','preflight','qc_running','production','finalizing'].includes(j.status)&&!complete)actions+='<button data-cancel="'+j.id+'">Abbrechen</button>';
@@ -408,12 +416,20 @@ function renderJob(j,queuePos){
 function prepareSourceReplacement_(jobId){
  const j=currentJobs.find(x=>x.id===jobId);if(!j)return;
  if(j.site_book_id&&[...$('#book').options].some(o=>o.value===j.site_book_id))$('#book').value=j.site_book_id;
- if(['EN','DE'].includes(String(j.language_code||'').toUpperCase()))$('#lang').value=String(j.language_code).toUpperCase();
- renderVoices();
- if(j.voice_key&&[...$('#voice').options].some(o=>o.value===j.voice_key))$('#voice').value=j.voice_key;
+ const languageMismatch=String(j.error_code||'')==='SOURCE_LANGUAGE_MISMATCH'||String(j.stage||'')==='source_language_mismatch';
+ if(languageMismatch){
+   syncBookLanguage();
+ }else{
+   if(['EN','DE'].includes(String(j.language_code||'').toUpperCase()))$('#lang').value=String(j.language_code).toUpperCase();
+   renderVoices();
+   if(j.voice_key&&[...$('#voice').options].some(o=>o.value===j.voice_key))$('#voice').value=j.voice_key;
+ }
  updateVoiceInfo();
  $('#source').value='';
- $('#sourceStatus').textContent='Bitte jetzt die korrigierte DOCX für „'+(j.requested_title||'dieses Buch')+'“ auswählen.';
+ $('#sourceStatus').textContent=languageMismatch
+   ?('Bitte Manuskript erneut auswählen; Sprache und verfügbare Stimme für „'+(j.requested_title||'dieses Buch')+'“ wurden korrigiert.')
+   :('Bitte jetzt die korrigierte DOCX für „'+(j.requested_title||'dieses Buch')+'“ auswählen.');
+ void checkExistingEdition();
  $('#newJob').scrollIntoView({behavior:'smooth',block:'start'});
 }
 async function loadJobs(){
