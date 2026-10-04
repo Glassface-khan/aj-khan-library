@@ -240,19 +240,27 @@ async function startJob(){
 }
 const esc=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 function statusLabel(j){
+ const complete=Number(j.progress_total||0)>0&&Number(j.progress_done||0)>=Number(j.progress_total||0);
+ if(j.status==='production'&&complete&&j.qc_status==='passed')return 'Finalisierung';
  const map={uploading:'Upload',queued:'Wartet auf Cloud-Worker',preflight:'Vorprüfung',qc_running:'Qualitätsprüfung',production:'Produktion',finalizing:'Finalisierung',ready:'Fertig',needs_attention:'Prüfung nötig',failed:'Fehler',cancelled:'Abgebrochen'};
  return map[j.status]||j.status;
 }
 function renderJob(j){
  const pct=j.progress_total?Math.round(100*j.progress_done/j.progress_total):0;
+ const complete=Number(j.progress_total||0)>0&&Number(j.progress_done||0)>=Number(j.progress_total||0);
  const q=j.qc_status==='passed'?'<span class="badge good">QC PASS</span>':j.qc_status==='failed'?'<span class="badge bad">QC FAIL</span>':'<span class="badge">QC '+esc(j.qc_status)+'</span>';
  const actions=(j.status==='needs_attention'||j.status==='failed')?'<button data-retry="'+j.id+'">Automatisch erneut versuchen</button>':'';
- const cancel=!['ready','failed','cancelled'].includes(j.status)?'<button data-cancel="'+j.id+'">Abbrechen</button>':'';
- return '<div class="job"><div class="job-title">'+esc(j.detected_title||j.requested_title||j.source_file_name)+'</div>'+
+ const cancel=!complete&&!['ready','failed','cancelled'].includes(j.status)?'<button data-cancel="'+j.id+'">Abbrechen</button>':'';
+ const title=j.requested_title||j.detected_title||j.source_file_name;
+ const detected=String(j.detected_title||'').trim();
+ const requested=String(j.requested_title||'').trim();
+ const titleConflict=!!(detected&&requested&&norm(detected)!==norm(requested)&&j.qc_summary&&j.qc_summary.title_pass===false);
+ const conflict=titleConflict?'<p class="bad">Titelkonflikt: ausgewählt „'+esc(requested)+'“, im Manuskript erkannt „'+esc(detected)+'“. Bitte nicht erneut versuchen – richtige DOCX/Buchauswahl verwenden.</p>':'';
+ return '<div class="job"><div class="job-title">'+esc(title)+'</div>'+
  '<div class="job-meta">'+esc(j.voice_name)+' · '+esc(j.language_code)+' · '+esc(statusLabel(j))+'</div>'+q+
  (j.qc_score!=null?'<span class="badge">QC '+Math.round(Number(j.qc_score))+'%</span>':'')+
  '<progress max="100" value="'+pct+'"></progress><div class="muted">'+j.progress_done+' / '+(j.progress_total||'?')+' Abschnitte · '+pct+'%</div>'+
- (j.error_detail?'<p class="bad">'+esc(j.error_detail)+'</p>':'')+
+ conflict+(j.error_detail?'<p class="bad">'+esc(j.error_detail)+'</p>':'')+
  '<div class="row">'+actions+cancel+'</div></div>';
 }
 async function loadJobs(){
