@@ -181,8 +181,13 @@ function resetJobSubmitState(){
  $('#sourceStatus').textContent=file?('Ausgewählt: '+file.name):'Auf dem iPhone kannst du hier direkt Google Drive oder iCloud Drive auswählen.';
 }
 function isSourceProblem(j){
- return ['SOURCE_TITLE_MISMATCH','SOURCE_STRUCTURE_MISMATCH'].includes(String(j&&j.error_code||'')) ||
-        ['source_title_mismatch','source_structure_mismatch'].includes(String(j&&j.stage||''));
+ const code=String(j&&j.error_code||'');
+ const stage=String(j&&j.stage||'');
+ const detail=String(j&&j.error_detail||'');
+ const summaryError=String(j&&j.qc_summary&&j.qc_summary.error||'');
+ return ['SOURCE_TITLE_MISMATCH','SOURCE_STRUCTURE_MISMATCH'].includes(code) ||
+        ['source_title_mismatch','source_structure_mismatch'].includes(stage) ||
+        (code==='PREPRODUCTION_QC_FAILED' && /TOC\/body mismatch|has no body text|No chapter\/prologue structure/i.test(detail+' '+summaryError));
 }
 function matchingExistingJob(file,b,voice){
  const lang=$('#lang').value;
