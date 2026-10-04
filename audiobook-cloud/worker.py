@@ -696,6 +696,7 @@ def prepare(args: argparse.Namespace) -> int:
             "job": rjob,
             "sourceUrl": remote["sourceUrl"],
             "voice": remote["voice"],
+            "titleAliases": remote.get("titleAliases") or [],
             "resumeProduction": rjob.get("qc_status") == "passed" and int(rjob.get("detected_sections") or 0) > 0,
         }
     else:
@@ -761,8 +762,15 @@ def prepare(args: argparse.Namespace) -> int:
     requested = normalize_text(job.get("requested_title") or "")
     detected = normalize_text(detected_title)
     source_name_text = normalize_text(re.sub(r"[_-]+", " ", job.get("source_file_name") or ""))
+    title_aliases = [normalize_text(x) for x in (claim.get("titleAliases") or []) if normalize_text(x)]
     title_similarity = difflib.SequenceMatcher(None, requested, detected).ratio() if requested and detected else 1.0
     title_in_filename = bool(requested and source_name_text and requested in source_name_text)
+    title_alias_match = bool(
+        detected and any(
+            detected == alias or difflib.SequenceMatcher(None, alias, detected).ratio() >= 0.90
+            for alias in title_aliases
+        )
+    )
 
     try:
         model, state = load_tts(voice["ttsLanguage"], voice["source"], workdir)
@@ -830,7 +838,7 @@ def prepare(args: argparse.Namespace) -> int:
                 and diagnostics.get("toc_section_count") == len(sections)
             )
         )
-        title_pass = title_similarity >= 0.45 or title_in_filename
+        title_pass = title_similarity >= 0.45 or title_in_filename or title_alias_match
         passed = samples_pass and structure_pass and title_pass
         quality_values = [
             (r["sequence_similarity"] + r["word_recall"] + r["wer_similarity"]) / 3.0
@@ -842,6 +850,8 @@ def prepare(args: argparse.Namespace) -> int:
             "language_guard": language_guard,
             "title_similarity": title_similarity,
             "title_in_filename": title_in_filename,
+            "title_aliases": title_aliases,
+            "title_alias_match": title_alias_match,
             "sample_sections": sample_results,
             "samples_pass": samples_pass,
             "structure_pass": structure_pass,
