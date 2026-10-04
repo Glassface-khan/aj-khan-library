@@ -83,6 +83,49 @@ def normalize_text(text: str) -> str:
     return " ".join(text.split())
 
 
+def detect_manuscript_language(sections: list[Section]) -> dict[str, Any]:
+    """Lightweight deterministic DE/EN guard before any TTS is rendered."""
+    sample = " ".join(
+        s.spoken_text.replace("[[SCENE_BREAK]]", " ")
+        for s in sections[: min(len(sections), 12)]
+    )
+    toks = normalize_text(sample).split()[:5000]
+    counts = collections.Counter(toks)
+
+    de_words = {
+        "der","die","das","den","dem","des","und","ist","sind","war","waren","nicht","mit",
+        "für","von","auf","zu","im","in","ein","eine","einer","einem","einen","dass","sich",
+        "als","auch","aber","noch","nur","schon","wenn","wie","was","wer","sie","er","wir",
+        "ihr","ich","hat","haben","hatte","durch","bei","aus","über","nach","vor","oder"
+    }
+    en_words = {
+        "the","and","is","are","was","were","not","with","for","from","on","to","of","in",
+        "a","an","that","this","it","he","she","we","they","but","also","still","only",
+        "already","when","how","what","who","has","have","had","through","by","out","over",
+        "after","before","or","his","her","their","you","i"
+    }
+
+    de_score = sum(counts[w] for w in de_words)
+    en_score = sum(counts[w] for w in en_words)
+    # Orthographic markers are strong evidence but never sufficient alone.
+    de_score += 2 * sum(1 for token in toks if re.search(r"[äöüß]", token))
+    total = de_score + en_score
+    if total < 20:
+        return {"language": "UNKNOWN", "de_score": de_score, "en_score": en_score, "confidence": 0.0}
+
+    language = "DE" if de_score > en_score else "EN"
+    confidence = max(de_score, en_score) / max(1, total)
+    if confidence < 0.65:
+        language = "UNKNOWN"
+    return {
+        "language": language,
+        "de_score": de_score,
+        "en_score": en_score,
+        "confidence": round(confidence, 4),
+        "sample_words": len(toks),
+    }
+
+
 def finite(value: Any, default: float = 0.0) -> float:
     try:
         v = float(value)
@@ -684,6 +727,32 @@ def prepare(args: argparse.Namespace) -> int:
         gh_output("has_job", "false")
         return 0
 
+    language_guard = detect_manuscript_language(sections)
+    detected_language = str(language_guard.get("language") or "UNKNOWN")
+    selected_language = str(job.get("language_code") or "").upper()
+    if detected_language in {"DE", "EN"} and selected_language in {"DE", "EN"} and detected_language != selected_language:
+        api("workerPreflightResult", {
+            "jobId": job_id,
+            "qcStatus": "failed",
+            "qcScore": 0,
+            "qcSummary": {
+                "language_guard": language_guard,
+                "selected_language": selected_language,
+                "detected_language": detected_language,
+                "structure": diagnostics,
+            },
+            "detectedTitle": detected_title,
+            "sourceSha256": sha256_file(source),
+            "wordCount": sum(s.word_count for s in sections),
+            "expectedSections": diagnostics.get("expected_sections", len(sections)),
+            "detectedSections": len(sections),
+            "sections": [],
+            "errorCode": "SOURCE_LANGUAGE_MISMATCH",
+            "errorDetail": f"Manuscript language appears to be {detected_language}, but the selected audiobook language/voice is {selected_language}.",
+        }, timeout=180)
+        gh_output("has_job", "false")
+        return 0
+
     if claim.get("resumeProduction"):
         gh_output("has_job", "true")
         return 0
@@ -770,6 +839,7 @@ def prepare(args: argparse.Namespace) -> int:
         qc_score = round(100.0 * sum(quality_values) / max(1, len(quality_values)), 2)
         summary = {
             "structure": diagnostics,
+            "language_guard": language_guard,
             "title_similarity": title_similarity,
             "title_in_filename": title_in_filename,
             "sample_sections": sample_results,
