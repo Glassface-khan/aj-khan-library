@@ -1,0 +1,43 @@
+name: Audiobook Queue Watchdog
+
+on:
+  schedule:
+    - cron: "*/5 * * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: ajk-audiobook-queue-watchdog
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  actions: write
+
+jobs:
+  watch:
+    name: Wake audiobook worker when needed
+    runs-on: ubuntu-24.04
+    timeout-minutes: 3
+    steps:
+      - name: Check queue health
+        id: queue
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --fail --silent --show-error \
+            -H "Content-Type: application/json" \
+            -d '{"op":"queueWakeNeeded"}' \
+            "https://ipoqyjrojljmbqslmxxf.supabase.co/functions/v1/audiobook-factory" \
+            > queue-status.json
+          cat queue-status.json
+          echo "worker_needed=$(jq -r '.workerNeeded // false' queue-status.json)" >> "$GITHUB_OUTPUT"
+
+      - name: Wake cloud worker
+        if: steps.queue.outputs.worker_needed == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh workflow run audiobook-cloud-worker.yml --repo "$GITHUB_REPOSITORY" --ref main
+          echo "Audiobook cloud worker dispatched."
