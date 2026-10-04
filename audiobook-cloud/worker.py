@@ -210,25 +210,29 @@ def parse_docx(path: Path) -> tuple[str, list[Section], dict[str, Any]]:
 
     toc_entries = [t for _, t, st in nonempty if "toc" in st.lower()]
 
-    starts: list[int] = []
+    explicit_starts: list[int] = []
     for i, t, st in nonempty:
         sl = st.lower()
         if "toc" in sl:
             continue
         if "chapter label" in sl or LABEL_RE.match(t):
-            starts.append(i)
+            explicit_starts.append(i)
 
-    heading_only = False
-    if len(starts) < 2:
-        heading_only = True
-        starts = []
-        for i, t, st in nonempty:
-            sl = st.lower()
-            if "toc" in sl or "back" in sl:
+    # Some publication masters use explicit CHAPTER labels for most sections but
+    # Heading 1 / Chapter styles for a few special sections. Recover those
+    # without double-counting the chapter-title line immediately after a label.
+    styled_candidates: list[int] = []
+    for i, t, st in nonempty:
+        sl = st.lower()
+        if "toc" in sl or "back" in sl or BACKMATTER_RE.match(t):
+            continue
+        if sl.startswith("heading 1") or sl in {"chapter", "book chapter"}:
+            if any(0 < i - s <= 2 for s in explicit_starts):
                 continue
-            if sl.startswith("heading 1") or sl in {"chapter", "book chapter"}:
-                if not BACKMATTER_RE.match(t):
-                    starts.append(i)
+            styled_candidates.append(i)
+
+    starts = sorted(set(explicit_starts + styled_candidates))
+    heading_only = len(explicit_starts) < 2
 
     if not starts:
         raise ValueError("No chapter/prologue structure could be detected")
@@ -273,19 +277,33 @@ def parse_docx(path: Path) -> tuple[str, list[Section], dict[str, Any]]:
             raise ValueError(f"Section {pos + 1} ({label}) has no body text")
         sections.append(Section(pos, kind, label, chapter_title, body))
 
-    expected = len(toc_entries) if len(toc_entries) >= 2 else len(sections)
+    toc_section_entries = [t for t in toc_entries if LABEL_RE.match(t)]
+    expected = (
+        len(toc_section_entries)
+        if len(toc_section_entries) >= 2
+        else (len(toc_entries) if len(toc_entries) >= 2 else len(sections))
+    )
     diagnostics = {
         "toc_count": len(toc_entries),
+        "toc_section_count": len(toc_section_entries),
+        "toc_extra_count": max(0, len(toc_entries) - len(toc_section_entries)),
         "body_section_count": len(sections),
+        "explicit_body_start_count": len(explicit_starts),
+        "styled_recovery_count": len([x for x in styled_candidates if x not in explicit_starts]),
         "expected_sections": expected,
         "title": title,
         "style_counts": dict(collections.Counter(st for _, _, st in nonempty)),
     }
 
     if toc_entries and len(toc_entries) != len(sections):
-        raise ValueError(
-            f"TOC/body mismatch: TOC has {len(toc_entries)} sections but body parser found {len(sections)}"
-        )
+        # Publication TOCs often include dedication, notes, glossary, etc.
+        # Those extras must not fail the audiobook gate when all narrative
+        # section labels still match the parsed body exactly.
+        if not (len(toc_section_entries) >= 2 and len(toc_section_entries) == len(sections)):
+            raise ValueError(
+                f"TOC/body mismatch: TOC has {len(toc_entries)} entries "
+                f"({len(toc_section_entries)} narrative sections) but body parser found {len(sections)}"
+            )
 
     tiny = [s.index for s in sections if s.word_count < 40]
     if tiny:
