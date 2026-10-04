@@ -210,13 +210,28 @@ def parse_docx(path: Path) -> tuple[str, list[Section], dict[str, Any]]:
 
     toc_entries = [t for _, t, st in nonempty if "toc" in st.lower()]
 
-    explicit_starts: list[int] = []
+    explicit_start_rows: list[tuple[int, str]] = []
     for i, t, st in nonempty:
         sl = st.lower()
         if "toc" in sl:
             continue
         if "chapter label" in sl or LABEL_RE.match(t):
-            explicit_starts.append(i)
+            explicit_start_rows.append((i, t))
+
+    # A number of polished publication masters have Contents entries in Normal
+    # style rather than a TOC style. The same chapter heading then appears twice:
+    # once in Contents and once at the real chapter start. Keep the last
+    # occurrence of an identical label, which is the body occurrence.
+    by_label: dict[str, list[int]] = collections.defaultdict(list)
+    for i, t in explicit_start_rows:
+        by_label[normalize_text(t)].append(i)
+    duplicate_toc_starts = {
+        i
+        for positions in by_label.values()
+        if len(positions) > 1
+        for i in positions[:-1]
+    }
+    explicit_starts = [i for i, _ in explicit_start_rows if i not in duplicate_toc_starts]
 
     # Some publication masters use explicit CHAPTER labels for most sections but
     # Heading 1 / Chapter styles for a few special sections. Recover those
@@ -289,6 +304,7 @@ def parse_docx(path: Path) -> tuple[str, list[Section], dict[str, Any]]:
         "toc_extra_count": max(0, len(toc_entries) - len(toc_section_entries)),
         "body_section_count": len(sections),
         "explicit_body_start_count": len(explicit_starts),
+        "duplicate_contents_labels_ignored": len(duplicate_toc_starts),
         "styled_recovery_count": len([x for x in styled_candidates if x not in explicit_starts]),
         "expected_sections": expected,
         "title": title,
@@ -297,13 +313,16 @@ def parse_docx(path: Path) -> tuple[str, list[Section], dict[str, Any]]:
 
     if toc_entries and len(toc_entries) != len(sections):
         # Publication TOCs often include dedication, notes, glossary, etc.
-        # Those extras must not fail the audiobook gate when all narrative
-        # section labels still match the parsed body exactly.
-        if not (len(toc_section_entries) >= 2 and len(toc_section_entries) == len(sections)):
+        # Only enforce an exact TOC/body count when the TOC's narrative labels
+        # are themselves recognisable. If the TOC uses bare titles/numbers,
+        # treat it as advisory and trust the non-empty body-section parse.
+        if len(toc_section_entries) >= 2 and len(toc_section_entries) != len(sections):
             raise ValueError(
                 f"TOC/body mismatch: TOC has {len(toc_entries)} entries "
                 f"({len(toc_section_entries)} narrative sections) but body parser found {len(sections)}"
             )
+        if not toc_section_entries:
+            diagnostics["toc_count_advisory_only"] = True
 
     tiny = [s.index for s in sections if s.word_count < 40]
     if tiny:
