@@ -25,6 +25,11 @@ progress{width:100%;height:18px;accent-color:var(--gold)}
 .job-title{font-family:Georgia,serif;font-size:23px}.job-meta{font-size:12px;color:var(--muted);margin:5px 0 10px}
 pre{white-space:pre-wrap;word-break:break-word;font-size:11px;background:#11100d;padding:10px;border-radius:8px;max-height:220px;overflow:auto}
 #gate{border-left:4px solid var(--gold)}#error{color:var(--bad);min-height:1.2em}
+.edition-warning{margin-top:12px;padding:14px 15px;border:1px solid var(--gold);border-left:4px solid var(--gold);border-radius:10px;background:rgba(199,155,74,.08)}
+.edition-warning strong{display:block;color:var(--gold);font-size:14px;margin-bottom:6px}
+.edition-warning p{margin:0 0 10px;color:var(--ink);line-height:1.45}
+.edition-warning .edition-confirm{display:flex;gap:9px;align-items:flex-start;text-transform:none;letter-spacing:0;color:var(--ink);font-size:13px;margin:0}
+.edition-warning .edition-confirm input{margin-top:2px;flex:0 0 auto}
 .hidden{display:none!important}
 @media(max-width:650px){.grid{grid-template-columns:1fr}.full{grid-column:auto}.row>*{width:100%}}
 </style>
@@ -61,6 +66,11 @@ pre{white-space:pre-wrap;word-break:break-word;font-size:11px;background:#11100d
         <label>Stimme</label>
         <select id="voice"></select>
         <div id="voiceInfo" class="muted"></div>
+        <div id="editionWarning" class="edition-warning hidden" role="alert">
+          <strong>⚠ Hörbuch mit dieser Stimme bereits vorhanden</strong>
+          <p id="editionWarningText"></p>
+          <label class="edition-confirm"><input id="replaceEditionAck" type="checkbox"> Bestehende Fassung mit diesem Erzähler wirklich ersetzen</label>
+        </div>
       </div>
       <div class="full hidden" id="voiceUploadBox">
         <label id="voiceUploadLabel">Referenzstimme hochladen</label>
@@ -89,6 +99,7 @@ pre{white-space:pre-wrap;word-break:break-word;font-size:11px;background:#11100d
 const API='https://ipoqyjrojljmbqslmxxf.supabase.co/functions/v1/audiobook-factory';
 const $=s=>document.querySelector(s);
 let books=[],voices=[],token='',currentJobs=[],jobSubmitLocked=false,lastSubmittedKey='';
+let editionCheckSeq=0,editionCheckPending=false,currentEdition=null;
 const norm=s=>String(s||'').toLowerCase().normalize('NFKD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9]+/g,' ').trim();
 const api=async body=>{
  const r=await fetch(API,{method:'POST',headers:{'Content-Type':'application/json'},cache:'no-store',body:JSON.stringify({...body,adminToken:token})});
@@ -173,12 +184,59 @@ async function uploadMissingVoice(){
 function selectedJobKey(file,b,voice){
  return [file.name,file.size,file.lastModified,b.id,$('#lang').value,voice.key].join('|');
 }
+function updateStartAvailability(){
+ if(jobSubmitLocked)return;
+ const ack=$('#replaceEditionAck');
+ const replacementBlocked=!!(currentEdition&&(!ack||!ack.checked));
+ $('#start').disabled=editionCheckPending||replacementBlocked;
+}
+async function checkExistingEdition(){
+ const seq=++editionCheckSeq;
+ const box=$('#editionWarning'),text=$('#editionWarningText'),ack=$('#replaceEditionAck');
+ currentEdition=null;
+ editionCheckPending=false;
+ if(ack)ack.checked=false;
+ if(box)box.classList.add('hidden');
+
+ const b=books.find(x=>x.id===$('#book').value);
+ const voice=voices.find(v=>v.key===$('#voice').value);
+ if(!b||!voice){
+   updateStartAvailability();
+   return;
+ }
+
+ editionCheckPending=true;
+ updateStartAvailability();
+ try{
+   const edition=await api({op:'editionStatus',siteBookId:b.id,voiceKey:voice.key});
+   if(seq!==editionCheckSeq)return;
+   currentEdition=edition.exists?(edition.edition||{narrator_name:voice.name}):null;
+   if(currentEdition){
+     const narrator=currentEdition.narrator_name||voice.name;
+     const state=currentEdition.is_active?'veröffentlicht':'bereits vorhanden';
+     text.textContent='Für „'+b.title+'“ gibt es bereits eine '+state+'e Hörbuchfassung mit „'+narrator+'“. Ein neuer Lauf mit derselben Stimme würde genau diese Erzählerfassung ersetzen. Andere Stimmenfassungen bleiben unverändert.';
+     box.classList.remove('hidden');
+   }else{
+     box.classList.add('hidden');
+   }
+ }catch(e){
+   if(seq!==editionCheckSeq)return;
+   currentEdition=null;
+   box.classList.add('hidden');
+   $('#error').textContent='Vorhandene Hörbuchfassungen konnten nicht geprüft werden: '+e.message;
+ }finally{
+   if(seq===editionCheckSeq){
+     editionCheckPending=false;
+     updateStartAvailability();
+   }
+ }
+}
 function resetJobSubmitState(){
  jobSubmitLocked=false;lastSubmittedKey='';
- $('#start').disabled=false;
  $('#start').textContent='QUALITÄT PRÜFEN & HÖRBUCH STARTEN';
  const file=$('#source').files[0];
  $('#sourceStatus').textContent=file?('Ausgewählt: '+file.name):'Auf dem iPhone kannst du hier direkt Google Drive oder iCloud Drive auswählen.';
+ updateStartAvailability();
 }
 function isSourceProblem(j){
  const code=String(j&&j.error_code||'');
@@ -217,11 +275,10 @@ async function startJob(){
       throw new Error('Für dieses Buch und diese Stimme existiert bereits ein Cloud-Job ('+statusLabel(existing)+'). Bitte den vorhandenen Job verwenden bzw. „Automatisch erneut versuchen“.');
    }
     const edition=await api({op:'editionStatus',siteBookId:b.id,voiceKey:voice.key});
-    let replaceExisting=false;
-    if(edition.exists){
+    const replaceExisting=!!edition.exists;
+    if(edition.exists&&!$('#replaceEditionAck').checked){
       const narrator=(edition.edition&&edition.edition.narrator_name)||voice.name;
-      replaceExisting=confirm('Für dieses Buch existiert bereits eine fertige Hörbuchfassung mit „'+narrator+'“.\n\nWirklich ersetzen?\n\nAndere Stimmenfassungen bleiben unverändert.');
-      if(!replaceExisting)return;
+      throw new Error('Für dieses Buch existiert bereits eine Hörbuchfassung mit „'+narrator+'“. Bitte zuerst die Ersetzen-Bestätigung unter der Stimmenauswahl aktivieren.');
     }
    localStorage.setItem('ajk_factory_voice_'+$('#lang').value,voice.key);
    $('#start').textContent='JOB WIRD ANGELEGT …';
@@ -242,8 +299,8 @@ async function startJob(){
  }finally{
    if(!success){
      jobSubmitLocked=false;
-     $('#start').disabled=false;
      $('#start').textContent='QUALITÄT PRÜFEN & HÖRBUCH STARTEN';
+     updateStartAvailability();
    }
  }
 }
@@ -347,16 +404,18 @@ async function init(){
  }
  try{
    await Promise.all([loadBooks(),loadVoices()]);
+   await checkExistingEdition();
    $('#authText').textContent='Admin bestätigt · Cloud Factory bereit.';
    $('#newJob').classList.remove('hidden');$('#jobsCard').classList.remove('hidden');
    await loadJobs();
    setInterval(()=>{if(!document.hidden)loadJobs()},10000);
  }catch(e){$('#authText').textContent='Admin-Sitzung konnte nicht bestätigt werden: '+e.message}
 }
-$('#source').onchange=()=>{resetJobSubmitState();const f=$('#source').files[0];if(f)chooseBookFromFilename(f.name)};
-$('#book').onchange=()=>{resetJobSubmitState();syncBookLanguage()};
-$('#lang').onchange=()=>{resetJobSubmitState();renderVoices()};
-$('#voice').onchange=()=>{resetJobSubmitState();updateVoiceInfo()};
+$('#source').onchange=()=>{resetJobSubmitState();const f=$('#source').files[0];if(f)chooseBookFromFilename(f.name);void checkExistingEdition()};
+$('#book').onchange=()=>{resetJobSubmitState();syncBookLanguage();void checkExistingEdition()};
+$('#lang').onchange=()=>{resetJobSubmitState();renderVoices();void checkExistingEdition()};
+$('#voice').onchange=()=>{resetJobSubmitState();updateVoiceInfo();void checkExistingEdition()};
+$('#replaceEditionAck').onchange=updateStartAvailability;
 $('#start').onclick=startJob;
 $('#refresh').onclick=loadJobs;
 $('#uploadVoice').onclick=uploadMissingVoice;
