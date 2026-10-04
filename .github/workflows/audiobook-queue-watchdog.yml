@@ -1,6 +1,10 @@
 name: Audiobook Queue Watchdog
 
 on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/audiobook-queue-watchdog.yml"
   schedule:
     - cron: "*/5 * * * *"
   workflow_dispatch:
