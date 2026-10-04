@@ -226,7 +226,7 @@
       '#books.ajk-cover-mode .book-card{display:none!important}' +
       '.ajk-cover-thumb{appearance:none;border:0;background:none;padding:0;cursor:pointer;min-width:0;text-align:left}' +
       '.ajk-cover-frame{display:block;position:relative;width:100%;aspect-ratio:2/3;overflow:hidden;background:var(--bone-deep,#e9e3d7);border:1px solid var(--rule,#cfc6b5);box-shadow:0 8px 22px rgba(0,0,0,.10);transition:transform .18s ease,box-shadow .18s ease,border-color .18s ease}' +
-      '.ajk-cover-audio-badge{position:absolute;right:7px;top:7px;width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;background:rgba(70,70,70,.54);color:rgba(255,255,255,.92);backdrop-filter:blur(3px);-webkit-backdrop-filter:blur(3px);box-shadow:0 2px 8px rgba(0,0,0,.16);pointer-events:none}' +
+      '.ajk-cover-audio-badge{position:absolute;right:7px;top:7px;z-index:4;width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;background:rgba(70,70,70,.54);color:rgba(255,255,255,.92);backdrop-filter:blur(3px);-webkit-backdrop-filter:blur(3px);box-shadow:0 2px 8px rgba(0,0,0,.16);pointer-events:none}' +
       '.ajk-cover-audio-badge svg{width:15px;height:15px;display:block;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}' +
       '.ajk-cover-thumb:hover .ajk-cover-frame,.ajk-cover-thumb:focus-visible .ajk-cover-frame{transform:translateY(-4px);border-color:var(--gold,#b89448);box-shadow:0 14px 30px rgba(0,0,0,.16)}' +
       '.ajk-cover-frame img{width:100%;height:100%;object-fit:cover;display:block}' +
@@ -259,6 +259,7 @@
       '.book-toc-panel::before{top:0;margin-top:-6px;margin-bottom:-34px;background:linear-gradient(to bottom,rgba(245,240,230,1) 0%,rgba(245,240,230,.94) 38%,rgba(245,240,230,0) 100%)}' +
       '.book-toc-panel::after{bottom:0;margin-top:-34px;margin-bottom:-6px;background:linear-gradient(to top,rgba(245,240,230,1) 0%,rgba(245,240,230,.94) 38%,rgba(245,240,230,0) 100%)}' +
       '#'+GRID_ID+'.ajk-admin-reorder .ajk-cover-thumb{position:relative}' +
+      '#'+GRID_ID+'.ajk-admin-reorder .ajk-cover-audio-badge{right:50px}' +
       '.ajk-cover-drag-handle{display:none;position:absolute;right:7px;top:7px;z-index:5;width:36px;height:36px;border-radius:18px;background:rgba(32,28,22,.82);color:#fff;align-items:center;justify-content:center;font-family:"Archivo",sans-serif;font-size:18px;line-height:1;box-shadow:0 3px 12px rgba(0,0,0,.24);touch-action:none;user-select:none;-webkit-user-select:none;cursor:grab}' +
       '#'+GRID_ID+'.ajk-admin-reorder .ajk-cover-drag-handle{display:flex}' +
       '.ajk-cover-thumb.is-dragging{z-index:6;opacity:.24}' +
@@ -1213,7 +1214,7 @@
       } else {
         var fb = document.createElement('span'); fb.className = 'ajk-cover-placeholder'; fb.textContent = book.title; frame.appendChild(fb);
       }
-      if (audioForBook_(book)) frame.appendChild(audioBadge_());
+      if (audioAvailableBookIds_.has(String(book.id || '').trim()) || audioForBook_(book)) frame.appendChild(audioBadge_());
       thumb.appendChild(frame);
       thumb.addEventListener('click', function () {
         if (Date.now() < suppressCoverClickUntil_) return;
@@ -1444,6 +1445,7 @@
     var grid = document.getElementById(GRID_ID);
     if (grid) grid.dataset.signature = '';
     buildGrid(wrap);
+    refreshAudioBadges_();
     if (active) setMode(true);
   }
 
