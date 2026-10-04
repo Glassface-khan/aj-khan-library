@@ -11,8 +11,10 @@ on:
     paths:
       - ".github/workflows/audiobook-cloud-worker.yml"
       - "audiobook-cloud/**"
+  # The lightweight watchdog handles normal 5-minute queue checks.
+  # Keep one hourly fallback here in case the watchdog itself is delayed.
   schedule:
-    - cron: "*/5 * * * *"
+    - cron: "17 * * * *"
   workflow_dispatch:
 
 concurrency:
@@ -47,15 +49,15 @@ jobs:
           OIDC_JSON="$(curl --fail --silent --show-error             -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN"             "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=ajk-audiobook-factory")"
           OIDC_TOKEN="$(printf '%s' "$OIDC_JSON" | jq -r '.value')"
           JOB_ID=""
-          for attempt in 1 2 3 4 5 6 7 8 9 10; do
+          for attempt in 1 2 3 4; do
             curl --fail --silent --show-error               -H "Authorization: Bearer $OIDC_TOKEN"               -H "Content-Type: application/json"               -d '{"op":"workerClaim"}'               "https://ipoqyjrojljmbqslmxxf.supabase.co/functions/v1/audiobook-factory"               > claim.json
             JOB_ID="$(jq -r '.job.id // empty' claim.json)"
             if [ -n "$JOB_ID" ]; then
               break
             fi
-            if [ "$attempt" -lt 10 ]; then
-              echo "Queue empty; waiting 20s before check $((attempt + 1))/10."
-              sleep 20
+            if [ "$attempt" -lt 4 ]; then
+              echo "Queue empty; waiting 10s before check $((attempt + 1))/4."
+              sleep 10
             fi
           done
           if [ -n "$JOB_ID" ]; then
