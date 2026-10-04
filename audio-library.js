@@ -273,6 +273,8 @@
     loading: false,
     error: '',
     catalog: [],
+    libraryFilter: 'all',
+    librarySearch: '',
     listenerName: '',
     activeBook: null,
     activeChapter: null,
@@ -419,6 +421,37 @@
       .ajka-check input{margin-top:2px}
       .ajka-saved{font-family:'Archivo',sans-serif; font-size:10px; color:#4f6d45; margin-left:8px}
       .ajka-spinner{padding:34px 0; text-align:center; color:var(--ink-3,#7A7263)}
+      .ajka-library-controls{margin:0 0 26px}
+      .ajka-filter-row{display:flex; gap:7px; overflow-x:auto; padding:1px 0 9px; -webkit-overflow-scrolling:touch; scrollbar-width:none}
+      .ajka-filter-row::-webkit-scrollbar{display:none}
+      .ajka-filter-chip{flex:0 0 auto; border:1px solid var(--rule,#CBC1A6); background:rgba(255,255,255,.08); color:var(--ink,#16140F); font-family:'Archivo',sans-serif; font-size:10px; letter-spacing:.07em; text-transform:uppercase; padding:9px 12px; cursor:pointer; border-radius:999px}
+      .ajka-filter-chip.active{background:var(--ink,#16140F); color:var(--bone,#E6E2D7); border-color:var(--ink,#16140F)}
+      .ajka-search-row{display:grid; grid-template-columns:minmax(0,1fr) auto; gap:8px}
+      .ajka-search{min-width:0; border:1px solid var(--rule,#CBC1A6); background:rgba(255,255,255,.12); color:var(--ink,#16140F); padding:10px 12px; font:14px 'Newsreader',serif; border-radius:0; -webkit-appearance:none}
+      .ajka-search::placeholder{color:var(--ink-3,#7A7263)}
+      .ajka-library-section{margin:0 0 34px}
+      .ajka-section-title{font-family:'Cormorant Garamond','Newsreader',serif; font-size:27px; line-height:1.05; font-weight:400; margin:0 0 14px}
+      .ajka-series-shelf{border:1px solid var(--rule,#CBC1A6); background:rgba(255,255,255,.09); padding:18px 16px 15px; margin:0 0 16px; border-radius:14px; overflow:hidden}
+      .ajka-series-head{display:flex; align-items:flex-end; justify-content:space-between; gap:14px; margin:0 2px 15px}
+      .ajka-series-title{font-family:'Cormorant Garamond','Newsreader',serif; font-size:26px; line-height:1; font-weight:500; margin:4px 0 0; letter-spacing:.01em}
+      .ajka-series-count{font-family:'Archivo',sans-serif; font-size:9px; line-height:1.35; letter-spacing:.07em; text-transform:uppercase; color:var(--ink-3,#7A7263); text-align:right}
+      .ajka-series-rail{display:flex; gap:16px; overflow-x:auto; padding:3px 2px 9px; position:relative; scroll-snap-type:x proximity; -webkit-overflow-scrolling:touch; scrollbar-width:thin}
+      .ajka-series-rail::before{content:''; position:absolute; left:16px; right:16px; top:77px; height:1px; background:linear-gradient(90deg,transparent,var(--gold,#9F7A34) 9%,var(--gold,#9F7A34) 91%,transparent); opacity:.35; pointer-events:none}
+      .ajka-series-book{flex:0 0 122px; position:relative; z-index:1; scroll-snap-align:start}
+      .ajka-series-cover-button{display:block; width:112px; margin:0 auto; padding:0; border:0; background:transparent; color:inherit; cursor:pointer; text-align:left}
+      .ajka-series-cover-wrap{display:block; width:112px; height:158px; position:relative; background:var(--bone-deep,#D9D4C4); box-shadow:0 7px 18px rgba(22,20,15,.15)}
+      .ajka-series-cover{display:block; width:112px; height:158px; object-fit:cover; border:1px solid var(--rule,#CBC1A6); background:var(--bone-deep,#D9D4C4)}
+      .ajka-series-cover-fallback{display:flex; align-items:center; justify-content:center; padding:9px; text-align:center; font-family:'Cormorant Garamond',serif; font-size:14px}
+      .ajka-volume-badge{position:absolute; top:7px; left:7px; min-width:42px; padding:5px 7px; border-radius:999px; background:rgba(22,20,15,.87); color:var(--bone,#E6E2D7); font-family:'Archivo',sans-serif; font-size:9px; line-height:1; letter-spacing:.08em; text-align:center; box-shadow:0 2px 8px rgba(0,0,0,.18)}
+      .ajka-series-progress-dot{position:absolute; right:8px; bottom:8px; width:9px; height:9px; border-radius:50%; background:var(--gold,#9F7A34); border:2px solid rgba(230,226,215,.92); box-sizing:content-box}
+      .ajka-series-book-title{font-family:'Cormorant Garamond','Newsreader',serif; font-size:18px; line-height:1.05; font-weight:500; margin:10px 5px 4px}
+      .ajka-series-book-meta{font-family:'Archivo',sans-serif; font-size:8px; line-height:1.3; letter-spacing:.05em; text-transform:uppercase; color:var(--ink-3,#7A7263); margin:0 5px 8px; min-height:20px}
+      .ajka-series-listen{margin:0 5px; padding:0 0 3px; border:0; border-bottom:1px solid var(--gold,#9F7A34); background:transparent; color:var(--ink,#16140F); font-family:'Archivo',sans-serif; font-size:9px; letter-spacing:.08em; text-transform:uppercase; cursor:pointer}
+      .ajka-player-voice{font-family:'Archivo',sans-serif; font-size:9px; letter-spacing:.07em; text-transform:uppercase; color:var(--ink-3,#7A7263); margin:1px 0 12px}
+      .ajka-voice-control{display:grid; grid-template-columns:auto minmax(0,1fr); gap:10px; align-items:center; margin:4px 0 13px; font-family:'Archivo',sans-serif; font-size:9px; letter-spacing:.07em; text-transform:uppercase; color:var(--ink-3,#7A7263)}
+      .ajka-voice-control .ajka-select{margin:0; font-size:13px; text-transform:none; letter-spacing:0}
+      .ajka-empty-filter{border-top:1px solid var(--rule,#CBC1A6); padding-top:18px}
+
       @media(max-width:600px){
         #ajk-audio-launch{right:14px; bottom:calc(14px + env(safe-area-inset-bottom)); padding:11px 13px}
         .ajka-panel{width:100vw; padding-left:18px; padding-right:18px}
@@ -426,6 +459,13 @@
         .ajka-book{grid-template-columns:58px 1fr; gap:12px}
         .ajka-cover,.ajka-cover-fallback{width:58px;height:82px}
         .ajka-book .ajka-action{grid-column:2; justify-self:start}
+        .ajka-series-shelf{margin-left:-4px; margin-right:-4px; padding-left:12px; padding-right:12px}
+        .ajka-series-book{flex-basis:112px}
+        .ajka-series-cover-button,.ajka-series-cover-wrap,.ajka-series-cover{width:104px}
+        .ajka-series-cover-wrap,.ajka-series-cover{height:147px}
+        .ajka-series-rail::before{top:72px}
+        .ajka-search-row{grid-template-columns:1fr}
+        .ajka-search-row .ajka-smallbtn{justify-self:start}
       }
     `;
     document.head.appendChild(style);
@@ -541,6 +581,182 @@
     return tr('Weiter bei ', 'Continue at ') + esc(ch.title) + ' · ' + formatTime(p.position_seconds);
   }
 
+  function libraryGroupKey_(book) {
+    const siteId = String(book && book.site_book_id || '').trim();
+    if (siteId) return siteId;
+    return normAudioTitle_(book && book.title) + '|' + String(book && book.language_code || '').toUpperCase();
+  }
+
+  function groupedLibraryBooks_() {
+    const byKey = new Map();
+    for (const book of state.catalog) {
+      const key = libraryGroupKey_(book);
+      let group = byKey.get(key);
+      if (!group) {
+        group = {
+          key,
+          site_book_id: String(book.site_book_id || ''),
+          title: String(book.title || ''),
+          language_code: String(book.language_code || ''),
+          cover_url: String(book.cover_url || ''),
+          series_key: String(book.series_key || ''),
+          series_title: String(book.series_title || ''),
+          series_number: Number(book.series_number || 0) || 0,
+          series_total: Number(book.series_total || 0) || 0,
+          editions: []
+        };
+        byKey.set(key, group);
+      }
+      group.editions.push(book);
+      if (!group.cover_url && book.cover_url) group.cover_url = String(book.cover_url);
+      if (!group.series_key && book.series_key) group.series_key = String(book.series_key);
+      if (!group.series_title && book.series_title) group.series_title = String(book.series_title);
+      if (!group.series_number && Number(book.series_number)) group.series_number = Number(book.series_number);
+      if (!group.series_total && Number(book.series_total)) group.series_total = Number(book.series_total);
+    }
+
+    const groups = Array.from(byKey.values());
+    groups.forEach((group) => {
+      group.editions.sort((a, b) => String(a.narrator_name || '').localeCompare(String(b.narrator_name || '')));
+    });
+    return groups;
+  }
+
+  function preferredEdition_(group) {
+    const unfinished = (group.editions || []).filter((book) =>
+      book.progress && book.progress.chapter_id && book.progress.completed !== true
+    ).sort((a, b) => String(b.progress && b.progress.updated_at || '').localeCompare(String(a.progress && a.progress.updated_at || '')));
+    return unfinished[0] || (group.editions || [])[0] || null;
+  }
+
+  function voiceSummary_(group) {
+    const editions = group.editions || [];
+    if (editions.length > 1) return editions.length + ' ' + tr('Stimmen', 'voices');
+    const book = editions[0];
+    return book && book.narrator_name ? String(book.narrator_name) : '';
+  }
+
+  function seriesShortTitle_(group) {
+    const title = String(group.title || '');
+    if (!group.series_title) return title;
+    const parts = title.split(/\s+[—–]\s+|\s+:\s+/);
+    if (parts.length > 1 && normAudioTitle_(parts[0]) === normAudioTitle_(group.series_title)) {
+      return parts.slice(1).join(' — ').trim() || title;
+    }
+    return title;
+  }
+
+  function groupMatchesQuery_(group) {
+    const q = normAudioTitle_(state.librarySearch || '');
+    if (!q) return true;
+    const narrators = (group.editions || []).map((book) => book.narrator_name || '').join(' ');
+    return normAudioTitle_([
+      group.title,
+      group.series_title,
+      group.language_code,
+      narrators
+    ].join(' ')).includes(q);
+  }
+
+  function groupMatchesFilter_(group) {
+    if (!groupMatchesQuery_(group)) return false;
+    const filter = String(state.libraryFilter || 'all');
+    if (filter === 'series') return !!group.series_key;
+    if (filter === 'single') return !group.series_key;
+    if (filter === 'DE' || filter === 'EN') return String(group.language_code || '').toUpperCase() === filter;
+    return true;
+  }
+
+  function renderCoverForGroup_(group, compact) {
+    if (group.cover_url) {
+      return '<img class="' + (compact ? 'ajka-series-cover' : 'ajka-cover') + '" src="' + esc(group.cover_url) + '" alt="">';
+    }
+    return '<div class="' + (compact ? 'ajka-series-cover ajka-series-cover-fallback' : 'ajka-cover-fallback') + '">' + esc(seriesShortTitle_(group)) + '</div>';
+  }
+
+  function renderListBook_(group) {
+    const book = preferredEdition_(group);
+    if (!book) return '';
+    const ptxt = progressText(book);
+    const voice = voiceSummary_(group);
+    return '<article class="ajka-book">' +
+      renderCoverForGroup_(group, false) +
+      '<div><h3 class="ajka-book-title">' + esc(group.title) + '</h3>' +
+      '<div class="ajka-meta">' + esc(group.language_code || '') +
+      (book.total_duration_seconds ? ' · ' + esc(formatTime(book.total_duration_seconds)) : '') +
+      (voice ? ' · ' + esc(voice) : '') + '</div>' +
+      (ptxt ? '<div class="ajka-continue">' + ptxt + '</div>' : '') +
+      '</div>' +
+      '<button class="ajka-action primary" data-book="' + esc(book.id) + '">' +
+        esc(ptxt ? tr('Weiterhören', 'Continue') : tr('Hören', 'Listen')) +
+      '</button></article>';
+  }
+
+  function renderSeriesBook_(group) {
+    const book = preferredEdition_(group);
+    if (!book) return '';
+    const n = Number(group.series_number || 0);
+    const total = Number(group.series_total || 0);
+    const badge = n
+      ? String(n).padStart(2, '0') + (total ? ' · ' + String(total).padStart(2, '0') : '')
+      : '';
+    const ptxt = progressText(book);
+    const voice = voiceSummary_(group);
+    return '<article class="ajka-series-book">' +
+      '<button class="ajka-series-cover-button" data-book="' + esc(book.id) + '" aria-label="' + esc(group.title + ' — ' + tr('Hören', 'Listen')) + '">' +
+        '<span class="ajka-series-cover-wrap">' +
+          renderCoverForGroup_(group, true) +
+          (badge ? '<span class="ajka-volume-badge">' + esc(badge) + '</span>' : '') +
+          (ptxt ? '<span class="ajka-series-progress-dot" aria-hidden="true"></span>' : '') +
+        '</span>' +
+      '</button>' +
+      '<h4 class="ajka-series-book-title">' + esc(seriesShortTitle_(group)) + '</h4>' +
+      '<div class="ajka-series-book-meta">' + esc(voice || group.language_code || '') + '</div>' +
+      '<button class="ajka-series-listen" data-book="' + esc(book.id) + '">' +
+        esc(ptxt ? tr('Weiterhören', 'Continue') : tr('Hören', 'Listen')) +
+      '</button>' +
+    '</article>';
+  }
+
+  function renderSeriesShelf_(title, groups) {
+    const sorted = groups.slice().sort((a, b) => {
+      const an = Number(a.series_number || 0);
+      const bn = Number(b.series_number || 0);
+      if (an && bn && an !== bn) return an - bn;
+      return String(a.title || '').localeCompare(String(b.title || ''));
+    });
+    const total = Math.max(...sorted.map((g) => Number(g.series_total || 0)), sorted.length);
+    const available = sorted.length;
+    const countText = total + ' ' + tr(total === 1 ? 'Band' : 'Bände', total === 1 ? 'volume' : 'volumes') +
+      (available < total ? ' · ' + available + ' ' + tr('verfügbar', 'available') : '');
+    return '<section class="ajka-series-shelf">' +
+      '<div class="ajka-series-head"><div><div class="ajka-label">' + esc(tr('Reihe', 'Series')) + '</div>' +
+      '<h3 class="ajka-series-title">' + esc(title) + '</h3></div>' +
+      '<div class="ajka-series-count">' + esc(countText) + '</div></div>' +
+      '<div class="ajka-series-rail">' + sorted.map(renderSeriesBook_).join('') + '</div>' +
+    '</section>';
+  }
+
+  function renderLibraryControls_() {
+    const filters = [
+      ['all', tr('Alle', 'All')],
+      ['series', tr('Reihen', 'Series')],
+      ['single', tr('Einzelbände', 'Standalone')],
+      ['DE', 'Deutsch'],
+      ['EN', 'English']
+    ];
+    const buttons = filters.map(([key, label]) =>
+      '<button class="ajka-filter-chip' + (state.libraryFilter === key ? ' active' : '') + '" data-audio-filter="' + esc(key) + '">' + esc(label) + '</button>'
+    ).join('');
+    return '<div class="ajka-library-controls">' +
+      '<div class="ajka-filter-row">' + buttons + '</div>' +
+      '<div class="ajka-search-row">' +
+        '<input id="ajka-library-search" class="ajka-search" type="search" value="' + esc(state.librarySearch || '') + '" placeholder="' + esc(tr('Titel, Reihe oder Stimme', 'Title, series or voice')) + '">' +
+        '<button class="ajka-smallbtn" id="ajka-search-go">' + esc(tr('Suchen', 'Search')) + '</button>' +
+      '</div>' +
+    '</div>';
+  }
+
   function renderLibrary(panel) {
     const c = credentials();
     const adminButton = c.isAdmin
@@ -556,23 +772,54 @@
     } else if (!state.catalog.length && !state.error) {
       list = '<p class="ajka-muted">' + esc(tr('Noch sind keine Hörbücher in der Audio-Bibliothek veröffentlicht.', 'No audiobooks have been published in the audio library yet.')) + '</p>';
     } else {
-      list = state.catalog.map((b) => {
-        const cover = b.cover_url
-          ? '<img class="ajka-cover" src="' + esc(b.cover_url) + '" alt="">'
-          : '<div class="ajka-cover-fallback">' + esc(b.title) + '</div>';
-        const ptxt = progressText(b);
-        return '<article class="ajka-book">' +
-          cover +
-          '<div><h3 class="ajka-book-title">' + esc(b.title) + '</h3>' +
-          '<div class="ajka-meta">' + esc(b.language_code || '') +
-          (b.total_duration_seconds ? ' · ' + esc(formatTime(b.total_duration_seconds)) : '') +
-          (b.narrator_name ? ' · ' + esc(b.narrator_name) : '') + '</div>' +
-          (ptxt ? '<div class="ajka-continue">' + ptxt + '</div>' : '') +
-          '</div>' +
-          '<button class="ajka-action primary" data-book="' + esc(b.id) + '">' +
-            esc(ptxt ? tr('Weiterhören', 'Continue') : tr('Hören', 'Listen')) +
-          '</button></article>';
-      }).join('');
+      const allGroups = groupedLibraryBooks_();
+      const groups = allGroups.filter(groupMatchesFilter_);
+      const continuing = groups.filter((group) => {
+        const book = preferredEdition_(group);
+        return !!(book && book.progress && book.progress.chapter_id && book.progress.completed !== true);
+      }).sort((a, b) => {
+        const ap = preferredEdition_(a);
+        const bp = preferredEdition_(b);
+        return String(bp && bp.progress && bp.progress.updated_at || '').localeCompare(String(ap && ap.progress && ap.progress.updated_at || ''));
+      });
+
+      const seriesMap = new Map();
+      const singles = [];
+      groups.forEach((group) => {
+        if (group.series_key) {
+          const key = group.series_key;
+          if (!seriesMap.has(key)) seriesMap.set(key, { title: group.series_title || key, groups: [] });
+          seriesMap.get(key).groups.push(group);
+        } else {
+          singles.push(group);
+        }
+      });
+
+      const seriesShelves = Array.from(seriesMap.values())
+        .sort((a, b) => String(a.title).localeCompare(String(b.title)))
+        .map((entry) => renderSeriesShelf_(entry.title, entry.groups))
+        .join('');
+
+      singles.sort((a, b) => String(a.title).localeCompare(String(b.title)));
+
+      const continueBlock = continuing.length
+        ? '<section class="ajka-library-section"><h3 class="ajka-section-title">' + esc(tr('Weiterhören', 'Continue listening')) + '</h3>' +
+          continuing.map(renderListBook_).join('') + '</section>'
+        : '';
+
+      const seriesBlock = seriesShelves
+        ? '<section class="ajka-library-section"><h3 class="ajka-section-title">' + esc(tr('Meine Reihen', 'My series')) + '</h3>' + seriesShelves + '</section>'
+        : '';
+
+      const singlesBlock = singles.length
+        ? '<section class="ajka-library-section"><h3 class="ajka-section-title">' + esc(tr('Einzelromane', 'Standalone novels')) + '</h3>' +
+          singles.map(renderListBook_).join('') + '</section>'
+        : '';
+
+      list = renderLibraryControls_() + continueBlock + seriesBlock + singlesBlock;
+      if (!groups.length) {
+        list += '<p class="ajka-muted ajka-empty-filter">' + esc(tr('Für diesen Filter wurden keine Hörbücher gefunden.', 'No audiobooks match this filter.')) + '</p>';
+      }
     }
 
     panel.innerHTML =
@@ -585,7 +832,34 @@
     panel.querySelector('#ajka-refresh').addEventListener('click', loadCatalog);
     const admin = panel.querySelector('#ajka-admin-rights');
     if (admin) admin.addEventListener('click', openAdmin);
+
     panel.querySelectorAll('[data-book]').forEach((btn) => btn.addEventListener('click', () => startBook(btn.getAttribute('data-book'))));
+
+    panel.querySelectorAll('[data-audio-filter]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        state.libraryFilter = btn.getAttribute('data-audio-filter') || 'all';
+        render();
+      });
+    });
+
+    const search = panel.querySelector('#ajka-library-search');
+    const searchGo = panel.querySelector('#ajka-search-go');
+    const applySearch = () => {
+      if (!search) return;
+      state.librarySearch = String(search.value || '').trim();
+      render();
+    };
+    if (searchGo) searchGo.addEventListener('click', applySearch);
+    if (search) {
+      search.addEventListener('keydown', (event) => {
+        if (event.key === 'Enter') {
+          event.preventDefault();
+          applySearch();
+        }
+      });
+      search.addEventListener('search', applySearch);
+    }
+
     wirePlayer(panel);
   }
 
@@ -594,9 +868,18 @@
     const ch = state.activeChapter || {};
     const chapters = b.chapters || [];
     const opts = chapters.map((x) => '<option value="' + esc(x.id) + '"' + (x.id === ch.id ? ' selected' : '') + '>' + esc((Number(x.chapter_index) + 1) + '. ' + x.title) + '</option>').join('');
+    const editions = audioBooksFor_(b.site_book_id, b.title, b.language_code);
+    const voicePicker = editions.length > 1
+      ? '<div class="ajka-voice-control"><label for="ajka-voice-select">' + esc(tr('Stimme', 'Voice')) + '</label>' +
+        '<select class="ajka-select ajka-voice-select" id="ajka-voice-select">' +
+        editions.map((edition) => '<option value="' + esc(edition.id) + '"' + (edition.id === b.id ? ' selected' : '') + '>' + esc(edition.narrator_name || edition.voice_key || tr('Stimme', 'Voice')) + '</option>').join('') +
+        '</select></div>'
+      : (b.narrator_name ? '<div class="ajka-player-voice">' + esc(tr('Stimme', 'Voice')) + ': ' + esc(b.narrator_name) + '</div>' : '');
+
     return '<section class="ajka-player">' +
       '<div class="ajka-label">' + esc(tr('Jetzt hören', 'Now listening')) + '</div>' +
       '<h3 class="ajka-player-title">' + esc(b.title) + '</h3>' +
+      voicePicker +
       '<p class="ajka-chapter" id="ajka-current-chapter">' + esc(ch.title || tr('Kapitel wählen', 'Choose a chapter')) + '</p>' +
       '<input class="ajka-seek" id="ajka-seek" type="range" min="0" max="1000" value="0" aria-label="' + esc(tr('Position', 'Position')) + '">' +
       '<div class="ajka-time"><span id="ajka-now">0:00</span><span id="ajka-duration">' + esc(formatTime(ch.duration_seconds || 0)) + '</span></div>' +
@@ -619,7 +902,16 @@
     const play = panel.querySelector('#ajka-play');
     const seek = panel.querySelector('#ajka-seek');
     const select = panel.querySelector('#ajka-chapter-select');
+    const voice = panel.querySelector('#ajka-voice-select');
     if (!play || !seek || !select) return;
+
+    if (voice) {
+      voice.addEventListener('change', async () => {
+        if (state.audio && !state.audio.paused) state.audio.pause();
+        await saveProgress(false, false, true);
+        await startBook(voice.value);
+      });
+    }
 
     play.addEventListener('click', async () => {
       if (!state.activeChapter) return startBook(state.activeBook.id);
