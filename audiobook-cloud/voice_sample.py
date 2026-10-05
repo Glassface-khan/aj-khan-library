@@ -44,7 +44,7 @@ def render_voice(section, voice_key: str, outdir: Path, local_retry_phrase: str 
         if local_retry_phrase and local_retry_phrase.lower() in chunk.text.lower():
             audio = gen_audio(retry_model, retry_state, chunk.text)
             retry_hits += 1
-            print(f"LOCAL_RETRY_{voice_key.upper()}={chunk.text[:220]}")
+            print(f"LOCAL_RETRY_{voice_key.upper()}=1")
         else:
             audio = gen_audio(model, state, chunk.text)
         rendered.append(audio)
@@ -80,9 +80,9 @@ def main() -> int:
     if args.section_index < 0 or args.section_index >= len(sections):
         raise SystemExit(f"Invalid section index {args.section_index}; manuscript has {len(sections)} sections")
     section = sections[args.section_index]
-    print(f"BOOK={title}")
+    print("BOOK_SOURCE=PRIVATE")
     print(f"SECTION_INDEX={args.section_index}")
-    print(f"SECTION_TITLE={section.title}")
+    print("SECTION_TITLE=REDACTED")
     print(f"SECTION_WORDS={section.word_count}")
 
     ref_mp3 = Path(__file__).resolve().parent / "RPReplay_Final1790942161.mp3"
@@ -102,7 +102,7 @@ def main() -> int:
     write_mp3(test_wav, test_mp3)
     transcript = AsrChecker("EN").transcribe(test_wav)
     scores = transcript_scores(test_text, transcript)
-    print(f"TOMMY_PREFLIGHT_TRANSCRIPT={transcript}")
+    print("TOMMY_PREFLIGHT_TRANSCRIPT=REDACTED")
     print(f"TOMMY_PREFLIGHT_SCORES={scores}")
     if scores["word_recall"] < 0.55 or scores["sequence_similarity"] < 0.45:
         raise SystemExit("Tommy preflight failed intelligibility gate; chapter render blocked")
