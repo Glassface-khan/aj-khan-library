@@ -54,8 +54,8 @@
 // payloads in IndexedDB for fast reopening; force clients to fetch the new JS.
 // v26 -> v27 (24.09.2026): books-live.json is the immediate catalog fallback;
 // BooksData remains canonical and replaces it whenever the live request succeeds.
-// v37 -> v38 (28.09.2026): force iOS to reload the exact-order cover grid.\n// v39 -> v40 (28.09.2026): deploy THE GUEST catalog entry, cover and EPUB; force clients to refresh the catalog fallback.\n// v40 -> v41 (28.09.2026): deploy THE NIGHT SIDE catalog entry, cover and EPUB; force clients to refresh the catalog fallback.\nconst SHELL_CACHE = 'ajk-shell-v63';
-const DATA_CACHE = 'ajk-data-v63';
+// v37 -> v38 (28.09.2026): force iOS to reload the exact-order cover grid.\n// v39 -> v40 (28.09.2026): deploy THE GUEST catalog entry, cover and EPUB; force clients to refresh the catalog fallback.\n// v40 -> v41 (28.09.2026): deploy THE NIGHT SIDE catalog entry, cover and EPUB; force clients to refresh the catalog fallback.\nconst SHELL_CACHE = 'ajk-shell-v64';
+const DATA_CACHE = 'ajk-data-v64';
 const SHELL_FILES = ['./', './index.html', './books-live.json', './cover-grid-v3.js', './manifest.webmanifest', './icons/icon-192.png', './icons/icon-512.png'];
 
 // Aktionen, deren Antwort für Offline-Nutzung zwischengespeichert werden
@@ -121,7 +121,7 @@ async function injectAudioLibrary_(response) {
   const pos = text.lastIndexOf('</body>');
 
   if (pos >= 0 && text.indexOf('audio-library.js') === -1) {
-    text = text.slice(0, pos) + '  <script src="./audio-library.js?v=20261005b" defer></script>\\n' + text.slice(pos);
+    text = text.slice(0, pos) + '  <script src="./audio-library.js?v=20261005c" defer></script>\\n' + text.slice(pos);
   }
 
   // Safari/WebKit can restore a page from the back-forward cache while keeping
@@ -141,7 +141,7 @@ async function injectAudioLibrary_(response) {
     if (now - lastCheck < 30000) return;
     lastCheck = now;
 
-    navigator.serviceWorker.register('./service-worker.js?v=63', {
+    navigator.serviceWorker.register('./service-worker.js?v=64', {
       scope: './',
       updateViaCache: 'none'
     }).then(function (reg) {
@@ -180,7 +180,21 @@ self.addEventListener('fetch', (event) => {
   let url;
   try { url = new URL(req.url); } catch (e) { return; }
 
-  // Navigations-Requests (die Seite selbst): Netzwerk zuerst, damit
+  // Audiobook Factory is an admin tool. It must bypass all shell rewriting,
+  // HTML injection and navigation caching. In particular, never store the
+  // factory response under ./index.html.
+  if (req.method === 'GET' && req.mode === 'navigate' &&
+      url.pathname.endsWith('/audiobook-factory.html')) {
+    event.respondWith(fetch(req, { cache: 'no-store' }).catch(() =>
+      new Response(
+        '<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Audiobook Factory</title><body style="font-family:system-ui;padding:2rem;background:#111;color:#eee">Die Audiobook Factory konnte gerade nicht geladen werden. Bitte die Seite erneut öffnen.</body>',
+        { status: 503, headers: { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' } }
+      )
+    ));
+    return;
+  }
+
+  // Navigations-Requests der normalen Autorenseite: Netzwerk zuerst, damit
   // Änderungen sofort ankommen, sobald online — mit Fallback auf den
   // zuletzt gecachten Stand, wenn offline.
   if (req.method === 'GET' && req.mode === 'navigate') {
@@ -277,13 +291,6 @@ self.addEventListener('fetch', (event) => {
           headers: { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' }
         });
       })());
-      return;
-    }
-
-    // The Audiobook Factory is an admin tool and must never come from a stale
-    // shell cache; its validation rules and queue controls are safety-critical.
-    if (url.pathname.endsWith('/audiobook-factory.html')) {
-      event.respondWith(fetch(req, { cache: 'no-store' }));
       return;
     }
 
