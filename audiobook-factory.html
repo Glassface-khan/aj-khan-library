@@ -147,17 +147,25 @@ function updateVoiceInfo(){
 }
 function chooseBookFromFilename(name){
  const n=norm(name.replace(/\.docx$/i,'').replace(/\b(final|publication|master|candidate|locked|working|complete|v\d+(?:_\d+)*)\b/gi,' '));
- let best=null,score=0;
+ const fileTerms=new Set(n.split(' ').filter(Boolean));
+ const stop=new Set(['the','a','an','der','die','das','ein','eine']);
+ let best=null,bestScore=0,secondScore=0,bestStrong=false;
  for(const b of books){
    const bt=norm(b.title);if(!bt)continue;
-   const a=new Set(n.split(' ')),terms=bt.split(' ').filter(Boolean),c=new Set(terms);
-   const common=[...c].filter(x=>a.has(x)).length;
-   const coverage=common/Math.max(1,c.size);
-   const strong=(n.includes(bt)||bt.includes(n))?1:0;
-   const sc=Math.max(coverage,strong);
-   if(sc>score){score=sc;best=b}
+   const titleTerms=bt.split(' ').filter(x=>x&&!stop.has(x));
+   if(!titleTerms.length)continue;
+   const common=titleTerms.filter(x=>fileTerms.has(x)).length;
+   const coverage=common/Math.max(1,titleTerms.length);
+   const strong=n.includes(bt)||bt.includes(n)||titleTerms.join(' ')===n;
+   const sc=Math.max(coverage,strong?1:0);
+   if(sc>bestScore){
+     secondScore=bestScore;bestScore=sc;best=b;bestStrong=strong;
+   }else if(sc>secondScore){
+     secondScore=sc;
+   }
  }
- if(best&&score>=0.80){
+ const uniqueEnough=bestStrong||(bestScore>=0.80&&bestScore-secondScore>=0.15);
+ if(best&&bestScore>=0.80&&uniqueEnough){
    $('#book').value=best.id;
    syncBookLanguage();
    $('#sourceStatus').textContent='Buch automatisch erkannt: '+best.title+' · '+name;
