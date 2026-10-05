@@ -1,4 +1,4 @@
-name: Native Voice Comparison
+name: Native Voice Comparison (No Public Artifacts)
 
 on:
   push:
@@ -38,10 +38,3 @@ jobs:
       - name: Render comparison
         working-directory: audiobook-cloud
         run: python compare_native_voices.py
-      - name: Upload samples
-        uses: actions/upload-artifact@v4
-        with:
-          name: native-pocket-tts-narrators
-          path: audiobook-cloud/voice-comparison/*.wav
-          if-no-files-found: error
-          retention-days: 2
