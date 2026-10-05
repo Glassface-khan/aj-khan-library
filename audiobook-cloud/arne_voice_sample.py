@@ -48,7 +48,7 @@ def main() -> int:
     sf.write(pre_wav, preflight, model.sample_rate, subtype="PCM_16")
     transcript = AsrChecker("DE").transcribe(pre_wav)
     scores = transcript_scores(PREFLIGHT_TEXT, transcript)
-    print(f"ARNE_PREFLIGHT_TRANSCRIPT={transcript}")
+    print("ARNE_PREFLIGHT_TRANSCRIPT=REDACTED")
     print(f"ARNE_PREFLIGHT_SCORES={scores}")
     if scores["word_recall"] < 0.55 or scores["sequence_similarity"] < 0.45:
         raise SystemExit("Arne preflight failed intelligibility gate")
@@ -62,7 +62,7 @@ def main() -> int:
 
     full_transcript = AsrChecker("DE").transcribe(wav)
     full_scores = transcript_scores(section.spoken_text, full_transcript)
-    print(f"ARNE_FULL_TRANSCRIPT={full_transcript}")
+    print("ARNE_FULL_TRANSCRIPT=REDACTED")
     print(f"ARNE_FULL_SCORES={full_scores}")
     print(f"ARNE_SECONDS={len(audio) / float(model.sample_rate):.2f}")
     print(f"ARNE_MP3={mp3}")
