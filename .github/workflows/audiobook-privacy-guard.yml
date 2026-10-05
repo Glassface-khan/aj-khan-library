@@ -1,0 +1,58 @@
+name: Audiobook Privacy Guard
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  privacy:
+    name: Block public audiobook data
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Reject private audio or manuscript files in public Git
+        shell: bash
+        run: |
+          set -euo pipefail
+          fail=0
+
+          # Two legacy reference clips are currently intentionally public and
+          # are NOT audiobook chapters. No new audio file may be added here.
+          allow_1="audiobook-cloud/RPReplay_Final1790927108.mp3"
+          allow_2="audiobook-cloud/RPReplay_Final1790942161.mp3"
+
+          while IFS= read -r path; do
+            [ -z "$path" ] && continue
+            if [ "$path" = "$allow_1" ] || [ "$path" = "$allow_2" ]; then
+              continue
+            fi
+            echo "::error file=$path::Private audio/manuscript file must not be committed to the public repository."
+            fail=1
+          done < <(git ls-files | grep -Ei '\.(mp3|wav|m4b|m4a|aac|flac|ogg|docx)$' || true)
+
+          if grep -R -n -E 'actions/upload-artifact@' .github/workflows/audiobook* .github/workflows/*voice* 2>/dev/null; then
+            echo "::error::Audiobook/voice workflows must not publish GitHub Actions artifacts."
+            fail=1
+          fi
+
+          if grep -R -n -E '/storage/v1/object/public/|getPublicUrl\(|createPublicUrl\('              audio-library.js cover-grid-v3.js audiobook-factory.html audiobook-cloud .github/workflows 2>/dev/null; then
+            echo "::error::Public Supabase object URLs are forbidden for audiobook code."
+            fail=1
+          fi
+
+          if grep -R -n -E 'push_to_hub|HfApi\(|upload_file\(|upload_folder\('              audiobook-cloud .github/workflows/audiobook* .github/workflows/*voice* 2>/dev/null; then
+            echo "::error::Uploading audiobook data/models to Hugging Face is forbidden."
+            fail=1
+          fi
+
+          if [ "$fail" -ne 0 ]; then
+            exit 1
+          fi
+
+          echo "AUDIOBOOK_PRIVACY_GUARD=PASS"
