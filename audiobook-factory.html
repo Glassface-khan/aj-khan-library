@@ -97,9 +97,15 @@ pre{white-space:pre-wrap;word-break:break-word;font-size:11px;background:#11100d
   </section>
 </main>
 <script>
+try{
+  const u=new URL(location.href);
+  if(u.searchParams.get('v')!=='20261005c'){
+    history.replaceState(null,'',location.pathname+'?v=20261005c');
+  }
+}catch(_){}
 const API='https://ipoqyjrojljmbqslmxxf.supabase.co/functions/v1/audiobook-factory';
 const $=s=>document.querySelector(s);
-let books=[],voices=[],token='',currentJobs=[],jobSubmitLocked=false,lastSubmittedKey='';
+let books=[],voices=[],token='',currentJobs=[],jobSubmitLocked=false,lastSubmittedKey='',jobsLoadInFlight=false;
 let editionCheckSeq=0,editionCheckPending=false,currentEdition=null,currentEditionJob=null;
 const norm=s=>String(s||'').toLowerCase().normalize('NFKD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9]+/g,' ').trim();
 function standaloneBookIdFromFilename(name){
@@ -311,10 +317,9 @@ function isSourceProblem(j){
  const code=String(j&&j.error_code||'');
  const stage=String(j&&j.stage||'');
  const detail=String(j&&j.error_detail||'');
- const summaryError=String(j&&j.qc_summary&&j.qc_summary.error||'');
  return ['SOURCE_TITLE_MISMATCH','SOURCE_STRUCTURE_MISMATCH','SOURCE_LANGUAGE_MISMATCH'].includes(code) ||
         ['source_title_mismatch','source_structure_mismatch','source_language_mismatch'].includes(stage) ||
-        (code==='PREPRODUCTION_QC_FAILED' && /TOC\/body mismatch|has no body text|No chapter\/prologue structure/i.test(detail+' '+summaryError));
+        (code==='PREPRODUCTION_QC_FAILED' && /TOC\/body mismatch|has no body text|No chapter\/prologue structure/i.test(detail));
 }
 function matchingExistingJob(file,b,voice){
  const lang=$('#lang').value;
@@ -406,9 +411,7 @@ function sourceProblemText_(j){
    return 'Die Kapitelstruktur der Quelle konnte nicht eindeutig zugeordnet werden. Bitte die korrigierte DOCX auswählen; dieser Job wird nicht automatisch erneut gestartet.';
  }
  if(String(j.error_code||'')==='SOURCE_LANGUAGE_MISMATCH'||String(j.stage||'')==='source_language_mismatch'){
-   const detected=String(j.qc_summary&&j.qc_summary.detected_language||'').toUpperCase();
-   const selected=String(j.qc_summary&&j.qc_summary.selected_language||j.language_code||'').toUpperCase();
-   return 'Sprache/Stimme passt nicht zum Manuskript'+(detected?(': Manuskript '+detected):'')+(selected?(', gewählt '+selected):'')+'. Bitte die Buchsprache bzw. Stimme korrigieren; ein erneuter Lauf mit derselben Auswahl würde wieder fehlschlagen.';
+   return String(j.error_detail||'Sprache/Stimme passt nicht zum Manuskript. Bitte Buchsprache bzw. Stimme korrigieren; ein erneuter Lauf mit derselben Auswahl würde wieder fehlschlagen.');
  }
  return String(j.error_detail||'Quelle prüfen.');
 }
@@ -470,6 +473,8 @@ function prepareSourceReplacement_(jobId){
  $('#newJob').scrollIntoView({behavior:'smooth',block:'start'});
 }
 async function loadJobs(){
+ if(jobsLoadInFlight)return;
+ jobsLoadInFlight=true;
  try{
    const d=await api({op:'listJobs'});const all=d.jobs||[];
    currentJobs=all.filter(j=>j.status!=='cancelled');
@@ -488,7 +493,11 @@ async function loadJobs(){
    document.querySelectorAll('[data-cancel]').forEach(b=>b.onclick=async()=>{if(confirm('Job wirklich abbrechen?')){await api({op:'cancelJob',jobId:b.dataset.cancel});await loadJobs()}});
    document.querySelectorAll('[data-dismiss]').forEach(b=>b.onclick=async()=>{if(confirm('Diesen fehlerhaften Job aus der Liste ausblenden?')){await api({op:'cancelJob',jobId:b.dataset.dismiss});await loadJobs()}});
    document.querySelectorAll('[data-fix-source]').forEach(b=>b.onclick=()=>prepareSourceReplacement_(b.dataset.fixSource));
- }catch(e){$('#jobs').innerHTML='<p class="bad">'+esc(e.message)+'</p>'}
+ }catch(e){
+   $('#jobs').innerHTML='<p class="bad">'+esc(e.message)+'</p>';
+ }finally{
+   jobsLoadInFlight=false;
+ }
 }
 async function init(){
  $('#back').onclick=()=>location.href='./';
@@ -504,7 +513,7 @@ async function init(){
    $('#authText').textContent='Admin bestätigt · Cloud Factory bereit.';
    $('#newJob').classList.remove('hidden');$('#jobsCard').classList.remove('hidden');
    await loadJobs();
-   setInterval(()=>{if(!document.hidden)loadJobs()},10000);
+   setInterval(()=>{if(!document.hidden)void loadJobs()},15000);
  }catch(e){$('#authText').textContent='Admin-Sitzung konnte nicht bestätigt werden: '+e.message}
 }
 $('#source').onchange=()=>{
