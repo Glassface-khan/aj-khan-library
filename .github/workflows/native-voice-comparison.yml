@@ -13,6 +13,8 @@ permissions:
 
 env:
   PYTHONUNBUFFERED: "1"
+  HF_HUB_DISABLE_TELEMETRY: "1"
+  DO_NOT_TRACK: "1"
   OMP_NUM_THREADS: "2"
   MKL_NUM_THREADS: "2"
 
