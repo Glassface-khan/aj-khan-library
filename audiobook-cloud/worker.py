@@ -137,6 +137,60 @@ def canonical_section_label(text: str) -> str:
     return f"{m.group(1).lower()}|{_canonical_chapter_ordinal(ordinal)}"
 
 
+def is_section_label(text: str) -> bool:
+    """Accept real section headings, but never prose merely starting with 'Chapter'."""
+    raw = str(text or "").strip()
+    if not raw or len(raw) > 180 or len(words(raw)) > 20:
+        return False
+
+    if re.fullmatch(
+        r"(?:PROLOGUE|PROLOG|EPILOGUE|EPILOG|CODA|INTERLUDE|ZWISCHENSPIEL)"
+        r"(?:\s*[:—–-]\s*[^\n]{1,100})?",
+        raw,
+        re.I,
+    ):
+        return True
+
+    if re.fullmatch(r"[A-ZÄÖÜ][A-Za-zÄÖÜäöüß-]+\s+KAPITEL", raw, re.I):
+        return True
+
+    m = re.match(r"^(CHAPTER|KAPITEL)\s+(.+)$", raw, re.I)
+    if not m:
+        return False
+
+    rest = m.group(2).strip()
+    parts = re.split(r"\s*:\s*|\s+[—–]\s+|\s+-\s+", rest, maxsplit=1)
+    ordinal = parts[0].strip()
+    title = parts[1].strip() if len(parts) > 1 else ""
+
+    # A true chapter ordinal is numeric, Roman, or a recognised number word.
+    # This rejects prose such as "Chapter Seven, Additional Note The 2017..."
+    # because the comma makes the entire prose fragment fail ordinal parsing.
+    canonical = _canonical_chapter_ordinal(ordinal)
+    if not re.fullmatch(r"\d+[a-z]?", canonical):
+        joined = ordinal.lower().replace(" ", "-")
+        canonical = _ORDINAL_WORDS.get(joined, canonical)
+    if not re.fullmatch(r"\d+[a-z]?", canonical):
+        return False
+
+    if title and (len(title) > 110 or len(words(title)) > 14):
+        return False
+    return True
+
+
+EDITORIAL_META_RE = re.compile(
+    r"\b(?:pending\s+track|working\s+track|production\s+notes?|editorial\s+notes?|"
+    r"handoff|scholar[-\s]?check|internal\s+notes?|review\s+notes?|draft\s+track)\b",
+    re.I,
+)
+
+def is_editorial_meta_heading(text: str, style: str = "") -> bool:
+    raw = str(text or "").strip()
+    sl = str(style or "").lower()
+    heading_like = sl.startswith("heading") or sl in {"chapter", "book chapter", "title", "subtitle"} or raw.isupper()
+    return bool(raw and heading_like and EDITORIAL_META_RE.search(raw))
+
+
 def detect_manuscript_language(sections: list[Section]) -> dict[str, Any]:
     """Lightweight deterministic DE/EN guard before any TTS is rendered."""
     sample = " ".join(
@@ -315,7 +369,7 @@ def parse_docx(path: Path) -> tuple[str, list[Section], dict[str, Any]]:
         sl = st.lower()
         if "toc" in sl:
             continue
-        if "chapter label" in sl or LABEL_RE.match(t):
+        if "chapter label" in sl or is_section_label(t):
             explicit_start_rows.append((i, t))
 
     # A number of polished publication masters have Contents entries in Normal
@@ -336,10 +390,14 @@ def parse_docx(path: Path) -> tuple[str, list[Section], dict[str, Any]]:
     # Some publication masters use explicit CHAPTER labels for most sections but
     # Heading 1 / Chapter styles for a few special sections. Recover those
     # without double-counting the chapter-title line immediately after a label.
+    editorial_starts: list[int] = []
     styled_candidates: list[int] = []
     for i, t, st in nonempty:
         sl = st.lower()
         if "toc" in sl or "back" in sl or BACKMATTER_RE.match(t):
+            continue
+        if is_editorial_meta_heading(t, st):
+            editorial_starts.append(i)
             continue
         if sl.startswith("heading 1") or sl in {"chapter", "book chapter"}:
             if any(0 < i - s <= 2 for s in explicit_starts):
@@ -351,6 +409,14 @@ def parse_docx(path: Path) -> tuple[str, list[Section], dict[str, Any]]:
 
     if not starts:
         raise ValueError("No chapter/prologue structure could be detected")
+
+    # Internal production/handoff blocks can be styled as Heading 1 inside a
+    # working master. Exclude the whole block up to the next real section start.
+    editorial_skip_rows: set[int] = set()
+    for e_start in editorial_starts:
+        later = [s for s in starts if s > e_start]
+        e_end = min(later) if later else len(paras)
+        editorial_skip_rows.update(range(e_start, e_end))
 
     sections: list[Section] = []
     start_set = set(starts)
@@ -380,7 +446,7 @@ def parse_docx(path: Path) -> tuple[str, list[Section], dict[str, Any]]:
             if not t:
                 continue
             sl = st.lower()
-            if "toc" in sl:
+            if "toc" in sl or j in editorial_skip_rows:
                 continue
             if pos == len(starts) - 1 and ("back heading" in sl or BACKMATTER_RE.match(t)):
                 break
@@ -392,7 +458,7 @@ def parse_docx(path: Path) -> tuple[str, list[Section], dict[str, Any]]:
             raise ValueError(f"Section {pos + 1} ({label}) has no body text")
         sections.append(Section(pos, kind, label, chapter_title, body))
 
-    toc_section_entries = [t for t in toc_entries if LABEL_RE.match(t)]
+    toc_section_entries = [t for t in toc_entries if is_section_label(t)]
     expected = (
         len(toc_section_entries)
         if len(toc_section_entries) >= 2
@@ -406,6 +472,8 @@ def parse_docx(path: Path) -> tuple[str, list[Section], dict[str, Any]]:
         "explicit_body_start_count": len(explicit_starts),
         "duplicate_contents_labels_ignored": len(duplicate_toc_starts),
         "styled_recovery_count": len([x for x in styled_candidates if x not in explicit_starts]),
+        "editorial_meta_blocks_ignored": len(editorial_starts),
+        "editorial_meta_rows_ignored": len(editorial_skip_rows),
         "expected_sections": expected,
         "title": title,
         "style_counts": dict(collections.Counter(st for _, _, st in nonempty)),
