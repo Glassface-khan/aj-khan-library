@@ -150,12 +150,23 @@ function chooseBookFromFilename(name){
  let best=null,score=0;
  for(const b of books){
    const bt=norm(b.title);if(!bt)continue;
-   const a=new Set(n.split(' ')),c=new Set(bt.split(' '));
+   const a=new Set(n.split(' ')),terms=bt.split(' ').filter(Boolean),c=new Set(terms);
    const common=[...c].filter(x=>a.has(x)).length;
-   const sc=common/Math.max(1,c.size);
+   const coverage=common/Math.max(1,c.size);
+   const strong=(n.includes(bt)||bt.includes(n))?1:0;
+   const sc=Math.max(coverage,strong);
    if(sc>score){score=sc;best=b}
  }
- if(best&&score>=0.65){$('#book').value=best.id;syncBookLanguage()}
+ if(best&&score>=0.80){
+   $('#book').value=best.id;
+   syncBookLanguage();
+   $('#sourceStatus').textContent='Buch automatisch erkannt: '+best.title+' · '+name;
+   return true;
+ }
+ $('#book').value='';
+ syncBookLanguage();
+ $('#sourceStatus').textContent='Kein sicherer Katalogtreffer für '+name+'. Bitte das Buch auf der Autorenseite auswählen. Wenn es dort fehlt, zuerst im Buchkatalog anlegen.';
+ return false;
 }
 function syncBookLanguage(){
  const b=books.find(x=>x.id===$('#book').value);
@@ -470,7 +481,14 @@ async function init(){
    setInterval(()=>{if(!document.hidden)loadJobs()},10000);
  }catch(e){$('#authText').textContent='Admin-Sitzung konnte nicht bestätigt werden: '+e.message}
 }
-$('#source').onchange=()=>{resetJobSubmitState();const f=$('#source').files[0];if(f)chooseBookFromFilename(f.name);void checkExistingEdition()};
+$('#source').onchange=()=>{
+ resetJobSubmitState();
+ $('#book').value='';
+ syncBookLanguage();
+ const f=$('#source').files[0];
+ if(f)chooseBookFromFilename(f.name);
+ void checkExistingEdition();
+};
 $('#book').onchange=()=>{resetJobSubmitState();syncBookLanguage();void checkExistingEdition()};
 $('#lang').onchange=()=>{resetJobSubmitState();renderVoices();updateStartAvailability();void checkExistingEdition()};
 $('#voice').onchange=()=>{resetJobSubmitState();updateVoiceInfo();void checkExistingEdition()};
