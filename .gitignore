@@ -1,0 +1,17 @@
+# Private audiobook/manuscript outputs must never be committed.
+*.docx
+*.m4b
+*.m4a
+*.aac
+*.flac
+*.ogg
+*.wav
+*.mp3
+
+# Local/CI audiobook working directories.
+prepared/
+voice-sample/
+arne-validation/
+audiobook-cloud/voice-comparison/
+audiobook-cloud/output/
+audiobook-cloud/outputs/
