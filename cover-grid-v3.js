@@ -32,6 +32,16 @@
     catch (_) { return ''; }
   }
 
+  function audioCredentials_() {
+    try {
+      if (isAdmin_()) return { code: '', adminToken: adminToken_() };
+      var access = JSON.parse(localStorage.getItem('ajk_visitor_access') || '{}') || {};
+      return { code: String(access.code || ''), adminToken: '' };
+    } catch (_) {
+      return { code: '', adminToken: '' };
+    }
+  }
+
   function normTitle_(value) {
     return String(value || '').replace(/\s+/g, ' ').trim().toLocaleLowerCase();
   }
@@ -433,20 +443,37 @@
 
   async function loadAudioAvailability_() {
     try {
+      var creds = audioCredentials_();
+      if (!creds.adminToken && !creds.code) {
+        audioAvailableBookIds_ = new Set();
+        refreshAudioBadges_();
+        return;
+      }
       var res = await fetch(AUDIO_AVAIL_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         cache: 'no-store',
-        body: JSON.stringify({ op: 'availability' })
+        body: JSON.stringify({
+          op: 'availability',
+          code: creds.code,
+          adminToken: creds.adminToken
+        })
       });
-      if (!res.ok) return;
+      if (!res.ok) {
+        audioAvailableBookIds_ = new Set();
+        refreshAudioBadges_();
+        return;
+      }
       var data = await res.json();
       var rows = data && data.ok && Array.isArray(data.books) ? data.books : [];
       audioAvailableBookIds_ = new Set(rows.map(function (x) {
         return String(x && x.site_book_id || '').trim();
       }).filter(Boolean));
       refreshAudioBadges_();
-    } catch (_) {}
+    } catch (_) {
+      audioAvailableBookIds_ = new Set();
+      refreshAudioBadges_();
+    }
   }
 
   function refreshAudioBadges_() {
