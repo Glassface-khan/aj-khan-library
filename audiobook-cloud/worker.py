@@ -236,7 +236,10 @@ def parse_docx(path: Path) -> tuple[str, list[Section], dict[str, Any]]:
     from docx import Document
 
     doc = Document(str(path))
-    paras = [(p.text.strip(), p.style.name or "") for p in doc.paragraphs]
+    paras = [
+        (p.text.strip(), ((getattr(p, "style", None) and getattr(p.style, "name", "")) or ""))
+        for p in doc.paragraphs
+    ]
     nonempty = [(i, t, st) for i, (t, st) in enumerate(paras) if t]
 
     title = ""
@@ -456,6 +459,7 @@ def chunks_for(section: Section) -> list[Chunk]:
             pause_after = PARAGRAPH_PAUSE if pi == len(pieces) - 1 else TECHNICAL_CHUNK_PAUSE
             chunks.append(Chunk(piece, pause_after))
 
+    chunks = [ch for ch in chunks if ch.text.strip() and words(ch.text)]
     if chunks:
         chunks[-1].pause_after = 0.0
     return chunks
@@ -616,6 +620,9 @@ def load_tts_from_prepared(language: str, state_path: Path, temp: float = 0.3):
 
 def gen_audio(model, state, text: str) -> np.ndarray:
     """Render with Pocket TTS 3.3 streaming; fade only the logical chunk onset."""
+    text = str(text or "").strip()
+    if not text or not words(text):
+        raise ValueError("TTS prompt contains no speakable words")
     rendered: list[np.ndarray] = []
     first_packet = True
     fade_samples = max(1, int(0.005 * model.sample_rate))
@@ -646,6 +653,48 @@ def write_mp3(wav_path: Path, mp3_path: Path) -> None:
 
 
 def preflight_sample_text(section: Section, max_words: int = 16) -> str:
+    """Choose a substantive prose sample, not title cards, timestamps or metadata."""
+    metadata_re = re.compile(
+        r"^(?:\[?\d{1,2}:\d{2}\]?|@\S+|hochgeladen\b|uploaded\b|aufrufe\b|views\b|"
+        r"top-kommentare\b|top comments\b|mirza home\b|video endet\b|video ends\b)",
+        re.I,
+    )
+    candidates: list[str] = []
+
+    for raw in section.paragraphs:
+        p = raw.strip()
+        if not p or SCENE_RE.match(p) or metadata_re.match(p):
+            continue
+        if p.isupper() and len(words(p)) <= 10:
+            continue
+        if re.match(r"^[A-ZÄÖÜ][A-ZÄÖÜ0-9 _.-]{1,30}:$", p):
+            continue
+
+        for sentence in split_sentences(p):
+            cleaned = sentence.strip()
+            wc = len(words(cleaned))
+            if wc >= 12:
+                candidates.append(cleaned)
+                if wc >= max_words:
+                    return " ".join(cleaned.split()[:max_words])
+
+    if candidates:
+        return " ".join(candidates[0].split()[:max_words])
+
+    # Fallback: accumulate real prose tokens while excluding technical markers.
+    prose: list[str] = []
+    for raw in section.paragraphs:
+        p = raw.strip()
+        if not p or SCENE_RE.match(p) or metadata_re.match(p):
+            continue
+        if p.isupper() and len(words(p)) <= 10:
+            continue
+        prose.extend(p.split())
+        if len(prose) >= max_words:
+            break
+    if prose:
+        return " ".join(prose[:max_words])
+
     text = section.spoken_text.replace("[[SCENE_BREAK]]", " ")
     return " ".join(text.split()[:max_words])
 
