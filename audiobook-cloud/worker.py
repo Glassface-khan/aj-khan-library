@@ -27,7 +27,7 @@ TECHNICAL_CHUNK_PAUSE = 0.03
 PARAGRAPH_PAUSE = 0.32
 SCENE_PAUSE = 0.90
 MODEL_RELOAD_EVERY_SECTIONS = 4
-MAX_CHUNK_RETRIES = 3  # queue repair wake 2026-10-05
+MAX_CHUNK_RETRIES = 3  # queue/parser repair wake 2026-10-05
 
 SCENE_RE = re.compile(r"^(?:[◆◇◊*]+|[-–—]{1,3})$")
 LABEL_RE = re.compile(r"^(PROLOGUE|PROLOG|EPILOGUE|EPILOG|CODA|CHAPTER(?:\s+.+)?|KAPITEL(?:\s+.+)?|[A-ZÄÖÜ][A-Za-zÄÖÜäöüß-]+\s+KAPITEL|INTERLUDE(?:\s+.+)?|ZWISCHENSPIEL(?:\s+.+)?)$", re.I)
