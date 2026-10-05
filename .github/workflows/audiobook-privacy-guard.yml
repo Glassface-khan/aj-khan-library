@@ -27,41 +27,7 @@ jobs:
             [ -z "$path" ] && continue
             echo "::error file=$path::Private audio/manuscript file must not be committed to the public repository."
             fail=1
-          done < <(git ls-files | grep -Ei '\.(mp3|wav|m4b|m4a|aac|flac|ogg|docx)
-
-          workflow_files="$(find .github/workflows -maxdepth 1 -type f \
-            \( -name 'audiobook*.yml' -o -name 'audiobook*.yaml' -o -name '*voice*.yml' -o -name '*voice*.yaml' \) \
-            ! -name 'audiobook-privacy-guard.yml' -print)"
-
-          if [ -n "$workflow_files" ] && grep -n -E 'actions/upload-artifact@' $workflow_files 2>/dev/null; then
-            echo "::error::Audiobook/voice workflows must not publish GitHub Actions artifacts."
-            fail=1
-          fi
-
-          if grep -R -n -E '/storage/v1/object/public/|getPublicUrl\(|createPublicUrl\(' \
-             audio-library.js cover-grid-v3.js audiobook-factory.html audiobook-cloud 2>/dev/null; then
-            echo "::error::Public Supabase object URLs are forbidden for audiobook code."
-            fail=1
-          fi
-
-          hf_upload_found=0
-          if grep -R -n -E 'push_to_hub|HfApi\(|upload_file\(|upload_folder\(' audiobook-cloud 2>/dev/null; then
-            hf_upload_found=1
-          fi
-          if [ -n "$workflow_files" ] && grep -n -E 'push_to_hub|HfApi\(|upload_file\(|upload_folder\(' $workflow_files 2>/dev/null; then
-            hf_upload_found=1
-          fi
-          if [ "$hf_upload_found" -ne 0 ]; then
-            echo "::error::Uploading audiobook data/models to Hugging Face is forbidden."
-            fail=1
-          fi
-
-          if [ "$fail" -ne 0 ]; then
-            exit 1
-          fi
-
-          echo "AUDIOBOOK_PRIVACY_GUARD=PASS"
- || true)
+          done < <(git ls-files | grep -Ei '\.(mp3|wav|m4b|m4a|aac|flac|ogg|docx)$' || true)
 
           workflow_files="$(find .github/workflows -maxdepth 1 -type f \
             \( -name 'audiobook*.yml' -o -name 'audiobook*.yaml' -o -name '*voice*.yml' -o -name '*voice*.yaml' \) \
