@@ -1,4 +1,4 @@
-name: Audiobook Voice Validation
+name: Audiobook Voice Validation (No Public Artifacts)
 
 on:
   push:
@@ -68,19 +68,3 @@ jobs:
         run: |
           cd audiobook-cloud
           python arne_voice_sample.py --output-dir ../arne-validation
-
-      - name: Upload private review sample
-        uses: actions/upload-artifact@v4
-        with:
-          name: audiobook-voice-validation
-          path: voice-sample/THE_TESTIMONY_OF_SAND_CH01_*.mp3
-          if-no-files-found: error
-          retention-days: 1
-
-      - name: Upload Arne German validation
-        uses: actions/upload-artifact@v4
-        with:
-          name: arne-german-voice-validation
-          path: arne-validation/ARNE_DE_VALIDATION.mp3
-          if-no-files-found: error
-          retention-days: 1
