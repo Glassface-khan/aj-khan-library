@@ -83,6 +83,60 @@ def normalize_text(text: str) -> str:
     return " ".join(text.split())
 
 
+_ORDINAL_WORDS = {
+    "one":"1","two":"2","three":"3","four":"4","five":"5","six":"6","seven":"7","eight":"8","nine":"9","ten":"10",
+    "eleven":"11","twelve":"12","thirteen":"13","fourteen":"14","fifteen":"15","sixteen":"16","seventeen":"17",
+    "eighteen":"18","nineteen":"19","twenty":"20","twenty-one":"21","twenty-two":"22","twenty-three":"23",
+    "twenty-four":"24","twenty-five":"25","twenty-six":"26","twenty-seven":"27","twenty-eight":"28",
+    "twenty-nine":"29","thirty":"30",
+    "eins":"1","ein":"1","zwei":"2","drei":"3","vier":"4","fünf":"5","funf":"5","sechs":"6","sieben":"7",
+    "acht":"8","neun":"9","zehn":"10","elf":"11","zwölf":"12","zwolf":"12","dreizehn":"13","vierzehn":"14",
+    "fünfzehn":"15","funfzehn":"15","sechzehn":"16","siebzehn":"17","achtzehn":"18","neunzehn":"19","zwanzig":"20",
+}
+
+def _roman_to_int(value: str) -> int | None:
+    vals = {"i":1,"v":5,"x":10,"l":50,"c":100}
+    s = value.lower().strip()
+    if not s or any(ch not in vals for ch in s):
+        return None
+    total = 0
+    prev = 0
+    for ch in reversed(s):
+        v = vals[ch]
+        if v < prev:
+            total -= v
+        else:
+            total += v
+            prev = v
+    return total if 0 < total <= 99 else None
+
+def _canonical_chapter_ordinal(raw: str) -> str:
+    s = raw.strip().lower().replace("–", "-").replace("—", "-")
+    s = re.sub(r"\s+", " ", s)
+    m = re.fullmatch(r"(\d+)\s*([a-z]?)", s)
+    if m:
+        return m.group(1) + m.group(2)
+    m = re.fullmatch(r"([a-zäöüß-]+)-([a-z])", s)
+    if m and m.group(1) in _ORDINAL_WORDS:
+        return _ORDINAL_WORDS[m.group(1)] + m.group(2)
+    if s in _ORDINAL_WORDS:
+        return _ORDINAL_WORDS[s]
+    roman = _roman_to_int(s)
+    if roman is not None:
+        return str(roman)
+    return normalize_text(s)
+
+def canonical_section_label(text: str) -> str:
+    """Match equivalent chapter labels used in Contents and body headings."""
+    raw = str(text or "").strip()
+    m = re.match(r"^(chapter|kapitel)\s+(.+?)\s*$", raw, re.I)
+    if not m:
+        return normalize_text(raw)
+    rest = m.group(2).strip()
+    ordinal = re.split(r"\s*:\s*|\s+[–—]\s+", rest, maxsplit=1)[0].strip()
+    return f"{m.group(1).lower()}|{_canonical_chapter_ordinal(ordinal)}"
+
+
 def detect_manuscript_language(sections: list[Section]) -> dict[str, Any]:
     """Lightweight deterministic DE/EN guard before any TTS is rendered."""
     sample = " ".join(
@@ -270,7 +324,7 @@ def parse_docx(path: Path) -> tuple[str, list[Section], dict[str, Any]]:
     # occurrence of an identical label, which is the body occurrence.
     by_label: dict[str, list[int]] = collections.defaultdict(list)
     for i, t in explicit_start_rows:
-        by_label[normalize_text(t)].append(i)
+        by_label[canonical_section_label(t)].append(i)
     duplicate_toc_starts = {
         i
         for positions in by_label.values()
