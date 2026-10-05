@@ -55,8 +55,9 @@ pre{white-space:pre-wrap;word-break:break-word;font-size:11px;background:#11100d
         <div id="sourceStatus" class="muted">Auf dem iPhone kannst du hier direkt Google Drive oder iCloud Drive auswählen.</div>
       </div>
       <div>
-        <label>Buch auf der Autorenseite</label>
+        <label>Buch auf der Autorenseite · optional</label>
         <select id="book"></select>
+        <div class="muted">Kein Eintrag nötig: Die Factory kann das Hörbuch auch eigenständig produzieren. Eine Verknüpfung wird nur für Buchkarte, Cover-Badge und automatische Zuordnung genutzt.</div>
       </div>
       <div>
         <label>Sprache</label>
@@ -83,7 +84,7 @@ pre{white-space:pre-wrap;word-break:break-word;font-size:11px;background:#11100d
         <p class="muted">Die Factory prüft zuerst Kapitelstruktur und erzeugt drei Probe-Segmente (Anfang · Mitte · Ende). Sprache wird zurücktranskribiert und gegen den Originaltext geprüft; zusätzlich werden Sprechtempo, Dauer, Stille und Clipping kontrolliert. Nur bei PASS startet das vollständige Hörbuch.</p>
       </div>
       <div class="full">
-        <label style="text-transform:none;letter-spacing:0"><input id="autoPublish" type="checkbox" checked> Nach bestandenem End-QC automatisch auf der Autorenseite veröffentlichen</label>
+        <label style="text-transform:none;letter-spacing:0"><input id="autoPublish" type="checkbox" checked> Nach bestandenem End-QC automatisch in der Audio-Bibliothek bereitstellen</label>
       </div>
     </div>
     <p id="error"></p>
@@ -101,6 +102,15 @@ const $=s=>document.querySelector(s);
 let books=[],voices=[],token='',currentJobs=[],jobSubmitLocked=false,lastSubmittedKey='';
 let editionCheckSeq=0,editionCheckPending=false,currentEdition=null,currentEditionJob=null;
 const norm=s=>String(s||'').toLowerCase().normalize('NFKD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9]+/g,' ').trim();
+function standaloneBookIdFromFilename(name){
+ let base=String(name||'manuscript').replace(/\.docx$/i,'').replace(/_/g,' ');
+ base=base.replace(/\bv\d+(?:[ .-]\d+)*\b/gi,' ');
+ base=base.replace(/\b(final|publication|master|candidate|locked|working|complete|consolidated|review)\b/gi,' ');
+ base=base.replace(/\b(prologue|epilogue)\b/gi,' ');
+ base=base.replace(/\bchapters?\s*\d+(?:\s*[-–]\s*\d+)?\b/gi,' ');
+ const core=norm(base).replace(/\s+/g,'-')||'manuscript';
+ return 'standalone_'+core;
+}
 const api=async body=>{
  const r=await fetch(API,{method:'POST',headers:{'Content-Type':'application/json'},cache:'no-store',body:JSON.stringify({...body,adminToken:token})});
  const d=await r.json().catch(()=>({}));
@@ -116,7 +126,7 @@ function parseBooksPayload(d){
 async function loadBooks(){
  const r=await fetch('./books-live.json?factory='+Date.now(),{cache:'no-store'});
  books=parseBooksPayload(await r.json());
- const s=$('#book');s.innerHTML='<option value="">— Buch wählen —</option>';
+ const s=$('#book');s.innerHTML='<option value="">— Keine Verknüpfung nötig —</option>';
  books.filter(b=>b&&b.id&&b.title).sort((a,b)=>a.title.localeCompare(b.title)).forEach(b=>{
    const o=document.createElement('option');o.value=b.id;o.textContent=b.title;s.appendChild(o);
  });
@@ -173,7 +183,7 @@ function chooseBookFromFilename(name){
  }
  $('#book').value='';
  syncBookLanguage();
- $('#sourceStatus').textContent='Kein sicherer Katalogtreffer für '+name+'. Bitte das Buch auf der Autorenseite auswählen. Wenn es dort fehlt, zuerst im Buchkatalog anlegen.';
+ $('#sourceStatus').textContent='Kein sicherer Katalogtreffer für '+name+'. Kein Problem: Das Hörbuch kann ohne Autorenseiten-Verknüpfung erstellt werden.';
  return false;
 }
 function syncBookLanguage(){
@@ -217,7 +227,8 @@ async function uploadMissingVoice(){
   }catch(e){$('#error').textContent=e.message}
 }
 function selectedJobKey(file,b,voice){
- return [file.name,file.size,file.lastModified,b.id,$('#lang').value,voice.key].join('|');
+ const bookKey=b?b.id:standaloneBookIdFromFilename(file.name);
+ return [file.name,file.size,file.lastModified,bookKey,$('#lang').value,voice.key].join('|');
 }
 function selectedBookLanguageMismatch_(){
  const b=books.find(x=>x.id===$('#book').value);
@@ -243,9 +254,12 @@ async function checkExistingEdition(){
  if(confirmBox)confirmBox.classList.remove('hidden');
  if(box)box.classList.add('hidden');
 
- const b=books.find(x=>x.id===$('#book').value);
+ const b=books.find(x=>x.id===$('#book').value)||null;
  const voice=voices.find(v=>v.key===$('#voice').value);
- if(!b||!voice){
+ const file=$('#source').files[0];
+ const siteBookId=b?b.id:(file?standaloneBookIdFromFilename(file.name):'');
+ const displayTitle=b?b.title:(file?file.name.replace(/\.docx$/i,''):'dieses Manuskript');
+ if(!voice||!siteBookId){
    updateStartAvailability();
    return;
  }
@@ -253,7 +267,7 @@ async function checkExistingEdition(){
  editionCheckPending=true;
  updateStartAvailability();
  try{
-   const edition=await api({op:'editionStatus',siteBookId:b.id,voiceKey:voice.key});
+   const edition=await api({op:'editionStatus',siteBookId,voiceKey:voice.key});
    if(seq!==editionCheckSeq)return;
    currentEdition=edition.exists?(edition.edition||{narrator_name:voice.name}):null;
    currentEditionJob=edition.activeJob||null;
@@ -261,13 +275,13 @@ async function checkExistingEdition(){
      const progress=Number(currentEditionJob.progress_total||0)>0
        ?(' · '+Number(currentEditionJob.progress_done||0)+'/'+Number(currentEditionJob.progress_total)+' Abschnitte')
        :'';
-     text.textContent='Für „'+b.title+'“ läuft oder wartet bereits ein Cloud-Job mit „'+voice.name+'“ ('+statusLabel(currentEditionJob)+progress+'). Ein zweiter Job mit derselben Stimme ist gesperrt. Bitte den vorhandenen Job verwenden oder zuerst abbrechen.';
+     text.textContent='Für „'+displayTitle+'“ läuft oder wartet bereits ein Cloud-Job mit „'+voice.name+'“ ('+statusLabel(currentEditionJob)+progress+'). Ein zweiter Job mit derselben Stimme ist gesperrt. Bitte den vorhandenen Job verwenden oder zuerst abbrechen.';
      if(confirmBox)confirmBox.classList.add('hidden');
      box.classList.remove('hidden');
    }else if(currentEdition){
      const narrator=currentEdition.narrator_name||voice.name;
      const state=currentEdition.is_active?'veröffentlichte':'bereits vorhandene';
-     text.textContent='Für „'+b.title+'“ gibt es bereits eine '+state+' Hörbuchfassung mit „'+narrator+'“. Ein neuer Lauf mit derselben Stimme würde genau diese Erzählerfassung ersetzen. Andere Stimmenfassungen bleiben unverändert.';
+     text.textContent='Für „'+displayTitle+'“ gibt es bereits eine '+state+' Hörbuchfassung mit „'+narrator+'“. Ein neuer Lauf mit derselben Stimme würde genau diese Erzählerfassung ersetzen. Andere Stimmenfassungen bleiben unverändert.';
      if(confirmBox)confirmBox.classList.remove('hidden');
      box.classList.remove('hidden');
    }else{
@@ -304,13 +318,14 @@ function isSourceProblem(j){
 }
 function matchingExistingJob(file,b,voice){
  const lang=$('#lang').value;
+ const targetBookId=b?b.id:standaloneBookIdFromFilename(file.name);
  return currentJobs.find(j=>{
    const sameFile=String(j.source_file_name||'')===file.name;
-   const sameTitle=norm(j.requested_title||j.detected_title||'')===norm(b.title);
+   const sameBook=String(j.site_book_id||'')===targetBookId || (!b&&sameFile);
    const sameLang=String(j.language_code||'').toUpperCase()===lang;
    const reusable=['uploading','queued','preflight','qc_running','production','finalizing','needs_attention','failed'].includes(String(j.status||''));
    const sameVoice=String(j.voice_key||'')===String(voice.key||'');
-   return sameFile&&sameTitle&&sameLang&&sameVoice&&reusable&&!isSourceProblem(j);
+   return sameBook&&sameLang&&sameVoice&&reusable&&!isSourceProblem(j);
  });
 }
 async function startJob(){
@@ -319,10 +334,12 @@ async function startJob(){
  let success=false;
  try{
    const file=$('#source').files[0];if(!file)throw new Error('Bitte DOCX auswählen.');
-   const b=books.find(x=>x.id===$('#book').value);if(!b)throw new Error('Bitte Buch auf der Autorenseite auswählen.');
-   const availableBookLangs=Object.keys(b.langs||{}).map(x=>String(x).toUpperCase()).filter(x=>['EN','DE'].includes(x));
-   if(availableBookLangs.length&&!availableBookLangs.includes(String($('#lang').value||'').toUpperCase())){
-     throw new Error('Die gewählte Sprache passt nicht zur Buchfassung. Verfügbar: '+availableBookLangs.join(', ')+'.');
+   const b=books.find(x=>x.id===$('#book').value)||null;
+   if(b){
+     const availableBookLangs=Object.keys(b.langs||{}).map(x=>String(x).toUpperCase()).filter(x=>['EN','DE'].includes(x));
+     if(availableBookLangs.length&&!availableBookLangs.includes(String($('#lang').value||'').toUpperCase())){
+       throw new Error('Die gewählte Sprache passt nicht zur Buchfassung. Verfügbar: '+availableBookLangs.join(', ')+'.');
+     }
    }
    const voice=voices.find(v=>v.key===$('#voice').value);if(!voice||!voice.ready)throw new Error('Bitte verfügbare Stimme auswählen.');
    const key=selectedJobKey(file,b,voice);
@@ -333,9 +350,10 @@ async function startJob(){
    if(existing){
       throw new Error('Für dieses Buch und diese Stimme existiert bereits ein Cloud-Job ('+statusLabel(existing)+'). Bitte den vorhandenen Job verwenden bzw. „Automatisch erneut versuchen“.');
    }
-    const edition=await api({op:'editionStatus',siteBookId:b.id,voiceKey:voice.key});
+    const siteBookId=b?b.id:standaloneBookIdFromFilename(file.name);
+    const edition=await api({op:'editionStatus',siteBookId,voiceKey:voice.key});
     if(edition.activeJob){
-      throw new Error('Für dieses Buch und „'+voice.name+'“ existiert bereits ein aktiver Cloud-Job. Bitte den vorhandenen Job verwenden oder zuerst abbrechen.');
+      throw new Error('Für dieses Manuskript/Buch und „'+voice.name+'“ existiert bereits ein aktiver Cloud-Job. Bitte den vorhandenen Job verwenden oder zuerst abbrechen.');
     }
     const replaceExisting=!!edition.exists;
     if(edition.exists&&!$('#replaceEditionAck').checked){
@@ -344,7 +362,7 @@ async function startJob(){
     }
    localStorage.setItem('ajk_factory_voice_'+$('#lang').value,voice.key);
    $('#start').textContent='JOB WIRD ANGELEGT …';
-   const created=await api({op:'createJob',fileName:file.name,title:b.title,siteBookId:b.id,coverUrl:b.coverUrl||'',languageCode:$('#lang').value,voiceKey:voice.key,replaceExisting:replaceExisting,publishAutomatically:$('#autoPublish').checked});
+   const created=await api({op:'createJob',fileName:file.name,title:b?b.title:'',siteBookId:b?b.id:'',coverUrl:(b&&b.coverUrl)||'',languageCode:$('#lang').value,voiceKey:voice.key,replaceExisting:replaceExisting,publishAutomatically:$('#autoPublish').checked});
    $('#start').textContent='MANUSKRIPT WIRD IN DIE CLOUD GELADEN …';
    const r=await fetch(API,{method:'POST',headers:{
      'x-ajk-op':'upload-source','x-admin-token':token,'x-job-id':created.jobId,
@@ -434,7 +452,7 @@ function renderJob(j,queuePos){
 }
 function prepareSourceReplacement_(jobId){
  const j=currentJobs.find(x=>x.id===jobId);if(!j)return;
- if(j.site_book_id&&[...$('#book').options].some(o=>o.value===j.site_book_id))$('#book').value=j.site_book_id;
+ $('#book').value=(j.site_book_id&&[...$('#book').options].some(o=>o.value===j.site_book_id))?j.site_book_id:'';
  const languageMismatch=String(j.error_code||'')==='SOURCE_LANGUAGE_MISMATCH'||String(j.stage||'')==='source_language_mismatch';
  if(languageMismatch){
    syncBookLanguage();
