@@ -27,7 +27,13 @@ VOICES = {
 }
 
 def render_voice(section, voice_key: str, outdir: Path, local_retry_phrase: str | None = None) -> Path:
-    voice = VOICES[voice_key]
+    voice = dict(VOICES[voice_key])
+    # Tommy's reference is now resolved through the OIDC-protected factory.
+    # This lets the backend migrate/use the private Supabase copy instead of
+    # reading a public GitHub MP3.
+    if voice_key == "tommy":
+        private_voice = api("workerVoice", {"voiceKey": "tommy"}).get("voice") or {}
+        voice["source"] = private_voice.get("source") or voice["source"]
     work = outdir / ("work_" + voice_key)
     work.mkdir(parents=True, exist_ok=True)
     model, state = load_tts(voice["ttsLanguage"], voice["source"], work)
