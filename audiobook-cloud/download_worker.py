@@ -1,5 +1,5 @@
 """Build private download parts from existing QC-passed audio. No audio in Git."""
-import json, os, re, subprocess, tempfile, urllib.request, zipfile
+import json, os, re, shutil, subprocess, tempfile, urllib.request, zipfile
 from pathlib import Path
 
 API = "https://ipoqyjrojljmbqslmxxf.supabase.co/functions/v1/audiobook-factory"
@@ -90,6 +90,9 @@ def main():
     if not claim.get("job"):return
     job=claim["job"];files=[]
     try:
+        if not shutil.which("ffmpeg") or not shutil.which("ffprobe"):
+            subprocess.run(["sudo","apt-get","update","-qq"],check=True,stdout=subprocess.DEVNULL)
+            subprocess.run(["sudo","apt-get","install","-y","-qq","ffmpeg"],check=True,stdout=subprocess.DEVNULL)
         with tempfile.TemporaryDirectory() as tmp:
             folder=Path(tmp);chapters=claim["chapters"]
             import base64
