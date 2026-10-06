@@ -340,6 +340,16 @@ def pretty_title(raw: str) -> str:
     return s
 
 
+def parse_source(path: Path) -> tuple[str, list[Section], dict[str, Any]]:
+    from zipfile import ZipFile
+    with ZipFile(path) as archive:
+        is_epub = "META-INF/container.xml" in archive.namelist()
+    if is_epub:
+        from epub_source import parse_epub
+        return parse_epub(path, Section)
+    return parse_docx(path)
+
+
 def parse_docx(path: Path) -> tuple[str, list[Section], dict[str, Any]]:
     from docx import Document
 
@@ -887,7 +897,7 @@ def prepare(args: argparse.Namespace) -> int:
     sections: list[Section] = []
     diagnostics: dict[str, Any] = {}
     try:
-        detected_title, sections, diagnostics = parse_docx(source)
+        detected_title, sections, diagnostics = parse_source(source)
         if len(sections) < 2:
             raise ValueError("Manuscript yielded fewer than 2 audio sections")
     except Exception as exc:
@@ -1147,7 +1157,7 @@ def produce(args: argparse.Namespace) -> int:
 
     source = workdir / "source.docx"
     download(remote["sourceUrl"], source)
-    _, parsed_sections, _ = parse_docx(source)
+    _, parsed_sections, _ = parse_source(source)
     section_map = {s.index: s for s in parsed_sections}
     if len(section_map) != int(job.get("detected_sections") or len(section_map)):
         raise RuntimeError("Private source re-parse does not match pre-production manifest")
