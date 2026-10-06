@@ -23,8 +23,8 @@ jobs:
           from pathlib import Path
           p = Path("index.html")
           text = p.read_text(encoding="utf-8")
-          audio_tag = '<script src="audio-library.js?v=20261006a" defer></script>'
-          grid_tag = '<script src="cover-grid-v3.js?v=20261006a"></script>'
+          audio_tag = '<script src="audio-library.js?v=20261006b" defer></script>'
+          grid_tag = '<script src="cover-grid-v3.js?v=20261006b"></script>'
           # index.html contains an embedded template string with its own </body>.
           # Remove any previous runtime loaders and place BOTH current runtimes
           # before the LAST closing body tag, which is the real outer document body.
