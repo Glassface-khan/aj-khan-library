@@ -30,7 +30,7 @@ pre{white-space:pre-wrap;word-break:break-word;font-size:11px;background:#11100d
 .edition-warning p{margin:0 0 10px;color:var(--ink);line-height:1.45}
 .edition-warning .edition-confirm{display:flex;gap:9px;align-items:flex-start;text-transform:none;letter-spacing:0;color:var(--ink);font-size:13px;margin:0}
 .edition-warning .edition-confirm input{margin-top:2px;flex:0 0 auto}
-.library-tools{display:grid;grid-template-columns:minmax(0,1fr) 170px;gap:10px;margin:14px 0 6px}
+.library-tools{display:grid;grid-template-columns:minmax(0,1fr) 150px 150px;gap:10px;margin:14px 0 6px}
 .library-series{border:1px solid var(--rule);border-radius:12px;overflow:hidden;margin-top:14px;background:rgba(255,255,255,.015)}
 .library-series-head{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:13px 14px;border-bottom:1px solid var(--rule);background:rgba(192,154,82,.055)}
 .library-series-title{font-family:Georgia,serif;font-size:20px;line-height:1.15}
@@ -125,6 +125,11 @@ pre{white-space:pre-wrap;word-break:break-word;font-size:11px;background:#11100d
         <option value="DE">Deutsch</option>
         <option value="EN">English</option>
       </select>
+      <select id="libraryStatus">
+        <option value="ALL">Fertig + offen</option>
+        <option value="OPEN">Noch offen</option>
+        <option value="READY">Fertig</option>
+      </select>
     </div>
     <div id="audioOverview"><p class="muted">Lade …</p></div>
   </section>
@@ -137,8 +142,8 @@ pre{white-space:pre-wrap;word-break:break-word;font-size:11px;background:#11100d
 <script>
 try{
   const u=new URL(location.href);
-  if(u.searchParams.get('v')!=='20261006f'){
-    history.replaceState(null,'',location.pathname+'?v=20261006f');
+  if(u.searchParams.get('v')!=='20261006g'){
+    history.replaceState(null,'',location.pathname+'?v=20261006g');
   }
 }catch(_){}
 const API='https://ipoqyjrojljmbqslmxxf.supabase.co/functions/v1/audiobook-factory';
@@ -537,16 +542,39 @@ function renderAudioRow_(b,isSeries){
    '<div class="audio-state">'+audioStateLabel_(b)+'</div>'+
    '</div>';
 }
+function openLibraryJobs_(){
+ return currentJobs.filter(j=>j.status!=='cancelled'&&!(j.status==='ready'&&j.stage==='published'));
+}
+function updateLibrarySummary_(){
+ const seriesKeys=new Set(libraryBooks.map(b=>String(b.series_key||'').trim()).filter(Boolean));
+ const singles=libraryBooks.filter(b=>!String(b.series_key||'').trim()).length;
+ const ready=libraryBooks.filter(b=>b.status==='ready').length;
+ $('#librarySummary').textContent=ready+' fertig · '+openLibraryJobs_().length+' offene Produktionen · '+seriesKeys.size+' Reihen · '+singles+' Einzelbände';
+}
+function renderOpenAudioRow_(j){
+ const labels={uploading:'DOCX-Upload offen',queued:'In Warteschlange',preflight:'Vorprüfung',qc_running:'Qualitätsprüfung',production:'In Produktion',finalizing:'Endprüfung',needs_attention:'Prüfung nötig',failed:'Fehler – Wiederholung nötig',ready:'Veröffentlichung offen'};
+ const total=Number(j.progress_total)||0,done=Number(j.progress_done)||0;
+ const progress=total?Math.min(100,Math.max(0,Math.round(done/total*100))):0;
+ const meta=[esc(j.voice_name||j.voice_key||'Ohne Sprecher'),esc(String(j.language_code||'').toUpperCase()),total?(done+' / '+total+' Abschnitte'):''].filter(Boolean).join(' · ');
+ return '<div class="audio-row"><div class="audio-number">◷</div><div><div class="audio-title">'+esc(j.detected_title||j.requested_title||j.source_file_name||'Ohne Titel')+'</div><div class="audio-meta">'+meta+'</div>'+
+ (total?'<progress value="'+progress+'" max="100" aria-label="Produktionsfortschritt: '+progress+' Prozent"></progress>':'')+
+ '</div><div class="audio-state"><span class="badge '+(['failed','needs_attention'].includes(j.status)?'bad':'gold')+'">'+esc(labels[j.status]||'Noch offen')+'</span></div></div>';
+}
 function renderAudioOverview_(){
  const root=$('#audioOverview');if(!root)return;
  const q=norm($('#librarySearch')&&$('#librarySearch').value||'');
  const lang=String($('#libraryLanguage')&&$('#libraryLanguage').value||'ALL').toUpperCase();
- let list=(libraryBooks||[]).filter(b=>{
+ const status=$('#libraryStatus').value;
+ let list=(status==='OPEN'?[]:libraryBooks||[]).filter(b=>{
    if(lang!=='ALL'&&String(b.language_code||'').toUpperCase()!==lang)return false;
    if(!q)return true;
    return norm((b.title||'')+' '+(b.narrator_name||'')+' '+(b.series_title||'')).includes(q);
  });
- if(!list.length){
+ const open=(status==='READY'?[]:openLibraryJobs_()).filter(j=>{
+   if(lang!=='ALL'&&String(j.language_code||'').toUpperCase()!==lang)return false;
+   return !q||norm((j.detected_title||j.requested_title||j.source_file_name||'')+' '+(j.voice_name||j.voice_key||'')).includes(q);
+ }).sort((a,b)=>jobRank_(a)-jobRank_(b)||new Date(a.created_at||0)-new Date(b.created_at||0));
+ if(!list.length&&!open.length){
    root.innerHTML='<div class="library-empty">Keine Hörbücher für diesen Filter.</div>';
    return;
  }
@@ -561,6 +589,7 @@ function renderAudioOverview_(){
  });
 
  const blocks=[];
+ if(open.length)blocks.push('<div class="library-series"><div class="library-series-head"><div class="library-series-title">Noch offen</div><div class="library-series-meta">'+open.length+' Produktionen</div></div>'+open.map(renderOpenAudioRow_).join('')+'</div>');
  [...seriesMap.entries()].sort((a,b)=>{
    const ta=String((a[1][0]&&a[1][0].series_title)||a[0]);
    const tb=String((b[1][0]&&b[1][0].series_title)||b[0]);
@@ -588,11 +617,7 @@ function renderAudioOverview_(){
 async function loadLibraryOverview(){
  const d=await api({op:'libraryOverview'});
  libraryBooks=Array.isArray(d.books)?d.books:[];
- const seriesKeys=new Set(libraryBooks.map(b=>String(b.series_key||'').trim()).filter(Boolean));
- const seriesVolumeCount=libraryBooks.filter(b=>String(b.series_key||'').trim()).length;
- const singles=libraryBooks.length-seriesVolumeCount;
- const ready=libraryBooks.filter(b=>String(b.status||'').toLowerCase()==='ready').length;
- $('#librarySummary').textContent=libraryBooks.length+' Hörbuchfassungen · '+seriesKeys.size+' Reihen · '+singles+' Einzelbände · '+ready+' fertig';
+ updateLibrarySummary_();
  renderAudioOverview_();
 }
 function queuePositionMap_(jobs){
@@ -683,6 +708,8 @@ async function loadJobs(){
  try{
    const d=await api({op:'listJobs'});const all=d.jobs||[];
    currentJobs=all.filter(j=>j.status!=='cancelled');
+   updateLibrarySummary_();
+   renderAudioOverview_();
    const qpos=queuePositionMap_(currentJobs);
    const visible=currentJobs.filter(j=>!(j.status==='ready'&&j.stage==='published'));
    visible.sort((a,b)=>{
@@ -736,7 +763,7 @@ $('#voice').onchange=()=>{resetJobSubmitState();updateVoiceInfo();void checkExis
 $('#replaceEditionAck').onchange=updateStartAvailability;
 $('#start').onclick=startJob;
 $('#refresh').onclick=loadJobs;
-$('#refreshLibrary').onclick=async()=>{try{await loadLibraryOverview()}catch(e){$('#audioOverview').innerHTML='<p class="bad">'+esc(e.message)+'</p>'}};
+$('#refreshLibrary').onclick=async()=>{try{await Promise.all([loadLibraryOverview(),loadJobs()])}catch(e){$('#audioOverview').innerHTML='<p class="bad">'+esc(e.message)+'</p>'}};
 $('#librarySearch').oninput=renderAudioOverview_;
 $('#libraryLanguage').onchange=renderAudioOverview_;
 $('#uploadVoice').onclick=uploadMissingVoice;
