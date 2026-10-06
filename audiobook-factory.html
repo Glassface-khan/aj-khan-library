@@ -63,6 +63,7 @@ pre{white-space:pre-wrap;word-break:break-word;font-size:11px;background:#11100d
   <section class="card" id="authCard">
     <h2>Admin-Zugang</h2>
     <p id="authText" class="muted">Prüfe vorhandene Autor-Anmeldung …</p>
+<button id="authRetry" class="hidden" type="button">ERNEUT LADEN</button>
   </section>
 
   <section class="card hidden" id="newJob">
@@ -155,8 +156,8 @@ pre{white-space:pre-wrap;word-break:break-word;font-size:11px;background:#11100d
 <script>
 try{
   const u=new URL(location.href);
-  if(u.searchParams.get('v')!=='20261006l'){
-    history.replaceState(null,'',location.pathname+'?v=20261006l');
+  if(u.searchParams.get('v')!=='20261006m'){
+    history.replaceState(null,'',location.pathname+'?v=20261006m');
   }
 }catch(_){}
 const API='https://ipoqyjrojljmbqslmxxf.supabase.co/functions/v1/audiobook-factory';
@@ -284,25 +285,30 @@ function parseBooksPayload(d){
 }
 async function loadBooks(){
  catalogFresh=false;
- const r=await fetch('./books-live.json?factory='+Date.now(),{cache:'no-store'});
- books=parseBooksPayload(await r.json());
+ try{
+   const cached=await requestJsonWithTimeout_('./books-live.json?factory='+Date.now(),{cache:'no-store'},8000);
+   if(!cached.response.ok)throw new Error('Buchkatalog nicht erreichbar');
+   books=parseBooksPayload(cached.data);
+ }catch(_){books=[]}
  try{
    let last;
-   for(let attempt=0;attempt<3;attempt++){
+   for(let attempt=0;attempt<2;attempt++){
      try{
-       const live=await fetch(AUTHOR_SCRIPT_URL+'?action=getBooks&_='+Date.now(),{cache:'no-store'});
-       if(!live.ok)throw new Error('Buchkatalog nicht erreichbar');
-       const loaded=parseBooksPayload(await live.json());
+       const live=await requestJsonWithTimeout_(AUTHOR_SCRIPT_URL+'?action=getBooks&_='+Date.now(),{cache:'no-store'},10000);
+       if(!live.response.ok)throw new Error('Buchkatalog nicht erreichbar');
+       const loaded=parseBooksPayload(live.data);
        if(!loaded.length)throw new Error('Buchkatalog leer');
        books=loaded;catalogFresh=true;break;
      }catch(e){last=e}
    }
    if(!catalogFresh)throw last;
  }catch(e){$('#notStartedStatus').textContent='Aktueller Buchkatalog nicht erreichbar. EPUB-Start bleibt gesperrt; bitte Aktualisieren.'}
- const s=$('#book');s.innerHTML='<option value="">— Keine Verknüpfung nötig —</option>';
+ const s=$('#book'),previous=s.value;s.innerHTML='<option value="">— Keine Verknüpfung nötig —</option>';
  books.filter(b=>b&&b.id&&b.title).sort((a,b)=>a.title.localeCompare(b.title)).forEach(b=>{
    const o=document.createElement('option');o.value=b.id;o.textContent=b.title;s.appendChild(o);
  });
+ if([...s.options].some(o=>o.value===previous))s.value=previous;
+ renderNotStarted_();
 }
 async function loadVoices(){
  const d=await api({op:'voices'});voices=d.voices||[];renderVoices();
@@ -934,24 +940,37 @@ async function loadJobs(){
    jobsLoadInFlight=false;
  }
 }
+let factoryInitInFlight_=false,factoryReady_=false,factoryJobsTimer_=null;
 async function init(){
+ if(factoryInitInFlight_)return;
+ factoryInitInFlight_=true;factoryReady_=false;
+ $('#authRetry').classList.add('hidden');
+ $('#authText').textContent='Prüfe vorhandene Autor-Anmeldung …';
  $('#back').onclick=()=>location.href='./';
- token=String(localStorage.getItem('ajk_admin_token')||'');
- const isAdmin=localStorage.getItem('ajk_author_admin')==='1';
- if(!isAdmin||!token){
-   $('#authText').innerHTML='Bitte zuerst auf der <a href="./" style="color:var(--gold)">Autorenseite als Admin anmelden</a>.';
-   return;
- }
  try{
+   token=String(localStorage.getItem('ajk_admin_token')||'');
+   const isAdmin=localStorage.getItem('ajk_author_admin')==='1';
+   if(!isAdmin||!token){
+     $('#authText').innerHTML='Bitte zuerst auf der <a href="./" style="color:var(--gold)">Autorenseite als Admin anmelden</a>.';
+     return;
+   }
    await api({op:'adminSession'});
-   await Promise.all([loadBooks(),loadVoices(),loadLibraryOverview()]);
-   await checkExistingEdition();
+   $('#authText').textContent='Admin bestätigt · Lade private Bibliothek und Stimmen …';
+   // The optional author catalog must never block authenticated Factory access.
+   void loadBooks().catch(()=>{$('#notStartedStatus').textContent='Buchkatalog nicht erreichbar. EPUB-Start bleibt gesperrt.';});
+   await Promise.all([loadVoices(),loadLibraryOverview()]);
+   factoryReady_=true;
    $('#authText').textContent='Admin bestätigt · Cloud Factory bereit.';
    $('#newJob').classList.remove('hidden');$('#libraryCard').classList.remove('hidden');$('#jobsCard').classList.remove('hidden');$('#notStartedCard').classList.remove('hidden');
-   await loadJobs();
-   setInterval(()=>{if(!document.hidden)void loadJobs()},15000);
- }catch(e){$('#authText').textContent='Admin-Sitzung konnte nicht bestätigt werden: '+e.message}
+   void checkExistingEdition();
+   void loadJobs();
+   if(!factoryJobsTimer_)factoryJobsTimer_=setInterval(()=>{if(!document.hidden)void loadJobs()},15000);
+ }catch(e){
+   $('#authText').textContent='Factory konnte nicht vollständig geladen werden: '+e.message;
+   $('#authRetry').classList.remove('hidden');
+ }finally{factoryInitInFlight_=false}
 }
+$('#authRetry').onclick=()=>void init();
 $('#source').onchange=()=>{
  resetJobSubmitState();
  $('#book').value='';
@@ -973,7 +992,7 @@ $('#uploadVoice').onclick=uploadMissingVoice;
 
 let lastForegroundRefresh_=0;
 async function refreshFactoryForeground_(){
- if(document.hidden)return;
+ if(document.hidden||!factoryReady_)return;
  const now=Date.now();
  if(now-lastForegroundRefresh_<5000)return;
  lastForegroundRefresh_=now;
