@@ -1,7 +1,7 @@
 index_size=9642522
 script_urls=["https://script.google.com/macros/s/AKfycbwcbRDaWkM1wf3MV_dj4RPw9jQl2Fgc4YfGcmFrGU1S243yvh8WGW7mbyXLbSeVJKI/exec"]
 backend=https://script.google.com/macros/s/AKfycbwcbRDaWkM1wf3MV_dj4RPw9jQl2Fgc4YfGcmFrGU1S243yvh8WGW7mbyXLbSeVJKI/exec
-book_count=56
+book_count=57
 BOOK|The Road it came by|status=Fertig|finished=True
 ASSET|The Road it came by|cover|status=None|content-type=image/jpeg|ok=True
 ASSET|The Road it came by|epub|ERROR|URLError('unknown url type: private-epub')
@@ -9,7 +9,7 @@ BOOK|The Mountain That Doesn't Answer|status=Fertig|finished=True
 ASSET|The Mountain That Doesn't Answer|cover|status=200|content-type=image/jpeg|ok=True
 ASSET|The Mountain That Doesn't Answer|epub|ERROR|URLError('unknown url type: private-epub')
 BOOK|The Low Wall|status=Fertig|finished=True
-ASSET|The Low Wall|cover|status=200|content-type=image/jpeg|ok=True
+ASSET|The Low Wall|cover|ERROR|<HTTPError 500: 'Internal Server Error'>
 ASSET|The Low Wall|epub|ERROR|URLError('unknown url type: private-epub')
 BOOK|The Physician of Ashes|status=Fertig|finished=True
 ASSET|The Physician of Ashes|cover|status=200|content-type=image/png|ok=True
@@ -169,9 +169,10 @@ ASSET|THE ADMIRAL|cover|status=200|content-type=image/jpeg|ok=True
 ASSET|THE ADMIRAL|epub|MISSING
 BOOK|The Counting|status=Fertig|finished=True
 backend_error=https://script.google.com/macros/s/AKfycbwcbRDaWkM1wf3MV_dj4RPw9jQl2Fgc4YfGcmFrGU1S243yvh8WGW7mbyXLbSeVJKI/exec|ValueError("unknown url type: 'assets/covers/the-counting.jpg'")
-asset_failure_count=77
+asset_failure_count=78
 FAIL|The Road it came by: epub request failed: URLError('unknown url type: private-epub')
 FAIL|The Mountain That Doesn't Answer: epub request failed: URLError('unknown url type: private-epub')
+FAIL|The Low Wall: cover request failed: <HTTPError 500: 'Internal Server Error'>
 FAIL|The Low Wall: epub request failed: URLError('unknown url type: private-epub')
 FAIL|The Physician of Ashes: epub request failed: URLError('unknown url type: private-epub')
 FAIL|The Weight of the Air: epub request failed: URLError('unknown url type: private-epub')
