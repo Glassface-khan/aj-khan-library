@@ -137,8 +137,8 @@ pre{white-space:pre-wrap;word-break:break-word;font-size:11px;background:#11100d
 <script>
 try{
   const u=new URL(location.href);
-  if(u.searchParams.get('v')!=='20261006d'){
-    history.replaceState(null,'',location.pathname+'?v=20261006d');
+  if(u.searchParams.get('v')!=='20261006e'){
+    history.replaceState(null,'',location.pathname+'?v=20261006e');
   }
 }catch(_){}
 const API='https://ipoqyjrojljmbqslmxxf.supabase.co/functions/v1/audiobook-factory';
@@ -156,14 +156,37 @@ function standaloneBookIdFromFilename(name){
  return 'standalone_'+core;
 }
 const api=async body=>{
- const r=await fetch(API,{method:'POST',headers:{'Content-Type':'application/json'},cache:'no-store',body:JSON.stringify({...body,adminToken:token,factorySession})});
- const d=await r.json().catch(()=>({}));
- if(!r.ok||!d.ok)throw new Error(d.error||d.detail||('HTTP '+r.status));
- if(d.factorySession){
-   factorySession=String(d.factorySession);
-   try{localStorage.setItem('ajk_factory_session',factorySession)}catch(_){}
+ const readOnlyOps=new Set(['voices','libraryOverview','editionStatus','listJobs']);
+ const maxAttempts=readOnlyOps.has(String(body&&body.op||''))?3:1;
+ let lastError=null;
+ for(let attempt=1;attempt<=maxAttempts;attempt++){
+   try{
+     const r=await fetch(API,{
+       method:'POST',
+       headers:{'Content-Type':'application/json'},
+       cache:'no-store',
+       body:JSON.stringify({...body,adminToken:token,factorySession})
+     });
+     const d=await r.json().catch(()=>({}));
+     if(!r.ok||!d.ok){
+       const err=new Error(d.error||d.detail||('HTTP '+r.status));
+       err.httpStatus=r.status;
+       throw err;
+     }
+     if(d.factorySession){
+       factorySession=String(d.factorySession);
+       try{localStorage.setItem('ajk_factory_session',factorySession)}catch(_){}
+     }
+     return d;
+   }catch(e){
+     lastError=e;
+     const status=Number(e&&e.httpStatus||0);
+     const transient=!status||[502,503,504].includes(status);
+     if(attempt>=maxAttempts||!transient)break;
+     await new Promise(resolve=>setTimeout(resolve,attempt===1?350:900));
+   }
  }
- return d;
+ throw lastError||new Error('Load failed');
 };
 function parseBooksPayload(d){
  if(Array.isArray(d))return d;
@@ -319,6 +342,10 @@ async function checkExistingEdition(){
  try{
    const edition=await api({op:'editionStatus',siteBookId,voiceKey:voice.key});
    if(seq!==editionCheckSeq)return;
+   editionCheckError='';
+   if($('#error').textContent.includes('Vorhandene Hörbuchfassungen konnten nicht geprüft werden')||$('#error').textContent==='Load failed'){
+     $('#error').textContent='';
+   }
    currentEdition=edition.exists?(edition.edition||{narrator_name:voice.name}):null;
    currentEditionJob=edition.activeJob||null;
    if(currentEditionJob){
@@ -667,6 +694,21 @@ $('#refreshLibrary').onclick=async()=>{try{await loadLibraryOverview()}catch(e){
 $('#librarySearch').oninput=renderAudioOverview_;
 $('#libraryLanguage').onchange=renderAudioOverview_;
 $('#uploadVoice').onclick=uploadMissingVoice;
+
+let lastForegroundRefresh_=0;
+async function refreshFactoryForeground_(){
+ if(document.hidden)return;
+ const now=Date.now();
+ if(now-lastForegroundRefresh_<5000)return;
+ lastForegroundRefresh_=now;
+ try{
+   await Promise.all([loadLibraryOverview(),loadJobs()]);
+   await checkExistingEdition();
+ }catch(_){}
+}
+window.addEventListener('pageshow',()=>{setTimeout(()=>void refreshFactoryForeground_(),250)});
+document.addEventListener('visibilitychange',()=>{if(!document.hidden)setTimeout(()=>void refreshFactoryForeground_(),250)});
+
 init();
 </script>
 </body></html>
