@@ -22,6 +22,4 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          command -v ffmpeg >/dev/null
-          command -v ffprobe >/dev/null
           python3 audiobook-cloud/download_worker.py
