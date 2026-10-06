@@ -1439,7 +1439,7 @@
 
       const a = document.createElement('a');
       a.setAttribute(FLAG, '1');
-      a.href = './audiobook-factory.html?v=20261006b';
+      a.href = './audiobook-factory.html?v=20261006c';
       a.textContent = 'Audiobook Factory';
       a.style.cssText = [
         'display:inline-block',
