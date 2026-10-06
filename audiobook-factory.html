@@ -137,8 +137,8 @@ pre{white-space:pre-wrap;word-break:break-word;font-size:11px;background:#11100d
 <script>
 try{
   const u=new URL(location.href);
-  if(u.searchParams.get('v')!=='20261006e'){
-    history.replaceState(null,'',location.pathname+'?v=20261006e');
+  if(u.searchParams.get('v')!=='20261006f'){
+    history.replaceState(null,'',location.pathname+'?v=20261006f');
   }
 }catch(_){}
 const API='https://ipoqyjrojljmbqslmxxf.supabase.co/functions/v1/audiobook-factory';
@@ -188,6 +188,50 @@ const api=async body=>{
  }
  throw lastError||new Error('Load failed');
 };
+async function uploadSourceWithRetry_(file,jobId){
+ let lastError=null;
+ for(let attempt=1;attempt<=3;attempt++){
+   try{
+     $('#start').textContent='MANUSKRIPT-UPLOAD '+attempt+'/3 …';
+     const r=await fetch(API,{method:'POST',headers:{
+       'x-ajk-op':'upload-source',
+       'x-admin-token':token,
+       'x-factory-session':factorySession,
+       'x-job-id':jobId,
+       'Content-Type':'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+     },body:file});
+     const d=await r.json().catch(()=>({}));
+     if(r.ok&&d.ok)return d;
+
+     // If the upload actually completed but Safari lost the response,
+     // the job has already advanced beyond "uploading".
+     if(d.error==='server_error'&&d.detail==='JOB_NOT_UPLOADABLE'){
+       try{
+         const list=await api({op:'listJobs'});
+         const j=(list.jobs||[]).find(x=>x.id===jobId);
+         if(j&&j.status!=='uploading')return {ok:true,status:j.status,recovered:true};
+       }catch(_){}
+     }
+
+     const err=new Error(d.error||d.detail||('HTTP '+r.status));
+     err.httpStatus=r.status;
+     throw err;
+   }catch(e){
+     lastError=e;
+     try{
+       const list=await api({op:'listJobs'});
+       const j=(list.jobs||[]).find(x=>x.id===jobId);
+       if(j&&j.status!=='uploading')return {ok:true,status:j.status,recovered:true};
+     }catch(_){}
+     const status=Number(e&&e.httpStatus||0);
+     const transient=!status||[502,503,504].includes(status);
+     if(attempt>=3||!transient)break;
+     await new Promise(resolve=>setTimeout(resolve,attempt===1?500:1200));
+   }
+ }
+ throw lastError||new Error('Manuskript-Upload fehlgeschlagen');
+}
+
 function parseBooksPayload(d){
  if(Array.isArray(d))return d;
  if(Array.isArray(d.books))return d.books;
@@ -441,11 +485,13 @@ async function startJob(){
    $('#start').textContent='JOB WIRD ANGELEGT …';
    const created=await api({op:'createJob',fileName:file.name,title:b?b.title:'',siteBookId:b?b.id:'',coverUrl:(b&&b.coverUrl)||'',languageCode:$('#lang').value,voiceKey:voice.key,replaceExisting:replaceExisting,publishAutomatically:$('#autoPublish').checked});
    $('#start').textContent='MANUSKRIPT WIRD IN DIE CLOUD GELADEN …';
-   const r=await fetch(API,{method:'POST',headers:{
-     'x-ajk-op':'upload-source','x-admin-token':token,'x-factory-session':factorySession,'x-job-id':created.jobId,
-     'Content-Type':'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
-   },body:file});
-   const d=await r.json().catch(()=>({}));if(!r.ok||!d.ok)throw new Error(d.error||'Manuskript-Upload fehlgeschlagen');
+   try{
+     await uploadSourceWithRetry_(file,created.jobId);
+   }catch(uploadError){
+     // Do not leave an empty zombie job behind if the DOCX never reached Storage.
+     try{await api({op:'cancelJob',jobId:created.jobId})}catch(_){}
+     throw uploadError;
+   }
    lastSubmittedKey=key;
    success=true;
    $('#sourceStatus').textContent='Upload abgeschlossen: '+file.name+' · Cloud-Job '+String(created.jobId||'').slice(0,8)+'…';
