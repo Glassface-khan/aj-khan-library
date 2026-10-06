@@ -82,5 +82,24 @@ class EpubSourceTest(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "cannot be safely classified"):
                 parse_epub(path, Section)
 
+    def test_companion_pages_preserve_all_text(self):
+        for filename in ('note', 'context', 'a_note_on_history'):
+            with self.subTest(filename=filename), TemporaryDirectory() as d:
+                path = Path(d) / 'source.epub'
+                self.fixture(path)
+                with ZipFile(path) as z:
+                    entries = [(n, z.read(n)) for n in z.namelist()]
+                with ZipFile(path, 'w') as z:
+                    for n, data in entries:
+                        if n == 'OEBPS/content.opf':
+                            data = data.replace(b'chapter2.xhtml', (filename + '.xhtml').encode())
+                        if n == 'OEBPS/chapter2.xhtml':
+                            n = 'OEBPS/' + filename + '.xhtml'
+                            data = b'<html><body><h1>Background to the story</h1><p>Preserve this entire companion text.</p></body></html>'
+                        z.writestr(n, data)
+                _, sections, _ = parse_epub(path, Section)
+                self.assertEqual(sections[1].paragraphs, ['Preserve this entire companion text.'])
+                self.assertEqual(sections[1].title, 'Background to the story')
+
 if __name__ == "__main__":
     unittest.main()
