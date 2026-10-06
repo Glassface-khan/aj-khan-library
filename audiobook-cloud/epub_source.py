@@ -120,6 +120,9 @@ def parse_epub(path, section_class):
                         if number_node is not None:
                             label = text(number_node)
                         break
+                combined = re.match(r'^((?:CHAPTER|KAPITEL)\s+[^:]+):\s*(.+)$', section_title, re.I)
+                if combined:
+                    label, section_title = combined.groups()
                 if offset < len(chunk) and chunk[offset][0].startswith('h') and not LABEL.match(chunk[offset][1]):
                     section_title = chunk[offset][1]
                     offset += 1
