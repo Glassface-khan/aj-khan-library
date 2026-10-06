@@ -9,6 +9,7 @@ EPUB_TYPE = '{http://www.idpf.org/2007/ops}type'
 LABEL = re.compile(r'^(?:chapter|kapitel|prologue|prolog|epilogue|epilog|coda|interlude|zwischenspiel)\b', re.I)
 META = re.compile(r'^(?:cover|title(?:page)?|copyright|imprint|impressum|dedication|widmung|epigraph|contents|table of contents|inhaltsverzeichnis|historical (?:note|background|context)|historische notiz|author.?s? note|afterword|nachwort|glossary|glossar|acknowledg(?:e)?ments?|about the author|scholar.?safety|notes on|reading group guide|timeline|endnotes|footnotes|bibliography|disclaimer|colophon)\b', re.I)
 META_TYPES = {'cover', 'titlepage', 'copyright-page', 'dedication', 'toc', 'landmarks', 'loi', 'lot', 'index', 'glossary', 'bibliography', 'endnotes', 'footnotes', 'acknowledgments', 'colophon'}
+PART = re.compile(r'^(?:part|teil|book|buch)\s+(?:\d+|[ivxlcdm]+|one|two|three|four|five|six|seven|eight|nine|ten|eins|zwei|drei|vier|fünf)\b', re.I)
 
 def local(tag):
     return tag.rsplit('}', 1)[-1].lower()
@@ -47,6 +48,7 @@ def parse_epub(path, section_class):
         base = posixpath.dirname(opf_path)
         manifest = {n.get('id'): n for n in package.iter() if local(n.tag) == 'item'}
         sections, skipped, narrative_paths = [], [], []
+        pending_part_headings = []
         for ref in (n for n in package.iter() if local(n.tag) == 'itemref'):
             item = manifest.get(ref.get('idref'))
             if item is None:
@@ -96,6 +98,13 @@ def parse_epub(path, section_class):
             if not blocks:
                 skipped.append(name)
                 continue
+            # A heading-only part divider is not an empty chapter. Preserve its
+            # spoken text at the start of the following narrative section.
+            # Never apply this exception to a chapter or a page with body text.
+            if PART.match(first) and len(blocks) <= 2 and all(tag.startswith('h') and not LABEL.match(value) for tag, value in blocks):
+                pending_part_headings.extend(value for _, value in blocks)
+                narrative_paths.append(name)
+                continue
             starts = [i for i, (tag, value) in enumerate(blocks) if tag.startswith('h') and LABEL.match(value)]
             narrative = bool(starts or semantic_types & {'bodymatter', 'chapter', 'prologue', 'epilogue'} or re.match(r'^(?:ch(?:apter)?|kapitel|prolog|epilog|coda)[ _-]*\d*\b', filename, re.I))
             if not narrative:
@@ -129,8 +138,13 @@ def parse_epub(path, section_class):
                 paragraphs = [value for _, value in chunk[offset:]]
                 if not paragraphs:
                     raise ValueError('Empty narrative EPUB section: ' + label)
+                if pending_part_headings:
+                    paragraphs = pending_part_headings + paragraphs
+                    pending_part_headings = []
                 kind = 'prologue' if re.match(r'^prolog', label, re.I) else 'epilogue' if re.match(r'^epilog', label, re.I) else 'coda' if re.match(r'^coda', label, re.I) else 'chapter'
                 sections.append(section_class(len(sections), kind, label, section_title, paragraphs))
+        if pending_part_headings:
+            raise ValueError('EPUB part divider has no following narrative section')
         if len(sections) < 2:
             raise ValueError('EPUB yielded fewer than 2 narrative sections')
         return title, sections, {'source_format': 'epub', 'expected_sections': len(sections), 'body_section_count': len(sections), 'narrative_files': narrative_paths, 'non_narrative_files_skipped': skipped, 'title': title}
