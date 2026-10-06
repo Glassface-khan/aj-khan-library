@@ -145,12 +145,18 @@ pre{white-space:pre-wrap;word-break:break-word;font-size:11px;background:#11100d
     <div id="notStartedStatus" role="status" class="muted" style="margin-top:12px"></div><div id="notStartedElapsed" class="muted" style="margin-top:6px"></div>
     <div id="notStartedBooks"></div>
   </section>
+<dialog id="downloadDialog" style="background:var(--panel);color:var(--ink);border:1px solid var(--rule);border-radius:14px;max-width:580px;width:calc(100% - 40px)">
+ <div class="row"><h2 id="downloadTitle" class="grow">Hörbuch herunterladen</h2><button id="closeDownloads">Schließen</button></div>
+ <p class="muted">Private M4B-Dateien mit Kapiteln und MP3-ZIPs. Große Bücher werden in nummerierte Teile aufgeteilt.</p>
+ <button id="prepareDownloads" class="primary">M4B + MP3-ZIP vorbereiten</button>
+ <p id="downloadStatus" role="status" class="muted"></p><div id="downloadLinks"></div>
+</dialog>
 </main>
 <script>
 try{
   const u=new URL(location.href);
-  if(u.searchParams.get('v')!=='20261006i'){
-    history.replaceState(null,'',location.pathname+'?v=20261006i');
+  if(u.searchParams.get('v')!=='20261006j'){
+    history.replaceState(null,'',location.pathname+'?v=20261006j');
   }
 }catch(_){}
 const API='https://ipoqyjrojljmbqslmxxf.supabase.co/functions/v1/audiobook-factory';
@@ -589,7 +595,7 @@ function renderAudioRow_(b,isSeries){
    '<div class="audio-number">'+esc(number)+'</div>'+
    '<div><div class="audio-title">'+esc(b.title||'Ohne Titel')+'</div>'+
    '<div class="audio-meta">'+parts.join(' · ')+'</div></div>'+
-   '<div class="audio-state">'+audioStateLabel_(b)+'</div>'+
+   '<div class="audio-state">'+audioStateLabel_(b)+(b.status==='ready'?'<button data-download-book="'+esc(b.id)+'" style="margin-top:8px">Downloads</button>':'')+'</div>'+
    '</div>';
 }
 function openLibraryJobs_(){
@@ -753,6 +759,57 @@ async function startCatalogEpub_(id){
  }
  finally{clearInterval(ticker);elapsed.textContent='';epubStartBusy=false;epubActiveBookId='';renderNotStarted_()}
 }
+let downloadBookId='',downloadPoll=null,downloadLoading=false,downloadFiles=[];
+async function downloadApi_(op){
+ const result=await requestJsonWithTimeout_('https://ipoqyjrojljmbqslmxxf.supabase.co/functions/v1/audio-library',{method:'POST',headers:{'Content-Type':'application/json'},cache:'no-store',body:JSON.stringify({op,bookId:downloadBookId,adminToken:token,factorySession})},25000);
+ if(!result.response.ok||!result.data.ok)throw new Error(result.data.error||'Download nicht verfügbar');
+ return result.data;
+}
+async function checkDownloads_(request=false){
+ if(downloadLoading||!downloadBookId)return;
+ downloadLoading=true;$('#prepareDownloads').disabled=true;
+ const bookId=downloadBookId;
+ $('#downloadStatus').textContent=request?'Vorbereitung wird angefordert …':'Prüfe Download …';
+ try{
+   const d=await downloadApi_(request?'requestDownload':'downloadStatus');
+   if(downloadBookId!==bookId)return;
+   downloadFiles=d.files||[];
+   const waiting=['queued','building'].includes(d.status);
+   $('#prepareDownloads').disabled=waiting;
+   $('#prepareDownloads').textContent=waiting?'DOWNLOAD WIRD VORBEREITET …':'M4B + MP3-ZIP vorbereiten';
+   $('#downloadStatus').textContent=d.status==='ready'?'✓ Download bereit.':d.status==='queued'?'Angefordert · wartet auf den Download-Worker.':d.status==='building'?('Dateien werden privat gebündelt · '+d.progressDone+'/'+d.progressTotal):(d.error||'Noch kein Download vorbereitet.');
+   $('#downloadLinks').innerHTML=downloadFiles.map((file,i)=>'<button data-file-download="'+i+'" style="display:block;width:100%;margin-top:8px">'+esc(file.format+' · '+file.name+' · '+Math.round(file.bytes/1000000)+' MB')+'</button>').join('');
+   $('#downloadLinks').querySelectorAll('[data-file-download]').forEach(el=>el.onclick=async()=>{
+     try{
+       const fresh=await downloadApi_('downloadStatus');
+       if(downloadBookId!==bookId)return;
+       const file=(fresh.files||[])[Number(el.dataset.fileDownload)];
+       if(!file)throw new Error('Download nicht verfügbar');
+       window.location.assign(file.url);
+     }catch(e){$('#downloadStatus').textContent=e.message}
+   });
+   if(!waiting&&downloadPoll){clearInterval(downloadPoll);downloadPoll=null}
+ }catch(e){if(downloadBookId===bookId){$('#downloadStatus').textContent='Download konnte nicht geprüft werden: '+e.message;$('#prepareDownloads').disabled=false}}
+ finally{downloadLoading=false}
+}
+function openDownloads_(id){
+ const b=libraryBooks.find(x=>x.id===id);if(!b)return;
+ if(downloadPoll)clearInterval(downloadPoll);
+ downloadBookId=id;downloadFiles=[];
+ $('#downloadTitle').textContent=b.title+' · Downloads';
+ $('#downloadLinks').innerHTML='';
+ $('#downloadDialog').showModal();
+ void checkDownloads_();
+ downloadPoll=setInterval(()=>{if(!document.hidden)void checkDownloads_()},15000);
+}
+$('#audioOverview').addEventListener('click',event=>{
+ const button=event.target.closest('[data-download-book]');
+ if(button)openDownloads_(button.dataset.downloadBook);
+});
+$('#prepareDownloads').onclick=()=>{void checkDownloads_(true);if(!downloadPoll)downloadPoll=setInterval(()=>{if(!document.hidden)void checkDownloads_()},15000)};
+$('#closeDownloads').onclick=()=>$('#downloadDialog').close();
+$('#downloadDialog').addEventListener('close',()=>{if(downloadPoll)clearInterval(downloadPoll);downloadPoll=null;downloadBookId=''});
+
 async function loadLibraryOverview(){
  libraryLoaded=false;
  renderNotStarted_();

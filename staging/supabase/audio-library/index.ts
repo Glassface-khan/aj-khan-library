@@ -271,6 +271,7 @@ Deno.serve(async (req: Request) => {
 
     if (op === "downloadStatus" || op === "requestDownload") {
       const access=await verifyAccess(body);
+      if(access.canDownload===false&&access.isAdmin!==true)throw new Error("FORBIDDEN");
       const bookId=String(body.bookId||"");
       const snapshot=await downloadSnapshot(supabase,bookId);
       if(access.fullAudioAccess!==true&&access.audioAccess?.[snapshot.book.title]!==true)throw new Error("FORBIDDEN");
