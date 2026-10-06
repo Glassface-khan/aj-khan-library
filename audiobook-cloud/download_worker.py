@@ -50,8 +50,9 @@ def escape_meta(value):
     return str(value).replace("\\","\\\\").replace("=","\\=").replace(";","\\;").replace("#","\\#").replace("\n"," ")
 
 def pack_m4b(chapters, book, folder):
-    # 64 kb/s mono spoken audio: retain chapters, use <45 MB groups.
-    max_seconds = 5500
+    # Start conservatively; AAC can exceed its nominal target bitrate.
+    # Verify actual bytes and split oversized groups at chapter boundaries.
+    max_seconds = 4500
     groups,current,seconds=[],[],0
     for ch in chapters:
         if current and seconds+ch["seconds"]>max_seconds:
@@ -59,7 +60,9 @@ def pack_m4b(chapters, book, folder):
         current.append(ch);seconds+=ch["seconds"]
     if current:groups.append(current)
     outputs=[]
-    for i,group in enumerate(groups,1):
+    i=1
+    while i<=len(groups):
+        group=groups[i-1]
         concat=folder/"concat.txt"
         concat.write_text("".join("file '"+str(ch["local"])+"'\n" for ch in group))
         metadata=folder/"metadata.txt"
@@ -78,11 +81,17 @@ def pack_m4b(chapters, book, folder):
         if cover.exists():args+=["-map","2:v","-c:v","mjpeg","-disposition:v","attached_pic"]
         args+=["-f","mp4",str(path)]
         run(*args)
-        if path.stat().st_size > LIMIT:raise ValueError("M4B exceeds limit")
+        if path.stat().st_size > LIMIT:
+            if len(group)<2:raise ValueError("M4B exceeds limit")
+            midpoint=len(group)//2
+            groups[i-1:i]=[group[:midpoint],group[midpoint:]]
+            path.unlink()
+            continue
         probe=json.loads(run("ffprobe","-v","error","-show_chapters","-show_format","-of","json",str(path)))
         if len(probe.get("chapters",[]))!=len(group) or abs(float(probe["format"]["duration"])-sum(ch["seconds"] for ch in group))>2:
             raise ValueError("M4B duration or chapters mismatch")
         outputs.append(path)
+        i+=1
     return outputs
 
 def main():
