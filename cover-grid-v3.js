@@ -34,11 +34,15 @@
 
   function audioCredentials_() {
     try {
-      if (isAdmin_()) return { code: '', adminToken: adminToken_() };
+      if (isAdmin_()) return {
+        code: '',
+        adminToken: adminToken_(),
+        factorySession: String(localStorage.getItem('ajk_factory_session') || '')
+      };
       var access = JSON.parse(localStorage.getItem('ajk_visitor_access') || '{}') || {};
-      return { code: String(access.code || ''), adminToken: '' };
+      return { code: String(access.code || ''), adminToken: '', factorySession: '' };
     } catch (_) {
-      return { code: '', adminToken: '' };
+      return { code: '', adminToken: '', factorySession: '' };
     }
   }
 
@@ -444,7 +448,7 @@
   async function loadAudioAvailability_() {
     try {
       var creds = audioCredentials_();
-      if (!creds.adminToken && !creds.code) {
+      if (!creds.adminToken && !creds.code && !creds.factorySession) {
         audioAvailableBookIds_ = new Set();
         refreshAudioBadges_();
         return;
@@ -456,7 +460,8 @@
         body: JSON.stringify({
           op: 'availability',
           code: creds.code,
-          adminToken: creds.adminToken
+          adminToken: creds.adminToken,
+          factorySession: creds.factorySession
         })
       });
       if (!res.ok) {
