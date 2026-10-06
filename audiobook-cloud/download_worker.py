@@ -88,13 +88,13 @@ def pack_m4b(chapters, book, folder):
 def main():
     claim=api("downloadWorkerClaim")
     if not claim.get("job"):return
-    job=claim["job"];files=[]
+    job=claim["job"];files=[];stage="dependencies"
     try:
         if not shutil.which("ffmpeg") or not shutil.which("ffprobe"):
             subprocess.run(["sudo","apt-get","update","-qq"],check=True,stdout=subprocess.DEVNULL)
             subprocess.run(["sudo","apt-get","install","-y","-qq","ffmpeg"],check=True,stdout=subprocess.DEVNULL)
         with tempfile.TemporaryDirectory() as tmp:
-            folder=Path(tmp);chapters=claim["chapters"]
+            folder=Path(tmp);chapters=claim["chapters"];stage="source_read"
             import base64
             cover=claim["book"].get("cover_url") or ""
             if cover.startswith("data:image/jpeg;base64,"):
@@ -113,19 +113,29 @@ def main():
                         out.write(block)
                 ch["local"]=path;ch["seconds"]=duration(path)
                 api("downloadWorkerProgress",jobId=job["id"],done=i+1,total=len(chapters)+2)
+            stage="zip"
             outputs=pack_zip(chapters,folder)
             api("downloadWorkerProgress",jobId=job["id"],done=len(chapters)+1,total=len(chapters)+2)
+            stage="m4b"
             outputs+=pack_m4b(chapters,claim["book"],folder)
             for path in outputs:
+                stage="upload_sign"
                 signed=api("downloadWorkerUpload",jobId=job["id"],name=path.name)
                 # Direct private Storage upload bypasses Edge memory limits.
                 content_type="application/zip" if path.suffix==".zip" else "audio/mp4"
                 request=urllib.request.Request(signed["url"],data=path.read_bytes(),method="PUT",headers={"Content-Type":content_type,"x-upsert":"true"})
+                stage="storage_upload"
                 with urllib.request.urlopen(request,timeout=120) as r:
                     if r.status>=300:raise ValueError("Private upload rejected")
                 files.append({"name":path.name,"bytes":path.stat().st_size})
+            stage="verify_files"
             api("downloadWorkerFinish",jobId=job["id"],success=True,files=files)
-    except Exception:
+    except Exception as exc:
+        # Never print raw exceptions: they can contain private signed URLs or metadata.
+        allowed={"M4B exceeds limit","M4B duration or chapters mismatch","ZIP exceeds limit","ZIP verification failed","Private upload rejected","A chapter exceeds the per-file download limit","Private download API rejected request"}
+        reason=str(exc) if str(exc) in allowed else type(exc).__name__
+        code=getattr(exc,"code",None)
+        print("Download preparation error: stage="+stage+"; reason="+reason+("; HTTP "+str(code) if isinstance(code,int) else ""),flush=True)
         api("downloadWorkerFinish",jobId=job["id"],success=False)
         raise RuntimeError("Private download preparation failed; source audio unchanged") from None
 
