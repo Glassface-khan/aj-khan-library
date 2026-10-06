@@ -30,6 +30,25 @@ pre{white-space:pre-wrap;word-break:break-word;font-size:11px;background:#11100d
 .edition-warning p{margin:0 0 10px;color:var(--ink);line-height:1.45}
 .edition-warning .edition-confirm{display:flex;gap:9px;align-items:flex-start;text-transform:none;letter-spacing:0;color:var(--ink);font-size:13px;margin:0}
 .edition-warning .edition-confirm input{margin-top:2px;flex:0 0 auto}
+.library-tools{display:grid;grid-template-columns:minmax(0,1fr) 170px;gap:10px;margin:14px 0 6px}
+.library-series{border:1px solid var(--rule);border-radius:12px;overflow:hidden;margin-top:14px;background:rgba(255,255,255,.015)}
+.library-series-head{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:13px 14px;border-bottom:1px solid var(--rule);background:rgba(192,154,82,.055)}
+.library-series-title{font-family:Georgia,serif;font-size:20px;line-height:1.15}
+.library-series-meta{color:var(--gold);font-size:11px;letter-spacing:.08em;text-transform:uppercase;white-space:nowrap}
+.audio-row{display:grid;grid-template-columns:38px minmax(0,1fr) auto;gap:11px;align-items:center;padding:12px 14px;border-top:1px solid rgba(74,66,53,.72)}
+.audio-row:first-child{border-top:0}
+.audio-number{width:30px;height:30px;border:1px solid var(--rule);border-radius:50%;display:flex;align-items:center;justify-content:center;color:var(--gold);font-weight:700;font-size:12px}
+.audio-title{font-family:Georgia,serif;font-size:18px;line-height:1.15}
+.audio-meta{font-size:12px;color:var(--muted);margin-top:4px;line-height:1.4}
+.audio-state{white-space:nowrap}
+.library-empty{padding:18px 2px;color:var(--muted)}
+@media(max-width:650px){
+  .library-tools{grid-template-columns:1fr}
+  .audio-row{grid-template-columns:34px minmax(0,1fr)}
+  .audio-state{grid-column:2}
+  .library-series-head{align-items:flex-start}
+  .library-series-meta{white-space:normal;text-align:right}
+}
 .hidden{display:none!important}
 @media(max-width:650px){.grid{grid-template-columns:1fr}.full{grid-column:auto}.row>*{width:100%}}
 </style>
@@ -91,6 +110,25 @@ pre{white-space:pre-wrap;word-break:break-word;font-size:11px;background:#11100d
     <button id="start" class="primary">QUALITÄT PRÜFEN & HÖRBUCH STARTEN</button>
   </section>
 
+  <section class="card hidden" id="libraryCard">
+    <div class="row">
+      <div class="grow">
+        <h2 style="margin-bottom:4px">Audiobook-Bibliothek</h2>
+        <div id="librarySummary" class="muted">Lade vorhandene Hörbücher …</div>
+      </div>
+      <button id="refreshLibrary">Aktualisieren</button>
+    </div>
+    <div class="library-tools">
+      <input id="librarySearch" type="text" placeholder="Titel oder Sprecher suchen">
+      <select id="libraryLanguage">
+        <option value="ALL">Alle Sprachen</option>
+        <option value="DE">Deutsch</option>
+        <option value="EN">English</option>
+      </select>
+    </div>
+    <div id="audioOverview"><p class="muted">Lade …</p></div>
+  </section>
+
   <section class="card hidden" id="jobsCard">
     <div class="row"><h2 class="grow">Cloud-Jobs</h2><button id="refresh">Aktualisieren</button></div>
     <div id="jobs"><p class="muted">Lade …</p></div>
@@ -99,13 +137,13 @@ pre{white-space:pre-wrap;word-break:break-word;font-size:11px;background:#11100d
 <script>
 try{
   const u=new URL(location.href);
-  if(u.searchParams.get('v')!=='20261006c'){
-    history.replaceState(null,'',location.pathname+'?v=20261006c');
+  if(u.searchParams.get('v')!=='20261006d'){
+    history.replaceState(null,'',location.pathname+'?v=20261006d');
   }
 }catch(_){}
 const API='https://ipoqyjrojljmbqslmxxf.supabase.co/functions/v1/audiobook-factory';
 const $=s=>document.querySelector(s);
-let books=[],voices=[],token='',factorySession=String(localStorage.getItem('ajk_factory_session')||''),currentJobs=[],jobSubmitLocked=false,lastSubmittedKey='',jobsLoadInFlight=false;
+let books=[],voices=[],libraryBooks=[],token='',factorySession=String(localStorage.getItem('ajk_factory_session')||''),currentJobs=[],jobSubmitLocked=false,lastSubmittedKey='',jobsLoadInFlight=false;
 let editionCheckSeq=0,editionCheckPending=false,editionCheckError='',currentEdition=null,currentEditionJob=null;
 const norm=s=>String(s||'').toLowerCase().normalize('NFKD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9]+/g,' ').trim();
 function standaloneBookIdFromFilename(name){
@@ -397,6 +435,93 @@ async function startJob(){
  }
 }
 const esc=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+
+function formatDuration_(seconds){
+ const total=Math.max(0,Math.round(Number(seconds)||0));
+ if(!total)return '';
+ const h=Math.floor(total/3600);
+ const m=Math.round((total%3600)/60);
+ return h?(h+' Std. '+String(m).padStart(2,'0')+' Min.'):(m+' Min.');
+}
+function audioStateLabel_(b){
+ const status=String(b&&b.status||'').toLowerCase();
+ if(status==='ready')return '<span class="badge good">FERTIG</span>';
+ if(status==='draft')return '<span class="badge gold">ENTWURF</span>';
+ return '<span class="badge">'+esc(String(b&&b.status||'Unbekannt').toUpperCase())+'</span>';
+}
+function renderAudioRow_(b,isSeries){
+ const number=isSeries&&b.series_number?String(b.series_number):'•';
+ const parts=[
+   esc(b.narrator_name||'Ohne Sprecher'),
+   esc(String(b.language_code||'').toUpperCase()),
+   Number(b.chapter_count||0)?(Number(b.chapter_count)+' Abschnitte'):'',
+   formatDuration_(b.total_duration_seconds)
+ ].filter(Boolean);
+ return '<div class="audio-row">'+
+   '<div class="audio-number">'+esc(number)+'</div>'+
+   '<div><div class="audio-title">'+esc(b.title||'Ohne Titel')+'</div>'+
+   '<div class="audio-meta">'+parts.join(' · ')+'</div></div>'+
+   '<div class="audio-state">'+audioStateLabel_(b)+'</div>'+
+   '</div>';
+}
+function renderAudioOverview_(){
+ const root=$('#audioOverview');if(!root)return;
+ const q=norm($('#librarySearch')&&$('#librarySearch').value||'');
+ const lang=String($('#libraryLanguage')&&$('#libraryLanguage').value||'ALL').toUpperCase();
+ let list=(libraryBooks||[]).filter(b=>{
+   if(lang!=='ALL'&&String(b.language_code||'').toUpperCase()!==lang)return false;
+   if(!q)return true;
+   return norm((b.title||'')+' '+(b.narrator_name||'')+' '+(b.series_title||'')).includes(q);
+ });
+ if(!list.length){
+   root.innerHTML='<div class="library-empty">Keine Hörbücher für diesen Filter.</div>';
+   return;
+ }
+
+ const seriesMap=new Map();
+ const singles=[];
+ list.forEach(b=>{
+   const key=String(b.series_key||'').trim();
+   if(!key){singles.push(b);return}
+   if(!seriesMap.has(key))seriesMap.set(key,[]);
+   seriesMap.get(key).push(b);
+ });
+
+ const blocks=[];
+ [...seriesMap.entries()].sort((a,b)=>{
+   const ta=String((a[1][0]&&a[1][0].series_title)||a[0]);
+   const tb=String((b[1][0]&&b[1][0].series_title)||b[0]);
+   return ta.localeCompare(tb);
+ }).forEach(([key,items])=>{
+   items.sort((a,b)=>(Number(a.series_number||999)-Number(b.series_number||999))||String(a.title||'').localeCompare(String(b.title||'')));
+   const first=items[0]||{};
+   const total=Number(first.series_total||items.length);
+   const readyCount=items.filter(x=>String(x.status||'').toLowerCase()==='ready').length;
+   blocks.push('<div class="library-series">'+
+     '<div class="library-series-head"><div class="library-series-title">'+esc(first.series_title||key)+'</div>'+
+     '<div class="library-series-meta">'+readyCount+' / '+total+' Bände fertig</div></div>'+
+     '<div>'+items.map(x=>renderAudioRow_(x,true)).join('')+'</div></div>');
+ });
+
+ if(singles.length){
+   singles.sort((a,b)=>String(a.title||'').localeCompare(String(b.title||'')));
+   blocks.push('<div class="library-series">'+
+     '<div class="library-series-head"><div class="library-series-title">Einzelbände</div>'+
+     '<div class="library-series-meta">'+singles.length+' Hörbücher</div></div>'+
+     '<div>'+singles.map(x=>renderAudioRow_(x,false)).join('')+'</div></div>');
+ }
+ root.innerHTML=blocks.join('');
+}
+async function loadLibraryOverview(){
+ const d=await api({op:'libraryOverview'});
+ libraryBooks=Array.isArray(d.books)?d.books:[];
+ const seriesKeys=new Set(libraryBooks.map(b=>String(b.series_key||'').trim()).filter(Boolean));
+ const seriesVolumeCount=libraryBooks.filter(b=>String(b.series_key||'').trim()).length;
+ const singles=libraryBooks.length-seriesVolumeCount;
+ const ready=libraryBooks.filter(b=>String(b.status||'').toLowerCase()==='ready').length;
+ $('#librarySummary').textContent=libraryBooks.length+' Hörbuchfassungen · '+seriesKeys.size+' Reihen · '+singles+' Einzelbände · '+ready+' fertig';
+ renderAudioOverview_();
+}
 function queuePositionMap_(jobs){
  const queued=jobs.filter(j=>j.status==='queued').sort((a,b)=>new Date(a.created_at||0)-new Date(b.created_at||0));
  const m=new Map();queued.forEach((j,i)=>m.set(j.id,i+1));return m;
@@ -516,10 +641,10 @@ async function init(){
  }
  try{
    await api({op:'adminSession'});
-   await Promise.all([loadBooks(),loadVoices()]);
+   await Promise.all([loadBooks(),loadVoices(),loadLibraryOverview()]);
    await checkExistingEdition();
    $('#authText').textContent='Admin bestätigt · Cloud Factory bereit.';
-   $('#newJob').classList.remove('hidden');$('#jobsCard').classList.remove('hidden');
+   $('#newJob').classList.remove('hidden');$('#libraryCard').classList.remove('hidden');$('#jobsCard').classList.remove('hidden');
    await loadJobs();
    setInterval(()=>{if(!document.hidden)void loadJobs()},15000);
  }catch(e){$('#authText').textContent='Admin-Sitzung konnte nicht bestätigt werden: '+e.message}
@@ -538,6 +663,9 @@ $('#voice').onchange=()=>{resetJobSubmitState();updateVoiceInfo();void checkExis
 $('#replaceEditionAck').onchange=updateStartAvailability;
 $('#start').onclick=startJob;
 $('#refresh').onclick=loadJobs;
+$('#refreshLibrary').onclick=async()=>{try{await loadLibraryOverview()}catch(e){$('#audioOverview').innerHTML='<p class="bad">'+esc(e.message)+'</p>'}};
+$('#librarySearch').oninput=renderAudioOverview_;
+$('#libraryLanguage').onchange=renderAudioOverview_;
 $('#uploadVoice').onclick=uploadMissingVoice;
 init();
 </script>
