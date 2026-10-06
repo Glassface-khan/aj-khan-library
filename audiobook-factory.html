@@ -99,14 +99,14 @@ pre{white-space:pre-wrap;word-break:break-word;font-size:11px;background:#11100d
 <script>
 try{
   const u=new URL(location.href);
-  if(u.searchParams.get('v')!=='20261006b'){
-    history.replaceState(null,'',location.pathname+'?v=20261006b');
+  if(u.searchParams.get('v')!=='20261006c'){
+    history.replaceState(null,'',location.pathname+'?v=20261006c');
   }
 }catch(_){}
 const API='https://ipoqyjrojljmbqslmxxf.supabase.co/functions/v1/audiobook-factory';
 const $=s=>document.querySelector(s);
 let books=[],voices=[],token='',factorySession=String(localStorage.getItem('ajk_factory_session')||''),currentJobs=[],jobSubmitLocked=false,lastSubmittedKey='',jobsLoadInFlight=false;
-let editionCheckSeq=0,editionCheckPending=false,currentEdition=null,currentEditionJob=null;
+let editionCheckSeq=0,editionCheckPending=false,editionCheckError='',currentEdition=null,currentEditionJob=null;
 const norm=s=>String(s||'').toLowerCase().normalize('NFKD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9]+/g,' ').trim();
 function standaloneBookIdFromFilename(name){
  let base=String(name||'manuscript').replace(/\.docx$/i,'').replace(/_/g,' ');
@@ -252,7 +252,8 @@ function updateStartAvailability(){
  const replacementBlocked=!!(currentEdition&&(!ack||!ack.checked));
  const activeJobBlocked=!!currentEditionJob;
  const languageBlocked=selectedBookLanguageMismatch_();
- $('#start').disabled=editionCheckPending||replacementBlocked||activeJobBlocked||languageBlocked;
+ const editionCheckFailed=!!editionCheckError;
+ $('#start').disabled=editionCheckPending||editionCheckFailed||replacementBlocked||activeJobBlocked||languageBlocked;
 }
 async function checkExistingEdition(){
  const seq=++editionCheckSeq;
@@ -260,6 +261,7 @@ async function checkExistingEdition(){
  currentEdition=null;
  currentEditionJob=null;
  editionCheckPending=false;
+ editionCheckError='';
  if(ack)ack.checked=false;
  if(confirmBox)confirmBox.classList.remove('hidden');
  if(box)box.classList.add('hidden');
@@ -301,8 +303,9 @@ async function checkExistingEdition(){
    if(seq!==editionCheckSeq)return;
    currentEdition=null;
    currentEditionJob=null;
+   editionCheckError=String(e&&e.message||e||'Prüfung nicht verfügbar');
    box.classList.add('hidden');
-   $('#error').textContent='Vorhandene Hörbuchfassungen konnten nicht geprüft werden: '+e.message;
+   $('#error').textContent='Vorhandene Hörbuchfassungen konnten nicht geprüft werden: '+editionCheckError+'. Der Start bleibt aus Sicherheitsgründen gesperrt. Bitte die Seite neu laden.';
  }finally{
    if(seq===editionCheckSeq){
      editionCheckPending=false;
