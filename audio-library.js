@@ -337,6 +337,7 @@
       headers: { 'Content-Type': 'application/json' },
       cache: 'no-store',
       keepalive: !!options.keepalive,
+      signal: options.signal,
       body: JSON.stringify({ ...payload, code: c.code, adminToken: c.adminToken, factorySession: c.factorySession })
     });
     let data = {};
@@ -864,6 +865,62 @@
     wirePlayer(panel);
   }
 
+  async function downloadApi_(payload){
+    const controller=new AbortController();
+    let timer;
+    const timeout=new Promise((_,reject)=>{timer=setTimeout(()=>{
+      controller.abort();reject(new Error(tr('Download-Anfrage hat zu lange gedauert. Bitte erneut prüfen.','Download request timed out. Please check again.')));
+    },25000)});
+    try{return await Promise.race([api(payload,{signal:controller.signal}),timeout])}
+    finally{clearTimeout(timer)}
+  }
+  const downloadStates = new Map();
+  const downloadRequests = new Set();
+  function downloadHtml_(bookId){
+    const d=downloadStates.get(bookId)||{};
+    const waiting=d.status==='queued'||d.status==='building'||downloadRequests.has(bookId);
+    const label=waiting?tr('Download wird vorbereitet …','Preparing download …'):tr('M4B + MP3-ZIP vorbereiten','Prepare M4B + MP3 ZIP');
+    const message=d.status==='queued'?tr('Angefordert · wartet auf den Download-Worker.','Requested · waiting for the download worker.'):
+      d.status==='building'?tr('Dateien werden privat gebündelt','Files are being packaged privately')+(d.progressTotal?' · '+d.progressDone+'/'+d.progressTotal:''):
+      d.status==='ready'?tr('Download bereit. Große Bücher sind in nummerierte Teile aufgeteilt.','Download ready. Large books are split into numbered parts.'):
+      (d.error||'');
+    return '<div class="ajka-downloads" style="border-top:1px solid var(--rule,#ccc);margin-top:18px;padding-top:15px">'+
+      '<button class="ajka-select" id="ajka-download-request" '+(waiting?'disabled':'')+'>'+esc(label)+'</button>'+
+      '<p role="status" class="ajka-chapter">'+esc(message)+'</p>'+
+      (d.files||[]).map((file,i)=>'<a class="ajka-select" style="display:block;margin-top:8px;text-align:center;text-decoration:none" href="'+esc(file.url)+'" data-download-file="'+i+'">'+esc(file.format+' · '+file.name+' · '+Math.round(file.bytes/1000000)+' MB')+'</a>').join('')+
+      '<div style="font-size:12px;opacity:.75">'+esc(tr('Privater Download · nur für berechtigte Familienmitglieder.','Private download · authorized family members only.'))+'</div></div>';
+  }
+  function drawDownloads_(){
+    const root=document.querySelector('#ajka-downloads');
+    if(!root||!state.activeBook)return;
+    const id=state.activeBook.id;root.innerHTML=downloadHtml_(id);
+    const request=root.querySelector('#ajka-download-request');
+    if(request)request.onclick=()=>refreshDownload_(id,true);
+    root.querySelectorAll('[data-download-file]').forEach(link=>link.onclick=async event=>{
+      event.preventDefault();
+      const index=Number(link.dataset.downloadFile);
+      try{
+        const fresh=await downloadApi_({op:'downloadStatus',bookId:id});
+        downloadStates.set(id,fresh);
+        const file=(fresh.files||[])[index];if(!file)throw new Error(tr('Download nicht verfügbar.','Download unavailable.'));
+        window.location.assign(file.url);
+      }catch(e){downloadStates.set(id,{error:e.message});drawDownloads_()}
+    });
+  }
+  async function refreshDownload_(id,request=false){
+    if(downloadRequests.has(id))return;
+    downloadRequests.add(id);drawDownloads_();
+    try{
+      const result=await downloadApi_({op:request?'requestDownload':'downloadStatus',bookId:id});
+      downloadStates.set(id,result);
+    }catch(e){downloadStates.set(id,{error:tr('Download konnte nicht geprüft werden: ','Could not check download: ')+e.message})}
+    finally{downloadRequests.delete(id);if(state.activeBook?.id===id)drawDownloads_()}
+  }
+  setInterval(()=>{
+    const b=state.activeBook;
+    if(!document.hidden&&b&&['queued','building'].includes(downloadStates.get(b.id)?.status))void refreshDownload_(b.id);
+  },15000);
+
   function playerHtml() {
     const b = state.activeBook;
     const ch = state.activeChapter || {};
@@ -895,11 +952,14 @@
         '<span class="ajka-speed-value" id="ajka-speed-value">' + Math.round(state.playbackRate * 100) + '%</span>' +
       '</div>' +
       '<select class="ajka-select" id="ajka-chapter-select" aria-label="' + esc(tr('Kapitel', 'Chapter')) + '">' + opts + '</select>' +
+      '<div id="ajka-downloads">'+downloadHtml_(b.id)+'</div>'+
       '</section>';
   }
 
   function wirePlayer(panel) {
     if (!state.activeBook) return;
+    drawDownloads_();
+    if(!downloadStates.has(state.activeBook.id))void refreshDownload_(state.activeBook.id);
     const play = panel.querySelector('#ajka-play');
     const seek = panel.querySelector('#ajka-seek');
     const select = panel.querySelector('#ajka-chapter-select');

@@ -1,0 +1,27 @@
+name: Audiobook Download Worker
+on:
+  push:
+    branches: [main]
+    paths: ["audiobook-cloud/download_worker.py", ".github/workflows/audiobook-download-worker.yml"]
+  schedule:
+    - cron: "*/5 * * * *"
+  workflow_dispatch:
+permissions:
+  contents: read
+  id-token: write
+concurrency:
+  group: ajk-private-downloads
+  cancel-in-progress: false
+jobs:
+  package:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - name: Prepare only requested private downloads
+        shell: bash
+        run: |
+          set -euo pipefail
+          command -v ffmpeg >/dev/null
+          command -v ffprobe >/dev/null
+          python3 audiobook-cloud/download_worker.py

@@ -1,3 +1,4 @@
+import { downloadSnapshot, downloadFilePath } from "./download_helpers.ts";
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { createRemoteJWKSet, jwtVerify } from "npm:jose@5";
@@ -12,6 +13,7 @@ const AUDIO_BUCKET = "audiobooks";
 const GITHUB_REPO = "Glassface-khan/aj-khan-library";
 const GITHUB_REPO_ID = "1332010124";
 const ALLOWED_GITHUB_WORKFLOWS = new Set([
+  "Glassface-khan/aj-khan-library/.github/workflows/audiobook-download-worker.yml@refs/heads/main",
   "Glassface-khan/aj-khan-library/.github/workflows/audiobook-cloud-worker.yml@refs/heads/main",
   "Glassface-khan/aj-khan-library/.github/workflows/audiobook-queue-watchdog.yml@refs/heads/main",
   "Glassface-khan/aj-khan-library/.github/workflows/john-d-voice-sample.yml@refs/heads/main",
@@ -237,7 +239,7 @@ async function verifyAdminToken(adminToken: string, factorySession = "") {
   return { ...data, factorySession: sessionToken, source: "apps_script" };
 }
 
-async function verifyWorker(req: Request) {
+async function verifyWorker(req: Request, allowDownloadWorker = false) {
   const auth = req.headers.get("authorization") || "";
   const token = auth.replace(/^Bearer\s+/i, "").trim();
   if (!token) throw new Error("WORKER_UNAUTHORIZED");
@@ -249,6 +251,7 @@ async function verifyWorker(req: Request) {
   if (String(payload.repository_id || "") !== GITHUB_REPO_ID) throw new Error("WORKER_UNAUTHORIZED");
   if (String(payload.ref || "") !== "refs/heads/main") throw new Error("WORKER_UNAUTHORIZED");
   if (!ALLOWED_GITHUB_WORKFLOWS.has(String(payload.workflow_ref || ""))) throw new Error("WORKER_UNAUTHORIZED");
+  if (String(payload.workflow_ref || "") === "Glassface-khan/aj-khan-library/.github/workflows/audiobook-download-worker.yml@refs/heads/main" && !allowDownloadWorker) throw new Error("WORKER_UNAUTHORIZED");
   const ev = String(payload.event_name || "");
   if (!["schedule", "workflow_dispatch", "push"].includes(ev)) throw new Error("WORKER_UNAUTHORIZED");
   return payload;
@@ -403,6 +406,57 @@ Deno.serve(async (req: Request) => {
   const op = String(body?.op || "").trim();
 
   try {
+    if (["downloadWorkerClaim","downloadWorkerProgress","downloadWorkerUpload","downloadWorkerFinish"].includes(op)){
+      const claims=await verifyWorker(req,true);
+      if(String(claims.workflow_ref)!=="Glassface-khan/aj-khan-library/.github/workflows/audiobook-download-worker.yml@refs/heads/main")throw new Error("WORKER_UNAUTHORIZED");
+      const runId=Number(claims.run_id);
+      if(op==="downloadWorkerClaim"){
+        await supabase.from("audiobook_download_jobs").update({status:"failed",error_detail:"Worker expired",updated_at:new Date().toISOString()}).eq("status","building").lt("updated_at",new Date(Date.now()-2*60*60*1000).toISOString());
+        const queued=await supabase.from("audiobook_download_jobs").select("*").eq("status","queued").order("created_at").limit(1).maybeSingle();
+        if(queued.error)throw queued.error;if(!queued.data)return json({ok:true,job:null});
+        const claimed=await supabase.from("audiobook_download_jobs").update({status:"building",worker_run_id:runId,updated_at:new Date().toISOString()}).eq("id",queued.data.id).eq("status","queued").select("*").maybeSingle();
+        if(claimed.error)throw claimed.error;if(!claimed.data)return json({ok:true,job:null});
+        const snapshot=await downloadSnapshot(supabase,claimed.data.audio_book_id);
+        if(snapshot.fingerprint!==claimed.data.source_fingerprint){
+          await supabase.from("audiobook_download_jobs").update({status:"failed",error_detail:"Edition changed"}).eq("id",claimed.data.id);
+          return json({ok:true,job:null});
+        }
+        const chapters=[];
+        for(const ch of snapshot.chapters){
+          const link=await supabase.storage.from("audiobooks").createSignedUrl(ch.storage_path,3600);
+          if(link.error)throw link.error;chapters.push({...ch,url:link.data.signedUrl});
+        }
+        return json({ok:true,job:claimed.data,book:snapshot.book,chapters});
+      }
+      const found=await supabase.from("audiobook_download_jobs").select("*").eq("id",String(body.jobId||"")).eq("status","building").eq("worker_run_id",runId).single();
+      if(found.error)throw found.error;const job=found.data;
+      if(op==="downloadWorkerProgress"){
+        const r=await supabase.from("audiobook_download_jobs").update({progress_done:Math.max(0,Number(body.done)||0),progress_total:Math.max(0,Number(body.total)||0),updated_at:new Date().toISOString()}).eq("id",job.id);
+        if(r.error)throw r.error;return json({ok:true});
+      }
+      if(op==="downloadWorkerUpload"){
+        const name=String(body.name||""),path=downloadFilePath(job.id,name);
+        const link=await supabase.storage.from("audiobook-downloads").createSignedUploadUrl(path,{upsert:true});
+        if(link.error)throw link.error;return json({ok:true,url:link.data.signedUrl,path});
+      }
+      const snapshot=await downloadSnapshot(supabase,job.audio_book_id);
+      const ready=body.success===true&&snapshot.fingerprint===job.source_fingerprint;
+      const files=[];
+      if(ready){
+        if(!Array.isArray(body.files)||!body.files.length)throw new Error("INVALID_DOWNLOAD_FILES");
+        for(const file of body.files){
+          const path=downloadFilePath(job.id,String(file.name||""));
+          // Storage metadata is checked through the Storage API, not the Data API schema.
+          const listing=await supabase.storage.from("audiobook-downloads").list(job.id,{search:file.name,limit:100});
+          if(listing.error||!(listing.data||[]).some((x:any)=>x.name===file.name))throw new Error("DOWNLOAD_FILE_MISSING");
+          files.push({name:file.name,path,format:file.name.endsWith(".zip")?"ZIP":"M4B",bytes:Math.max(0,Number(file.bytes)||0)});
+        }
+        if(!files.some((x:any)=>x.format==="ZIP")||!files.some((x:any)=>x.format==="M4B"))throw new Error("DOWNLOAD_FORMAT_MISSING");
+      }
+      const r=await supabase.from("audiobook_download_jobs").update({status:ready?"ready":"failed",files,error_detail:ready?null:"Download packaging failed or edition changed",updated_at:new Date().toISOString()}).eq("id",job.id).eq("worker_run_id",runId);
+      if(r.error)throw r.error;return json({ok:true});
+    }
+
     if (op === "adminSession") {
       const admin = await verifyAdminToken(body.adminToken, body.factorySession);
       return json({ ok: true, factorySession: admin.factorySession || String(body.factorySession || "") });
