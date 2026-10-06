@@ -10,6 +10,7 @@ LABEL = re.compile(r'^(?:chapter|kapitel|prologue|prolog|epilogue|epilog|coda|in
 META = re.compile(r'^(?:cover|title(?:page)?|copyright|imprint|impressum|dedication|widmung|epigraph|contents|table of contents|inhaltsverzeichnis|historical (?:note|background|context)|historische notiz|author.?s? note|afterword|nachwort|glossary|glossar|acknowledg(?:e)?ments?|about the author|scholar.?safety|notes on|reading group guide|timeline|endnotes|footnotes|bibliography|disclaimer|colophon)\b', re.I)
 META_TYPES = {'cover', 'titlepage', 'copyright-page', 'dedication', 'toc', 'landmarks', 'loi', 'lot', 'index', 'glossary', 'bibliography', 'endnotes', 'footnotes', 'acknowledgments', 'colophon'}
 PART = re.compile(r'^(?:part|teil|book|buch)\s+(?:\d+|[ivxlcdm]+|one|two|three|four|five|six|seven|eight|nine|ten|eins|zwei|drei|vier|fünf)\b', re.I)
+SUPPLEMENT = re.compile(r'^(?:a note on history|note|context)$', re.I)
 
 def local(tag):
     return tag.rsplit('}', 1)[-1].lower()
@@ -106,7 +107,10 @@ def parse_epub(path, section_class):
                 narrative_paths.append(name)
                 continue
             starts = [i for i, (tag, value) in enumerate(blocks) if tag.startswith('h') and LABEL.match(value)]
-            narrative = bool(starts or semantic_types & {'bodymatter', 'chapter', 'prologue', 'epilogue'} or re.match(r'^(?:ch(?:apter)?|kapitel|prolog|epilog|coda)[ _-]*\d*\b', filename, re.I))
+            # Preserve these editorial companion pages as spoken sections. Do
+            # not silently discard ambiguous "note" or "context" content.
+            supplement = bool(SUPPLEMENT.fullmatch(filename))
+            narrative = bool(supplement or starts or semantic_types & {'bodymatter', 'chapter', 'prologue', 'epilogue'} or re.match(r'^(?:ch(?:apter)?|kapitel|prolog|epilog|coda)[ _-]*\d*\b', filename, re.I))
             if not narrative:
                 raise ValueError('EPUB section cannot be safely classified: ' + name + '. Please use an audiobook DOCX.')
             if not starts:
