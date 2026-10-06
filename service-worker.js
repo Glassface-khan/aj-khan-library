@@ -54,9 +54,9 @@
 // payloads in IndexedDB for fast reopening; force clients to fetch the new JS.
 // v26 -> v27 (24.09.2026): books-live.json is the immediate catalog fallback;
 // BooksData remains canonical and replaces it whenever the live request succeeds.
-// v37 -> v38 (28.09.2026): force iOS to reload the exact-order cover grid.\n// v39 -> v40 (28.09.2026): deploy THE GUEST catalog entry, cover and EPUB; force clients to refresh the catalog fallback.\n// v40 -> v41 (28.09.2026): deploy THE NIGHT SIDE catalog entry, cover and EPUB; force clients to refresh the catalog fallback.\nconst SHELL_CACHE = 'ajk-shell-v64';
-const DATA_CACHE = 'ajk-data-v64';
-const SHELL_FILES = ['./', './index.html', './books-live.json', './cover-grid-v3.js', './manifest.webmanifest', './icons/icon-192.png', './icons/icon-512.png'];
+// v37 -> v38 (28.09.2026): force iOS to reload the exact-order cover grid.\n// v39 -> v40 (28.09.2026): deploy THE GUEST catalog entry, cover and EPUB; force clients to refresh the catalog fallback.\n// v40 -> v41 (28.09.2026): deploy THE NIGHT SIDE catalog entry, cover and EPUB; force clients to refresh the catalog fallback.\nconst SHELL_CACHE = 'ajk-shell-v65';
+const DATA_CACHE = 'ajk-data-v65';
+const SHELL_FILES = ['./', './index.html', './books-live.json', './manifest.webmanifest', './icons/icon-192.png', './icons/icon-512.png'];
 
 // Aktionen, deren Antwort für Offline-Nutzung zwischengespeichert werden
 // darf. Alles andere (insbesondere alle schreibenden Aktionen) läuft immer
@@ -120,8 +120,17 @@ async function injectAudioLibrary_(response) {
   let text = await response.text();
   const pos = text.lastIndexOf('</body>');
 
-  if (pos >= 0 && text.indexOf('audio-library.js') === -1) {
-    text = text.slice(0, pos) + '  <script src="./audio-library.js?v=20261005c" defer></script>\\n' + text.slice(pos);
+  if (pos >= 0) {
+    var runtimeTags = '';
+    if (text.indexOf('cover-grid-v3.js') === -1) {
+      runtimeTags += '  <script src="./cover-grid-v3.js?v=20261006a"></script>\\n';
+    }
+    if (text.indexOf('audio-library.js') === -1) {
+      runtimeTags += '  <script src="./audio-library.js?v=20261006a" defer></script>\\n';
+    }
+    if (runtimeTags) {
+      text = text.slice(0, pos) + runtimeTags + text.slice(pos);
+    }
   }
 
   // Safari/WebKit can restore a page from the back-forward cache while keeping
@@ -141,7 +150,7 @@ async function injectAudioLibrary_(response) {
     if (now - lastCheck < 30000) return;
     lastCheck = now;
 
-    navigator.serviceWorker.register('./service-worker.js?v=64', {
+    navigator.serviceWorker.register('./service-worker.js?v=65', {
       scope: './',
       updateViaCache: 'none'
     }).then(function (reg) {
