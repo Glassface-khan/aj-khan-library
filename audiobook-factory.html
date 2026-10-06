@@ -156,13 +156,13 @@ pre{white-space:pre-wrap;word-break:break-word;font-size:11px;background:#11100d
 <script>
 try{
   const u=new URL(location.href);
-  if(u.searchParams.get('v')!=='20261006m'){
-    history.replaceState(null,'',location.pathname+'?v=20261006m');
+  if(u.searchParams.get('v')!=='20261006n'){
+    history.replaceState(null,'',location.pathname+'?v=20261006n');
   }
 }catch(_){}
 const API='https://ipoqyjrojljmbqslmxxf.supabase.co/functions/v1/audiobook-factory';
 const $=s=>document.querySelector(s);
-let catalogFresh=false,libraryLoaded=false,jobsLoaded=false,epubStartBusy=false,epubActiveBookId='';
+let catalogFresh=false,catalogLoaded=false,catalogLoadInFlight=false,libraryLoaded=false,jobsLoaded=false,epubStartBusy=false,epubActiveBookId='';
 const catalogSelections=new Map();
 const AUTHOR_SCRIPT_URL='https://script.google.com/macros/s/AKfycbwcbRDaWkM1wf3MV_dj4RPw9jQl2Fgc4YfGcmFrGU1S243yvh8WGW7mbyXLbSeVJKI/exec';
 let books=[],voices=[],libraryBooks=[],token='',factorySession=String(localStorage.getItem('ajk_factory_session')||''),currentJobs=[],jobSubmitLocked=false,lastSubmittedKey='',jobsLoadInFlight=false;
@@ -283,31 +283,42 @@ function parseBooksPayload(d){
  if(typeof d.books==='string'){try{return JSON.parse(d.books)}catch(e){}}
  return [];
 }
-async function loadBooks(){
- catalogFresh=false;
- try{
-   const cached=await requestJsonWithTimeout_('./books-live.json?factory='+Date.now(),{cache:'no-store'},8000);
-   if(!cached.response.ok)throw new Error('Buchkatalog nicht erreichbar');
-   books=parseBooksPayload(cached.data);
- }catch(_){books=[]}
- try{
-   let last;
-   for(let attempt=0;attempt<2;attempt++){
-     try{
-       const live=await requestJsonWithTimeout_(AUTHOR_SCRIPT_URL+'?action=getBooks&_='+Date.now(),{cache:'no-store'},10000);
-       if(!live.response.ok)throw new Error('Buchkatalog nicht erreichbar');
-       const loaded=parseBooksPayload(live.data);
-       if(!loaded.length)throw new Error('Buchkatalog leer');
-       books=loaded;catalogFresh=true;break;
-     }catch(e){last=e}
-   }
-   if(!catalogFresh)throw last;
- }catch(e){$('#notStartedStatus').textContent='Aktueller Buchkatalog nicht erreichbar. EPUB-Start bleibt gesperrt; bitte Aktualisieren.'}
+function renderCatalogDropdown_(){
  const s=$('#book'),previous=s.value;s.innerHTML='<option value="">— Keine Verknüpfung nötig —</option>';
  books.filter(b=>b&&b.id&&b.title).sort((a,b)=>a.title.localeCompare(b.title)).forEach(b=>{
    const o=document.createElement('option');o.value=b.id;o.textContent=b.title;s.appendChild(o);
  });
  if([...s.options].some(o=>o.value===previous))s.value=previous;
+}
+async function loadBooks(){
+ if(catalogLoadInFlight)return;
+ catalogLoadInFlight=true;
+ catalogFresh=false;
+ $('#notStartedStatus').textContent='Buchkatalog wird geprüft …';
+ try{
+   const cached=await requestJsonWithTimeout_('./books-live.json?factory='+Date.now(),{cache:'no-store'},8000);
+   if(!cached.response.ok)throw new Error('Buchkatalog nicht erreichbar');
+   books=parseBooksPayload(cached.data);
+   catalogLoaded=books.length>0;
+ }catch(_){catalogLoaded=books.length>0}
+ renderCatalogDropdown_();
+ renderNotStarted_();
+ try{
+   let last;
+   for(let attempt=0;attempt<2;attempt++){
+     try{
+       const live=await requestJsonWithTimeout_(AUTHOR_SCRIPT_URL+'?action=getBooks&_='+Date.now(),{cache:'no-store'},30000);
+       if(!live.response.ok)throw new Error('Buchkatalog nicht erreichbar');
+       const loaded=parseBooksPayload(live.data);
+       if(!loaded.length)throw new Error('Buchkatalog leer');
+       books=loaded;catalogFresh=true;catalogLoaded=true;break;
+     }catch(e){last=e}
+   }
+   if(!catalogFresh)throw last;
+ }catch(e){$('#notStartedStatus').textContent=catalogLoaded?'Live-Katalog derzeit nicht erreichbar. Die veröffentlichte Buchliste wird verwendet; vorhandene Hörbücher und offene Jobs werden vor jedem Start privat geprüft.':'Buchkatalog nicht erreichbar. Bitte Aktualisieren.'}
+ renderCatalogDropdown_();
+ if(catalogFresh)$('#notStartedStatus').textContent='Buchkatalog bereit. EPUB auswählen; vor der Produktion werden Bestand und Quelle geprüft.';
+ catalogLoadInFlight=false;
  renderNotStarted_();
 }
 async function loadVoices(){
@@ -699,10 +710,11 @@ function renderNotStarted_(){
  root.innerHTML=rows.length?rows.map(b=>{
    const langs=catalogLanguages_(b),saved=catalogSelections.get(b.id)||{},lang=langs.includes(saved.lang)?saved.lang:langs[0];
    const finished=b.isFinished!==undefined?!!b.isFinished:/^fertig/i.test(b.status||'');
+   const blocked=!finished?'Buchfassung noch nicht abgeschlossen.':!catalogLoaded?'Buchkatalog noch nicht verfügbar.':epubStartBusy?'Ein EPUB-Import läuft bereits.':'';
    return '<div class="job"><div class="job-title">'+esc(b.title)+'</div><div class="job-meta">'+(finished?'Buchfassung fertig · noch kein Hörbuch':'Buchfassung noch in Arbeit')+'</div><div class="grid">'+
    '<div><label>Sprache</label><select data-catalog-lang="'+esc(b.id)+'">'+langs.map(l=>'<option value="'+l+'" '+(l===lang?'selected':'')+'>'+(l==='DE'?'Deutsch':'English')+'</option>').join('')+'</select></div>'+
    '<div><label>Stimme</label><select data-catalog-voice="'+esc(b.id)+'">'+catalogVoiceOptions_(lang,saved.voice)+'</select></div>'+
-   '<button class="primary full" data-start-epub="'+esc(b.id)+'" '+(!finished||!catalogFresh||epubStartBusy?'disabled':'')+'>'+(epubStartBusy?(epubActiveBookId===b.id?'EPUB WIRD VORBEREITET …':'START WARTET AUF LAUFENDEN IMPORT'):'EPUB → HÖRBUCH STARTEN')+'</button></div></div>';
+   '<button class="primary full" data-start-epub="'+esc(b.id)+'" '+(!finished||!catalogLoaded||epubStartBusy?'disabled':'')+'>'+(epubStartBusy?(epubActiveBookId===b.id?'EPUB WIRD VORBEREITET …':'START WARTET AUF LAUFENDEN IMPORT') :'EPUB → HÖRBUCH STARTEN')+'</button>'+(blocked?'<p class="muted full" role="status">'+esc(blocked)+'</p>':'')+'</div></div>';
  }).join(''):'<p class="muted">Keine Bücher für diese Auswahl.</p>';
  root.querySelectorAll('[data-catalog-lang]').forEach(el=>el.onchange=()=>{
    const id=el.dataset.catalogLang;
@@ -718,7 +730,7 @@ function catalogVoiceOptions_(lang,selected=''){
 }
 async function startCatalogEpub_(id){
  if(epubStartBusy)return;
- const b=books.find(x=>x.id===id);if(!b||!catalogFresh||!jobsLoaded||!libraryLoaded)return;
+ const b=books.find(x=>x.id===id);if(!b||!catalogLoaded||!jobsLoaded||!libraryLoaded)return;
  const root=$('#notStartedBooks');
  const langEl=[...root.querySelectorAll('[data-catalog-lang]')].find(x=>x.dataset.catalogLang===id);
  const voiceEl=[...root.querySelectorAll('[data-catalog-voice]')].find(x=>x.dataset.catalogVoice===id);
@@ -985,6 +997,7 @@ $('#voice').onchange=()=>{resetJobSubmitState();updateVoiceInfo();void checkExis
 $('#replaceEditionAck').onchange=updateStartAvailability;
 $('#start').onclick=()=>startJob();
 $('#refresh').onclick=loadJobs;
+$('#refreshNotStarted').onclick=async()=>{try{await Promise.all([loadBooks(),loadLibraryOverview(),loadJobs()])}catch(e){$('#notStartedStatus').textContent='Prüfung fehlgeschlagen: '+e.message}};
 $('#refreshLibrary').onclick=async()=>{try{await Promise.all([loadLibraryOverview(),loadJobs()])}catch(e){$('#audioOverview').innerHTML='<p class="bad">'+esc(e.message)+'</p>'}};
 $('#librarySearch').oninput=renderAudioOverview_;
 $('#libraryLanguage').onchange=renderAudioOverview_;
