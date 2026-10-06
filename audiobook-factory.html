@@ -155,8 +155,8 @@ pre{white-space:pre-wrap;word-break:break-word;font-size:11px;background:#11100d
 <script>
 try{
   const u=new URL(location.href);
-  if(u.searchParams.get('v')!=='20261006j'){
-    history.replaceState(null,'',location.pathname+'?v=20261006j');
+  if(u.searchParams.get('v')!=='20261006k'){
+    history.replaceState(null,'',location.pathname+'?v=20261006k');
   }
 }catch(_){}
 const API='https://ipoqyjrojljmbqslmxxf.supabase.co/functions/v1/audiobook-factory';
@@ -776,8 +776,8 @@ async function checkDownloads_(request=false){
    downloadFiles=d.files||[];
    const waiting=['queued','building'].includes(d.status);
    $('#prepareDownloads').disabled=waiting;
-   $('#prepareDownloads').textContent=waiting?'DOWNLOAD WIRD VORBEREITET …':'M4B + MP3-ZIP vorbereiten';
-   $('#downloadStatus').textContent=d.status==='ready'?'✓ Download bereit.':d.status==='queued'?'Angefordert · wartet auf den Download-Worker.':d.status==='building'?('Dateien werden privat gebündelt · '+d.progressDone+'/'+d.progressTotal):(d.error||'Noch kein Download vorbereitet.');
+   $('#prepareDownloads').textContent=d.status==='queued'?'AUFTRAG GESPEICHERT · WARTESCHLANGE':d.status==='building'?'DOWNLOAD WIRD ERSTELLT …':'M4B + MP3-ZIP vorbereiten';
+   $('#downloadStatus').textContent=d.status==='ready'?'✓ Download bereit.':d.status==='queued'?'✓ Auftrag gespeichert. Die Erstellung startet automatisch; der Start kann einige Minuten dauern. Du kannst dieses Fenster schließen und später unter Downloads nachsehen.':d.status==='building'?(d.progressTotal>0?'Erstellung läuft · '+d.progressDone+' von '+d.progressTotal+' Schritten. M4B-Dateien großer Bücher benötigen mehr Zeit.':'✓ Erstellung gestartet. Download wird vorbereitet …'):(d.error||'Noch kein Download vorbereitet.');
    $('#downloadLinks').innerHTML=downloadFiles.map((file,i)=>'<button data-file-download="'+i+'" style="display:block;width:100%;margin-top:8px">'+esc(file.format+' · '+file.name+' · '+Math.round(file.bytes/1000000)+' MB')+'</button>').join('');
    $('#downloadLinks').querySelectorAll('[data-file-download]').forEach(el=>el.onclick=async()=>{
      try{
