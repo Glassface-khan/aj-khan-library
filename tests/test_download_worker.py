@@ -22,6 +22,28 @@ class PrivateDownloadTests(unittest.TestCase):
             self.assertEqual([c["tags"]["title"] for c in probe["chapters"]],["Chapter 1","Chapter 2"])
             self.assertLess(m4b.stat().st_size,worker.LIMIT)
 
+    def test_m4b_splits_using_actual_bytes(self):
+        with TemporaryDirectory() as d:
+            folder=Path(d);chapters=[]
+            for i in range(4):
+                path=folder/f"chapter-{i}.mp3"
+                worker.run("ffmpeg","-v","error","-f","lavfi","-i","sine=frequency=500:duration=3","-ar","24000","-ac","1","-y",str(path))
+                chapters.append({"local":path,"chapter_index":i,"title":f"Chapter {i+1}","seconds":worker.duration(path)})
+            book={"title":"Synthetic size fixture"}
+            single_size=worker.pack_m4b(chapters[:1],book,folder)[0].stat().st_size
+            original=worker.LIMIT
+            try:
+                worker.LIMIT=single_size*2
+                parts=worker.pack_m4b(chapters,book,folder)
+                self.assertGreater(len(parts),1)
+                self.assertTrue(all(p.stat().st_size<=worker.LIMIT for p in parts))
+                titles=[]
+                for p in parts:
+                    probe=json.loads(worker.run("ffprobe","-v","error","-show_chapters","-of","json",str(p)))
+                    titles.extend(c["tags"]["title"] for c in probe["chapters"])
+                self.assertEqual(titles,[f"Chapter {i+1}" for i in range(4)])
+            finally:worker.LIMIT=original
+
     def test_zip_parts_stay_below_cap(self):
         with TemporaryDirectory() as d:
             folder=Path(d);chapters=[]
