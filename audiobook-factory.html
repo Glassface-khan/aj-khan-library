@@ -142,20 +142,20 @@ pre{white-space:pre-wrap;word-break:break-word;font-size:11px;background:#11100d
     <div class="row"><div class="grow"><h2>Noch nicht begonnen</h2><div id="notStartedSummary" class="muted">Prüfe Bücher der Autorenseite …</div></div><button id="refreshNotStarted">Aktualisieren</button></div>
     <p class="muted">Bücher ohne fertige Hörbuchfassung und ohne offenen Cloud-Job. Sprache und Stimme wählen, dann das geschützte EPUB direkt übernehmen.</p>
     <input id="notStartedSearch" type="text" placeholder="Buchtitel suchen">
-    <div id="notStartedStatus" role="status" class="muted" style="margin-top:12px"></div>
+    <div id="notStartedStatus" role="status" class="muted" style="margin-top:12px"></div><div id="notStartedElapsed" class="muted" style="margin-top:6px"></div>
     <div id="notStartedBooks"></div>
   </section>
 </main>
 <script>
 try{
   const u=new URL(location.href);
-  if(u.searchParams.get('v')!=='20261006h'){
-    history.replaceState(null,'',location.pathname+'?v=20261006h');
+  if(u.searchParams.get('v')!=='20261006i'){
+    history.replaceState(null,'',location.pathname+'?v=20261006i');
   }
 }catch(_){}
 const API='https://ipoqyjrojljmbqslmxxf.supabase.co/functions/v1/audiobook-factory';
 const $=s=>document.querySelector(s);
-let catalogFresh=false,libraryLoaded=false,jobsLoaded=false,epubStartBusy=false;
+let catalogFresh=false,libraryLoaded=false,jobsLoaded=false,epubStartBusy=false,epubActiveBookId='';
 const catalogSelections=new Map();
 const AUTHOR_SCRIPT_URL='https://script.google.com/macros/s/AKfycbwcbRDaWkM1wf3MV_dj4RPw9jQl2Fgc4YfGcmFrGU1S243yvh8WGW7mbyXLbSeVJKI/exec';
 let books=[],voices=[],libraryBooks=[],token='',factorySession=String(localStorage.getItem('ajk_factory_session')||''),currentJobs=[],jobSubmitLocked=false,lastSubmittedKey='',jobsLoadInFlight=false;
@@ -170,19 +170,41 @@ function standaloneBookIdFromFilename(name){
  const core=norm(base).replace(/\s+/g,'-')||'manuscript';
  return 'standalone_'+core;
 }
+async function requestJsonWithTimeout_(url,options={},timeoutMs=25000){
+ const controller=new AbortController();
+ let timer;
+ const request=(async()=>{
+   const response=await fetch(url,{...options,signal:controller.signal});
+   const data=await response.json();
+   return {response,data};
+ })();
+ const timeout=new Promise((_,reject)=>{
+   timer=setTimeout(()=>{
+     controller.abort();
+     const error=new Error('Zeitlimit der Verbindung erreicht. Bitte erneut versuchen.');
+     error.code='REQUEST_TIMEOUT';
+     reject(error);
+   },timeoutMs);
+ });
+ try{return await Promise.race([request,timeout])}
+ finally{clearTimeout(timer)}
+}
+function catalogStage_(message){
+ if(epubStartBusy)$('#notStartedStatus').textContent=message;
+}
 const api=async body=>{
  const readOnlyOps=new Set(['voices','libraryOverview','editionStatus','listJobs']);
  const maxAttempts=readOnlyOps.has(String(body&&body.op||''))?3:1;
  let lastError=null;
  for(let attempt=1;attempt<=maxAttempts;attempt++){
    try{
-     const r=await fetch(API,{
+     const result=await requestJsonWithTimeout_(API,{
        method:'POST',
        headers:{'Content-Type':'application/json'},
        cache:'no-store',
        body:JSON.stringify({...body,adminToken:token,factorySession})
      });
-     const d=await r.json().catch(()=>({}));
+     const r=result.response,d=result.data;
      if(!r.ok||!d.ok){
        const err=new Error(d.error||d.detail||('HTTP '+r.status));
        err.httpStatus=r.status;
@@ -208,14 +230,15 @@ async function uploadSourceWithRetry_(file,jobId){
  for(let attempt=1;attempt<=3;attempt++){
    try{
      $('#start').textContent='MANUSKRIPT-UPLOAD '+attempt+'/3 …';
-     const r=await fetch(API,{method:'POST',headers:{
+     catalogStage_('3/4 · Quelle wird privat hochgeladen · Versuch '+attempt+'/3. Hörbuchproduktion noch nicht gestartet.');
+     const result=await requestJsonWithTimeout_(API,{method:'POST',headers:{
        'x-ajk-op':'upload-source',
        'x-admin-token':token,
        'x-factory-session':factorySession,
        'x-job-id':jobId,
-       'Content-Type':'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
-     },body:file});
-     const d=await r.json().catch(()=>({}));
+       'Content-Type':file.type||'application/octet-stream'
+     },body:file},60000);
+     const r=result.response,d=result.data;
      if(r.ok&&d.ok)return d;
 
      // If the upload actually completed but Safari lost the response,
@@ -480,8 +503,8 @@ function matchingExistingJob(file,b,voice){
 }
 async function startJob(fileOverride=null){
  $('#error').textContent='';
- if(jobSubmitLocked)return;
- let success=false;
+ if(jobSubmitLocked)return {ok:false};
+ let success=false,createdJobId='';
  try{
    const file=fileOverride||$('#source').files[0];if(!file)throw new Error('Bitte DOCX auswählen.');
    const b=books.find(x=>x.id===$('#book').value)||null;
@@ -512,13 +535,15 @@ async function startJob(fileOverride=null){
     }
    localStorage.setItem('ajk_factory_voice_'+$('#lang').value,voice.key);
    $('#start').textContent='JOB WIRD ANGELEGT …';
+   catalogStage_('3/4 · Lege privaten Job an: '+(b?b.title:file.name)+' …');
    const created=await api({op:'createJob',fileName:file.name,title:b?b.title:'',siteBookId:b?b.id:'',coverUrl:(b&&b.coverUrl)||'',languageCode:$('#lang').value,voiceKey:voice.key,replaceExisting:replaceExisting,publishAutomatically:$('#autoPublish').checked});
+   createdJobId=created.jobId;
    $('#start').textContent='MANUSKRIPT WIRD IN DIE CLOUD GELADEN …';
    try{
      await uploadSourceWithRetry_(file,created.jobId);
    }catch(uploadError){
-     // Do not leave an empty zombie job behind if the DOCX never reached Storage.
-     try{await api({op:'cancelJob',jobId:created.jobId})}catch(_){}
+     // Keep uncertain uploads: a lost server response does not prove source absence.
+     await loadJobs();
      throw uploadError;
    }
    lastSubmittedKey=key;
@@ -535,6 +560,7 @@ async function startJob(fileOverride=null){
      updateStartAvailability();
    }
  }
+ return {ok:success,jobId:createdJobId};
 }
 const esc=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 
@@ -664,7 +690,7 @@ function renderNotStarted_(){
    return '<div class="job"><div class="job-title">'+esc(b.title)+'</div><div class="job-meta">'+(finished?'Buchfassung fertig · noch kein Hörbuch':'Buchfassung noch in Arbeit')+'</div><div class="grid">'+
    '<div><label>Sprache</label><select data-catalog-lang="'+esc(b.id)+'">'+langs.map(l=>'<option value="'+l+'" '+(l===lang?'selected':'')+'>'+(l==='DE'?'Deutsch':'English')+'</option>').join('')+'</select></div>'+
    '<div><label>Stimme</label><select data-catalog-voice="'+esc(b.id)+'">'+catalogVoiceOptions_(lang,saved.voice)+'</select></div>'+
-   '<button class="primary full" data-start-epub="'+esc(b.id)+'" '+(!finished||!catalogFresh||epubStartBusy?'disabled':'')+'>EPUB → HÖRBUCH STARTEN</button></div></div>';
+   '<button class="primary full" data-start-epub="'+esc(b.id)+'" '+(!finished||!catalogFresh||epubStartBusy?'disabled':'')+'>'+(epubStartBusy?(epubActiveBookId===b.id?'EPUB WIRD VORBEREITET …':'START WARTET AUF LAUFENDEN IMPORT'):'EPUB → HÖRBUCH STARTEN')+'</button></div></div>';
  }).join(''):'<p class="muted">Keine Bücher für diese Auswahl.</p>';
  root.querySelectorAll('[data-catalog-lang]').forEach(el=>el.onchange=()=>{
    const id=el.dataset.catalogLang;
@@ -686,18 +712,24 @@ async function startCatalogEpub_(id){
  const voiceEl=[...root.querySelectorAll('[data-catalog-voice]')].find(x=>x.dataset.catalogVoice===id);
  const lang=langEl.value,voice=voices.find(v=>v.key===voiceEl.value&&v.ready&&v.languageCode===lang);
  if(!voice){$('#notStartedStatus').textContent='Bitte eine verfügbare Stimme auswählen.';return}
- epubStartBusy=true;renderNotStarted_();
- const status=$('#notStartedStatus');status.textContent='Prüfe Bestand und lade EPUB: '+b.title+' …';
+ epubStartBusy=true;epubActiveBookId=id;renderNotStarted_();
+ const status=$('#notStartedStatus');
+ const startedAt=Date.now();
+ status.textContent='1/4 · Prüfe vorhandene Fassungen: '+b.title+'. Noch kein Produktionsstart.';
+ const elapsed=$('#notStartedElapsed');
+ const ticker=setInterval(()=>{elapsed.textContent='Vorbereitung seit '+Math.floor((Date.now()-startedAt)/1000)+' Sekunden · Bitte auf dieser Seite bleiben.'},1000);
  try{
    const edition=await api({op:'editionStatus',siteBookId:b.id,voiceKey:voice.key});
    if(edition.exists||edition.activeJob)throw new Error('Für diese Stimme besteht bereits eine Fassung oder ein Job. Bitte den vorhandenen Eintrag verwenden.');
+   status.textContent='2/4 · Lade geschütztes EPUB: '+b.title+'. Noch kein Produktionsstart.';
    const params=new URLSearchParams({action:'getPrivateEpub',bookTitle:b.title,langCode:lang,intent:'download',adminToken:token});
    let data,last;
-   for(let attempt=0;attempt<3;attempt++){
+   for(let attempt=0;attempt<2;attempt++){
      try{
-       const r=await fetch(AUTHOR_SCRIPT_URL,{method:'POST',body:params});
-       if(!r.ok)throw new Error('EPUB-Verbindung fehlgeschlagen');
-       data=await r.json();break;
+       status.textContent='2/4 · Lade EPUB: '+b.title+' · Versuch '+(attempt+1)+'/2. Noch kein Produktionsstart.';
+       const result=await requestJsonWithTimeout_(AUTHOR_SCRIPT_URL,{method:'POST',body:params,cache:'no-store'},60000);
+       if(!result.response.ok)throw new Error('EPUB-Verbindung fehlgeschlagen');
+       data=result.data;break;
      }catch(e){last=e}
    }
    if(!data)throw last||new Error('EPUB konnte nicht geladen werden');
@@ -710,12 +742,16 @@ async function startCatalogEpub_(id){
    $('#book').value=b.id;$('#lang').value=lang;renderVoices();$('#voice').value=voice.key;updateVoiceInfo();
    resetJobSubmitState();await checkExistingEdition();
    if(editionCheckError||currentEdition||currentEditionJob)throw new Error('Bestandsprüfung verhindert einen Doppelstart. Bitte oberen Hinweis prüfen.');
-   status.textContent='EPUB wird privat hochgeladen; anschließend Strukturprüfung und QC …';
-   await startJob(file);
-   if($('#error').textContent)throw new Error($('#error').textContent);
-   status.textContent='Job angelegt: '+b.title+' · '+voice.name+'. Fortschritt unter „Noch offen“.';
- }catch(e){status.textContent='Start nicht möglich: '+String(e.message||e)}
- finally{epubStartBusy=false;renderNotStarted_()}
+   status.textContent='3/4 · EPUB geladen. Job wird angelegt und Quelle privat hochgeladen …';
+   const result=await startJob(file);
+   if(!result||!result.ok)throw new Error($('#error').textContent||'Kein erfolgreicher Upload bestätigt.');
+   status.textContent='✓ 4/4 · '+b.title+' · '+voice.name+': EPUB hochgeladen. Job '+String(result.jobId).slice(0,8)+' wartet auf Vorprüfung/QC. Fortschritt unter „Noch offen“.';
+   $('#libraryCard').scrollIntoView({behavior:'smooth',block:'start'});
+ }catch(e){
+   status.textContent='Kein Produktionsstart bestätigt für '+b.title+': '+String(e.message||e)+' Die Buttons werden wieder freigegeben.';
+   void loadJobs();
+ }
+ finally{clearInterval(ticker);elapsed.textContent='';epubStartBusy=false;epubActiveBookId='';renderNotStarted_()}
 }
 async function loadLibraryOverview(){
  libraryLoaded=false;
