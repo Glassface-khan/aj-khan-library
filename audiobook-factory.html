@@ -156,8 +156,8 @@ pre{white-space:pre-wrap;word-break:break-word;font-size:11px;background:#11100d
 <script>
 try{
   const u=new URL(location.href);
-  if(u.searchParams.get('v')!=='20261006n'){
-    history.replaceState(null,'',location.pathname+'?v=20261006n');
+  if(u.searchParams.get('v')!=='20261006o'){
+    history.replaceState(null,'',location.pathname+'?v=20261006o');
   }
 }catch(_){}
 const API='https://ipoqyjrojljmbqslmxxf.supabase.co/functions/v1/audiobook-factory';
@@ -572,8 +572,8 @@ async function startJob(fileOverride=null){
    lastSubmittedKey=key;
    success=true;
    $('#sourceStatus').textContent='Upload abgeschlossen: '+file.name+' · Cloud-Job '+String(created.jobId||'').slice(0,8)+'…';
-   $('#start').textContent='JOB ANGELEGT · QC LÄUFT';
-   await loadJobs();
+   $('#start').textContent='JOB ANGELEGT · WARTESCHLANGE';
+   void loadJobs();
  }catch(e){
    $('#error').textContent=e.message;
  }finally{
@@ -710,11 +710,11 @@ function renderNotStarted_(){
  root.innerHTML=rows.length?rows.map(b=>{
    const langs=catalogLanguages_(b),saved=catalogSelections.get(b.id)||{},lang=langs.includes(saved.lang)?saved.lang:langs[0];
    const finished=b.isFinished!==undefined?!!b.isFinished:/^fertig/i.test(b.status||'');
-   const blocked=!finished?'Buchfassung noch nicht abgeschlossen.':!catalogLoaded?'Buchkatalog noch nicht verfügbar.':epubStartBusy?'Ein EPUB-Import läuft bereits.':'';
+   const blocked=!finished?'Buchfassung noch nicht abgeschlossen.':!catalogLoaded?'Buchkatalog noch nicht verfügbar.':epubStartBusy?('Import: '+(books.find(x=>x.id===epubActiveBookId)?.title||'Buch')+' · '+($('#notStartedStatus').textContent||'Vorbereitung läuft')):'';
    return '<div class="job"><div class="job-title">'+esc(b.title)+'</div><div class="job-meta">'+(finished?'Buchfassung fertig · noch kein Hörbuch':'Buchfassung noch in Arbeit')+'</div><div class="grid">'+
    '<div><label>Sprache</label><select data-catalog-lang="'+esc(b.id)+'">'+langs.map(l=>'<option value="'+l+'" '+(l===lang?'selected':'')+'>'+(l==='DE'?'Deutsch':'English')+'</option>').join('')+'</select></div>'+
    '<div><label>Stimme</label><select data-catalog-voice="'+esc(b.id)+'">'+catalogVoiceOptions_(lang,saved.voice)+'</select></div>'+
-   '<button class="primary full" data-start-epub="'+esc(b.id)+'" '+(!finished||!catalogLoaded||epubStartBusy?'disabled':'')+'>'+(epubStartBusy?(epubActiveBookId===b.id?'EPUB WIRD VORBEREITET …':'START WARTET AUF LAUFENDEN IMPORT') :'EPUB → HÖRBUCH STARTEN')+'</button>'+(blocked?'<p class="muted full" role="status">'+esc(blocked)+'</p>':'')+'</div></div>';
+   '<button class="primary full" data-start-epub="'+esc(b.id)+'" '+(!finished||!catalogLoaded||epubStartBusy?'disabled':'')+'>'+(epubStartBusy?(epubActiveBookId===b.id?'EPUB WIRD VORBEREITET …':'START WARTET AUF LAUFENDEN IMPORT') :'EPUB → HÖRBUCH STARTEN')+'</button>'+(blocked?'<p class="muted full" role="status" '+(epubStartBusy?'data-epub-progress="1"':'')+'>'+esc(blocked)+'</p>':'')+'</div></div>';
  }).join(''):'<p class="muted">Keine Bücher für diese Auswahl.</p>';
  root.querySelectorAll('[data-catalog-lang]').forEach(el=>el.onchange=()=>{
    const id=el.dataset.catalogLang;
@@ -736,13 +736,20 @@ async function startCatalogEpub_(id){
  const voiceEl=[...root.querySelectorAll('[data-catalog-voice]')].find(x=>x.dataset.catalogVoice===id);
  const lang=langEl.value,voice=voices.find(v=>v.key===voiceEl.value&&v.ready&&v.languageCode===lang);
  if(!voice){$('#notStartedStatus').textContent='Bitte eine verfügbare Stimme auswählen.';return}
- epubStartBusy=true;epubActiveBookId=id;renderNotStarted_();
+ epubStartBusy=true;epubActiveBookId=id;
  const status=$('#notStartedStatus');
  const startedAt=Date.now();
  status.textContent='1/4 · Prüfe vorhandene Fassungen: '+b.title+'. Noch kein Produktionsstart.';
  const elapsed=$('#notStartedElapsed');
- const ticker=setInterval(()=>{elapsed.textContent='Vorbereitung seit '+Math.floor((Date.now()-startedAt)/1000)+' Sekunden · Bitte auf dieser Seite bleiben.'},1000);
+ let ticker=null;
  try{
+   renderNotStarted_();
+   status.scrollIntoView({behavior:'smooth',block:'center'});
+   ticker=setInterval(()=>{
+     const seconds=Math.floor((Date.now()-startedAt)/1000);
+     elapsed.textContent='Vorbereitung seit '+seconds+' Sekunden · Bitte auf dieser Seite bleiben.';
+     document.querySelectorAll('[data-epub-progress]').forEach(el=>{el.textContent='Import: '+b.title+' · '+status.textContent+' · '+seconds+' Sekunden';});
+   },1000);
    const edition=await api({op:'editionStatus',siteBookId:b.id,voiceKey:voice.key});
    if(edition.exists||edition.activeJob)throw new Error('Für diese Stimme besteht bereits eine Fassung oder ein Job. Bitte den vorhandenen Eintrag verwenden.');
    status.textContent='2/4 · Lade geschütztes EPUB: '+b.title+'. Noch kein Produktionsstart.';
@@ -751,7 +758,7 @@ async function startCatalogEpub_(id){
    for(let attempt=0;attempt<2;attempt++){
      try{
        status.textContent='2/4 · Lade EPUB: '+b.title+' · Versuch '+(attempt+1)+'/2. Noch kein Produktionsstart.';
-       const result=await requestJsonWithTimeout_(AUTHOR_SCRIPT_URL,{method:'POST',body:params,cache:'no-store'},60000);
+       const result=await requestJsonWithTimeout_(AUTHOR_SCRIPT_URL,{method:'POST',body:params,cache:'no-store'},30000);
        if(!result.response.ok)throw new Error('EPUB-Verbindung fehlgeschlagen');
        data=result.data;break;
      }catch(e){last=e}
