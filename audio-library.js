@@ -320,13 +320,14 @@
     return {
       code: isAdmin ? '' : String(access.code || ''),
       adminToken: isAdmin ? String(localStorage.getItem('ajk_admin_token') || '') : '',
+      factorySession: isAdmin ? String(localStorage.getItem('ajk_factory_session') || '') : '',
       isAdmin
     };
   }
 
   function isEligible() {
     const c = credentials();
-    return !!(c.adminToken || c.code);
+    return !!(c.adminToken || c.code || c.factorySession);
   }
 
   async function api(payload, options = {}) {
@@ -336,7 +337,7 @@
       headers: { 'Content-Type': 'application/json' },
       cache: 'no-store',
       keepalive: !!options.keepalive,
-      body: JSON.stringify({ ...payload, code: c.code, adminToken: c.adminToken })
+      body: JSON.stringify({ ...payload, code: c.code, adminToken: c.adminToken, factorySession: c.factorySession })
     });
     let data = {};
     try { data = await res.json(); } catch (_) {}
