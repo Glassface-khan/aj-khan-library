@@ -99,13 +99,13 @@ pre{white-space:pre-wrap;word-break:break-word;font-size:11px;background:#11100d
 <script>
 try{
   const u=new URL(location.href);
-  if(u.searchParams.get('v')!=='20261005c'){
-    history.replaceState(null,'',location.pathname+'?v=20261005c');
+  if(u.searchParams.get('v')!=='20261006b'){
+    history.replaceState(null,'',location.pathname+'?v=20261006b');
   }
 }catch(_){}
 const API='https://ipoqyjrojljmbqslmxxf.supabase.co/functions/v1/audiobook-factory';
 const $=s=>document.querySelector(s);
-let books=[],voices=[],token='',currentJobs=[],jobSubmitLocked=false,lastSubmittedKey='',jobsLoadInFlight=false;
+let books=[],voices=[],token='',factorySession=String(localStorage.getItem('ajk_factory_session')||''),currentJobs=[],jobSubmitLocked=false,lastSubmittedKey='',jobsLoadInFlight=false;
 let editionCheckSeq=0,editionCheckPending=false,currentEdition=null,currentEditionJob=null;
 const norm=s=>String(s||'').toLowerCase().normalize('NFKD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9]+/g,' ').trim();
 function standaloneBookIdFromFilename(name){
@@ -118,9 +118,13 @@ function standaloneBookIdFromFilename(name){
  return 'standalone_'+core;
 }
 const api=async body=>{
- const r=await fetch(API,{method:'POST',headers:{'Content-Type':'application/json'},cache:'no-store',body:JSON.stringify({...body,adminToken:token})});
+ const r=await fetch(API,{method:'POST',headers:{'Content-Type':'application/json'},cache:'no-store',body:JSON.stringify({...body,adminToken:token,factorySession})});
  const d=await r.json().catch(()=>({}));
  if(!r.ok||!d.ok)throw new Error(d.error||d.detail||('HTTP '+r.status));
+ if(d.factorySession){
+   factorySession=String(d.factorySession);
+   try{localStorage.setItem('ajk_factory_session',factorySession)}catch(_){}
+ }
  return d;
 };
 function parseBooksPayload(d){
@@ -222,7 +226,7 @@ async function uploadMissingVoice(){
     const selected=voices.find(v=>v.key===$('#voice').value&&v.sourceType==='asset');
     if(!selected)throw new Error('Bitte eine Stimme mit eigener Referenz auswählen.');
     const r=await fetch(API,{method:'POST',headers:{
-      'x-ajk-op':'upload-voice','x-admin-token':token,'x-voice-key':selected.key,'x-voice-format':(file.name.toLowerCase().endsWith('.mp3')?'mp3':'wav'),'Content-Type':file.type||'application/octet-stream'
+      'x-ajk-op':'upload-voice','x-admin-token':token,'x-factory-session':factorySession,'x-voice-key':selected.key,'x-voice-format':(file.name.toLowerCase().endsWith('.mp3')?'mp3':'wav'),'Content-Type':file.type||'application/octet-stream'
     },body:file});
     const d=await r.json();if(!r.ok||!d.ok)throw new Error(d.error||'Upload fehlgeschlagen');
     $('#voiceFile').value='';
@@ -370,7 +374,7 @@ async function startJob(){
    const created=await api({op:'createJob',fileName:file.name,title:b?b.title:'',siteBookId:b?b.id:'',coverUrl:(b&&b.coverUrl)||'',languageCode:$('#lang').value,voiceKey:voice.key,replaceExisting:replaceExisting,publishAutomatically:$('#autoPublish').checked});
    $('#start').textContent='MANUSKRIPT WIRD IN DIE CLOUD GELADEN …';
    const r=await fetch(API,{method:'POST',headers:{
-     'x-ajk-op':'upload-source','x-admin-token':token,'x-job-id':created.jobId,
+     'x-ajk-op':'upload-source','x-admin-token':token,'x-factory-session':factorySession,'x-job-id':created.jobId,
      'Content-Type':'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
    },body:file});
    const d=await r.json().catch(()=>({}));if(!r.ok||!d.ok)throw new Error(d.error||'Manuskript-Upload fehlgeschlagen');
@@ -508,6 +512,7 @@ async function init(){
    return;
  }
  try{
+   await api({op:'adminSession'});
    await Promise.all([loadBooks(),loadVoices()]);
    await checkExistingEdition();
    $('#authText').textContent='Admin bestätigt · Cloud Factory bereit.';
