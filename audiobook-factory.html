@@ -68,6 +68,7 @@ pre{white-space:pre-wrap;word-break:break-word;font-size:11px;background:#11100d
     <h2>Admin-Zugang</h2>
     <p id="authText" class="muted">Prüfe vorhandene Autor-Anmeldung …</p>
 <button id="authRetry" class="hidden" type="button">ERNEUT LADEN</button>
+<button id="authSignIn" class="hidden" type="button">AUF DER AUTORENSEITE ANMELDEN</button>
   </section>
 
   <section class="card hidden" id="newJob">
@@ -161,8 +162,8 @@ pre{white-space:pre-wrap;word-break:break-word;font-size:11px;background:#11100d
 <script>
 try{
   const u=new URL(location.href);
-  if(u.searchParams.get('v')!=='20261007a'){
-    history.replaceState(null,'',location.pathname+'?v=20261007a');
+  if(u.searchParams.get('v')!=='20261007b'){
+    history.replaceState(null,'',location.pathname+'?v=20261007b');
   }
 }catch(_){}
 const API='https://ipoqyjrojljmbqslmxxf.supabase.co/functions/v1/audiobook-factory';
@@ -846,7 +847,7 @@ function ensureFactoryPlayer_(){
      else resolve(window.AJKAudioLibrary);
    };
    const timer=setTimeout(()=>finish(new Error('Player konnte nicht geladen werden. Bitte erneut auf Hören tippen.')),15000);
-   script.src='./audio-library.js?v=20261007a';
+   script.src='./audio-library.js?v=20261007b';
    script.onload=()=>finish(window.AJKAudioLibrary?null:new Error('Player nicht verfügbar.'));
    script.onerror=()=>finish(new Error('Player konnte nicht geladen werden. Bitte erneut versuchen.'));
    document.head.appendChild(script);
@@ -1002,17 +1003,28 @@ async function loadJobs(){
  }
 }
 let factoryInitInFlight_=false,factoryReady_=false,factoryJobsTimer_=null;
+function showFactorySignIn_(expired=false){
+ factoryReady_=false;
+ if(factoryJobsTimer_){clearInterval(factoryJobsTimer_);factoryJobsTimer_=null}
+ ['newJob','libraryCard','jobsCard','notStartedCard'].forEach(id=>$('#'+id).classList.add('hidden'));
+ $('#authRetry').classList.add('hidden');
+ $('#authSignIn').classList.remove('hidden');
+ $('#authText').textContent=expired
+   ?'Deine Admin-Anmeldung ist nicht mehr gültig. Bitte auf der Autorenseite erneut als Admin anmelden und danach die Audiobook Factory öffnen. Laufende Produktionen werden dadurch nicht abgebrochen.'
+   :'Bitte auf der Autorenseite als Admin anmelden und danach die Audiobook Factory öffnen.';
+}
 async function init(){
  if(factoryInitInFlight_)return;
  factoryInitInFlight_=true;factoryReady_=false;
  $('#authRetry').classList.add('hidden');
+ $('#authSignIn').classList.add('hidden');
  $('#authText').textContent='Prüfe vorhandene Autor-Anmeldung …';
  $('#back').onclick=()=>location.href='./';
  try{
    token=String(localStorage.getItem('ajk_admin_token')||'');
    const isAdmin=localStorage.getItem('ajk_author_admin')==='1';
    if(!isAdmin||!token){
-     $('#authText').innerHTML='Bitte zuerst auf der <a href="./" style="color:var(--gold)">Autorenseite als Admin anmelden</a>.';
+     showFactorySignIn_();
      return;
    }
    await api({op:'adminSession'});
@@ -1027,11 +1039,18 @@ async function init(){
    void loadJobs();
    if(!factoryJobsTimer_)factoryJobsTimer_=setInterval(()=>{if(!document.hidden)void loadJobs()},15000);
  }catch(e){
-   $('#authText').textContent='Factory konnte nicht vollständig geladen werden: '+e.message;
-   $('#authRetry').classList.remove('hidden');
+   if(Number(e.httpStatus)===401||e.message==='unauthorized'){
+     factorySession='';
+     try{localStorage.removeItem('ajk_factory_session')}catch(_){}
+     showFactorySignIn_(true);
+   }else{
+     $('#authText').textContent='Factory konnte nicht vollständig geladen werden: '+e.message;
+     $('#authRetry').classList.remove('hidden');
+   }
  }finally{factoryInitInFlight_=false}
 }
 $('#authRetry').onclick=()=>void init();
+$('#authSignIn').onclick=()=>location.href='./';
 $('#source').onchange=()=>{
  resetJobSubmitState();
  $('#book').value='';
