@@ -41,6 +41,10 @@ pre{white-space:pre-wrap;word-break:break-word;font-size:11px;background:#11100d
 .audio-title{font-family:Georgia,serif;font-size:18px;line-height:1.15}
 .audio-meta{font-size:12px;color:var(--muted);margin-top:4px;line-height:1.4}
 .audio-state{white-space:nowrap}
+.audio-actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px}
+ #ajk-audio-launch{display:none!important}
+#ajk-audio-root{--bone:var(--panel);--bone-deep:var(--bg);--ink-2:var(--ink);--ink-3:var(--muted)}
+#ajk-audio-root .ajka-panel{padding-left:18px;padding-right:18px}
 .library-empty{padding:18px 2px;color:var(--muted)}
 @media(max-width:650px){
   .library-tools{grid-template-columns:1fr}
@@ -132,6 +136,7 @@ pre{white-space:pre-wrap;word-break:break-word;font-size:11px;background:#11100d
         <option value="READY">Fertig</option>
       </select>
     </div>
+    <p id="listenStatus" class="muted" role="status" aria-live="polite"></p>
     <div id="audioOverview"><p class="muted">Lade …</p></div>
   </section>
 
@@ -156,8 +161,8 @@ pre{white-space:pre-wrap;word-break:break-word;font-size:11px;background:#11100d
 <script>
 try{
   const u=new URL(location.href);
-  if(u.searchParams.get('v')!=='20261006o'){
-    history.replaceState(null,'',location.pathname+'?v=20261006o');
+  if(u.searchParams.get('v')!=='20261007a'){
+    history.replaceState(null,'',location.pathname+'?v=20261007a');
   }
 }catch(_){}
 const API='https://ipoqyjrojljmbqslmxxf.supabase.co/functions/v1/audiobook-factory';
@@ -612,7 +617,7 @@ function renderAudioRow_(b,isSeries){
    '<div class="audio-number">'+esc(number)+'</div>'+
    '<div><div class="audio-title">'+esc(b.title||'Ohne Titel')+'</div>'+
    '<div class="audio-meta">'+parts.join(' · ')+'</div></div>'+
-   '<div class="audio-state">'+audioStateLabel_(b)+(b.status==='ready'?'<button data-download-book="'+esc(b.id)+'" style="margin-top:8px">Downloads</button>':'')+'</div>'+
+   '<div class="audio-state">'+audioStateLabel_(b)+(b.status==='ready'?'<div class="audio-actions"><button data-listen-book="'+esc(b.id)+'" aria-label="'+esc(b.title+' · '+(b.narrator_name||'')+' hören')+'">▶ Hören</button><button data-download-book="'+esc(b.id)+'">Downloads</button></div>':'')+'</div>'+
    '</div>';
 }
 function openLibraryJobs_(){
@@ -827,7 +832,44 @@ function openDownloads_(id){
  void checkDownloads_();
  downloadPoll=setInterval(()=>{if(!document.hidden)void checkDownloads_()},15000);
 }
+let audioPlayerLoader_=null,listenOpening_=false;
+function ensureFactoryPlayer_(){
+ if(window.AJKAudioLibrary)return Promise.resolve(window.AJKAudioLibrary);
+ if(audioPlayerLoader_)return audioPlayerLoader_;
+ audioPlayerLoader_=new Promise((resolve,reject)=>{
+   const script=document.createElement('script');
+   let finished=false;
+   const finish=(error)=>{
+     if(finished)return;finished=true;clearTimeout(timer);
+     script.onload=script.onerror=null;
+     if(error){script.remove();reject(error)}
+     else resolve(window.AJKAudioLibrary);
+   };
+   const timer=setTimeout(()=>finish(new Error('Player konnte nicht geladen werden. Bitte erneut auf Hören tippen.')),15000);
+   script.src='./audio-library.js?v=20261007a';
+   script.onload=()=>finish(window.AJKAudioLibrary?null:new Error('Player nicht verfügbar.'));
+   script.onerror=()=>finish(new Error('Player konnte nicht geladen werden. Bitte erneut versuchen.'));
+   document.head.appendChild(script);
+ }).catch(error=>{audioPlayerLoader_=null;throw error});
+ return audioPlayerLoader_;
+}
+async function listenFactoryBook_(id,button){
+ if(listenOpening_)return;
+ const book=libraryBooks.find(b=>b.id===id&&b.status==='ready');
+ if(!book)return;
+ listenOpening_=true;button.disabled=true;button.textContent='Player öffnen …';
+ $('#listenStatus').textContent='Öffne '+book.title+' …';
+ try{
+   const player=await ensureFactoryPlayer_();
+   const opened=await player.openAudioBook(id);
+   if(!opened)throw new Error('Hörbuch konnte nicht geöffnet werden. Bitte aktualisieren und erneut versuchen.');
+   $('#listenStatus').textContent='Player geöffnet. Falls Safari die Wiedergabe noch nicht startet, im Player auf ▶ tippen.';
+ }catch(error){$('#listenStatus').textContent=String(error.message||'Hörbuch konnte nicht geöffnet werden.')}
+ finally{listenOpening_=false;button.disabled=false;button.textContent='▶ Hören'}
+}
 $('#audioOverview').addEventListener('click',event=>{
+ const listen=event.target.closest('[data-listen-book]');
+ if(listen){void listenFactoryBook_(listen.dataset.listenBook,listen);return}
  const button=event.target.closest('[data-download-book]');
  if(button)openDownloads_(button.dataset.downloadBook);
 });
