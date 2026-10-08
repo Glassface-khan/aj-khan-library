@@ -78,7 +78,7 @@ class EpubSourceTest(unittest.TestCase):
                         data = data.replace(b'<itemref idref="chapter1"/>', b'<itemref idref="half"/><itemref idref="part"/><itemref idref="chapter1"/>')
                     z.writestr(n, data)
                 z.writestr('OEBPS/half_title.xhtml', '<html><body><h1>Fixture Novel</h1></body></html>')
-                z.writestr('OEBPS/part_1.xhtml', '<html><body><h1>Part I</h1><p>The Life</p></body></html>')
+                z.writestr('OEBPS/part_1.xhtml', '<html xmlns:epub="http://www.idpf.org/2007/ops"><body><section epub:type="part"><div class="part-kicker">Part I</div><h1>The Life</h1><div class="ornament">◆</div></section></body></html>')
             _, sections, diagnostics = parse_epub(path, Section)
             self.assertEqual(len(sections), 2)
             self.assertEqual(sections[0].paragraphs[:2], ['Part I', 'The Life'])

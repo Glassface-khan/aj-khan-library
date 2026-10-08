@@ -79,6 +79,11 @@ def parse_epub(path, section_class):
                 node_types = set(node.get(EPUB_TYPE, '').split())
                 if tag in ('nav', 'script', 'style', 'aside') or node_types & {'footnote', 'endnote', 'noteref'}:
                     return
+                if 'part-kicker' in node.get('class', '').split():
+                    value = text(node)
+                    if value:
+                        blocks.append(('h2', value))
+                    return
                 if tag in ('h1', 'h2', 'h3', 'p', 'li', 'pre', 'dt', 'dd'):
                     # Remove note reference numbers but preserve their tails.
                     for child in list(node.iter()):
@@ -102,7 +107,8 @@ def parse_epub(path, section_class):
             # A heading-only part divider is not an empty chapter. Preserve its
             # spoken text at the start of the following narrative section.
             # Never apply this exception to a chapter or a page with body text.
-            if (PART.match(first) and len(blocks) <= 3
+            if ((PART.match(first) or ('part' in semantic_types and PART.match(filename)))
+                    and len(blocks) <= 3
                     and sum(len(value.split()) for _, value in blocks) <= 40
                     and all(not LABEL.match(value) for _, value in blocks)
                     and (all(tag.startswith('h') for tag, _ in blocks)
