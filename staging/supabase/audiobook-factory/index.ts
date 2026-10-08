@@ -1,3 +1,5 @@
+import { wakeQueue } from "./queue_wake.js";
+import { driveBackupOperation } from "./drive_backup.ts";
 import { downloadSnapshot, downloadFilePath } from "./download_helpers.ts";
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
@@ -12,7 +14,9 @@ const FACTORY_BUCKET = "audiobook-factory";
 const AUDIO_BUCKET = "audiobooks";
 const GITHUB_REPO = "Glassface-khan/aj-khan-library";
 const GITHUB_REPO_ID = "1332010124";
+const DRIVE_BACKUP_WORKFLOW = "Glassface-khan/aj-khan-library/.github/workflows/audiobook-drive-backup.yml@refs/heads/main";
 const ALLOWED_GITHUB_WORKFLOWS = new Set([
+  DRIVE_BACKUP_WORKFLOW,
   "Glassface-khan/aj-khan-library/.github/workflows/audiobook-download-worker.yml@refs/heads/main",
   "Glassface-khan/aj-khan-library/.github/workflows/audiobook-cloud-worker.yml@refs/heads/main",
   "Glassface-khan/aj-khan-library/.github/workflows/audiobook-queue-watchdog.yml@refs/heads/main",
@@ -251,7 +255,7 @@ async function verifyWorker(req: Request, allowDownloadWorker = false) {
   if (String(payload.repository_id || "") !== GITHUB_REPO_ID) throw new Error("WORKER_UNAUTHORIZED");
   if (String(payload.ref || "") !== "refs/heads/main") throw new Error("WORKER_UNAUTHORIZED");
   if (!ALLOWED_GITHUB_WORKFLOWS.has(String(payload.workflow_ref || ""))) throw new Error("WORKER_UNAUTHORIZED");
-  if (String(payload.workflow_ref || "") === "Glassface-khan/aj-khan-library/.github/workflows/audiobook-download-worker.yml@refs/heads/main" && !allowDownloadWorker) throw new Error("WORKER_UNAUTHORIZED");
+  if ([DRIVE_BACKUP_WORKFLOW, "Glassface-khan/aj-khan-library/.github/workflows/audiobook-download-worker.yml@refs/heads/main"].includes(String(payload.workflow_ref || "")) && !allowDownloadWorker) throw new Error("WORKER_UNAUTHORIZED");
   const ev = String(payload.event_name || "");
   if (!["schedule", "workflow_dispatch", "push"].includes(ev)) throw new Error("WORKER_UNAUTHORIZED");
   return payload;
@@ -317,6 +321,13 @@ async function signedVoice(v: any) {
   return { ...available, source: sr.data.signedUrl };
 }
 
+
+function scheduleQueueWake() {
+  EdgeRuntime.waitUntil(wakeQueue(supabase, Deno.env.get("AUDIOBOOK_GITHUB_ACTIONS_TOKEN") || "", logEvent).catch(() => {
+    console.warn("QUEUE_WAKE_CHECK_FAILED");
+  }));
+}
+
 async function rawUpload(req: Request, op: string) {
   await ensureFactoryBucket();
 
@@ -337,6 +348,7 @@ async function rawUpload(req: Request, op: string) {
     }).eq("id", jobId);
     if (ur.error) throw ur.error;
     await logEvent(jobId, "info", "SOURCE_UPLOADED", "Source manuscript uploaded and queued.", { bytes: body.length });
+    scheduleQueueWake();
     return json({ ok: true, jobId, status: "queued" });
   }
 
@@ -386,6 +398,19 @@ async function rawUpload(req: Request, op: string) {
   return json({ ok: false, error: "unknown_raw_operation" }, 400);
 }
 
+async function wakePrivateExport_(workflow: string) {
+  const token = Deno.env.get("AUDIOBOOK_GITHUB_ACTIONS_TOKEN") || "";
+  if (!token) return;
+  // Fixed workflow names only; never use user-controlled dispatch destinations.
+  if (!["audiobook-download-worker.yml","audiobook-drive-backup.yml"].includes(workflow)) return;
+  try {
+    const response = await fetch(`https://api.github.com/repos/${GITHUB_REPO}/actions/workflows/${workflow}/dispatches`, {
+      method:"POST",headers:{Authorization:"Bearer "+token,Accept:"application/vnd.github+json","Content-Type":"application/json"},body:JSON.stringify({ref:"main"}),signal:AbortSignal.timeout(15000)
+    });
+    await response.body?.cancel();
+  } catch (_) { /* Scheduled worker is the fallback. Never log credentials. */ }
+}
+
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
   if (req.method !== "POST") return json({ ok: false, error: "method_not_allowed" }, 405);
@@ -406,6 +431,21 @@ Deno.serve(async (req: Request) => {
   const op = String(body?.op || "").trim();
 
   try {
+    if (["driveBackupStatus", "requestDriveBackup", "driveBackupClaim", "driveBackupProgress", "driveBackupFinish"].includes(op)) {
+      let runId: number | null = null;
+      if (["driveBackupClaim", "driveBackupProgress", "driveBackupFinish"].includes(op)) {
+        const claims = await verifyWorker(req, true);
+        if (String(claims.workflow_ref) !== DRIVE_BACKUP_WORKFLOW) throw new Error("WORKER_UNAUTHORIZED");
+        runId = Number(claims.run_id);
+      } else {
+        await verifyAdminToken(body.adminToken, body.factorySession);
+      }
+      const result = await driveBackupOperation(supabase, op, body, runId);
+      if (op === "requestDriveBackup" && result.status === "queued") {
+        EdgeRuntime.waitUntil(Promise.all([wakePrivateExport_("audiobook-download-worker.yml"),wakePrivateExport_("audiobook-drive-backup.yml")]));
+      }
+      return json(result);
+    }
     if (["downloadWorkerClaim","downloadWorkerProgress","downloadWorkerUpload","downloadWorkerFinish"].includes(op)){
       const claims=await verifyWorker(req,true);
       if(String(claims.workflow_ref)!=="Glassface-khan/aj-khan-library/.github/workflows/audiobook-download-worker.yml@refs/heads/main")throw new Error("WORKER_UNAUTHORIZED");
@@ -454,7 +494,9 @@ Deno.serve(async (req: Request) => {
         if(!files.some((x:any)=>x.format==="ZIP")||!files.some((x:any)=>x.format==="M4B"))throw new Error("DOWNLOAD_FORMAT_MISSING");
       }
       const r=await supabase.from("audiobook_download_jobs").update({status:ready?"ready":"failed",files,error_detail:ready?null:"Download packaging failed or edition changed",updated_at:new Date().toISOString()}).eq("id",job.id).eq("worker_run_id",runId);
-      if(r.error)throw r.error;return json({ok:true});
+      if(r.error)throw r.error;
+      if(ready) EdgeRuntime.waitUntil(wakePrivateExport_("audiobook-drive-backup.yml"));
+      return json({ok:true});
     }
 
     if (op === "adminSession") {
@@ -640,7 +682,8 @@ Deno.serve(async (req: Request) => {
         .order("created_at", { ascending: false }).limit(1000);
       if (r.error) throw r.error;
       if ((r.count || 0) > (r.data || []).length) throw new Error("JOB_INVENTORY_INCOMPLETE");
-      return json({ ok: true, jobs: r.data || [] });
+      if ((r.data || []).some((j: any) => j.status === "queued")) scheduleQueueWake();
+      return json({ ok: true, jobs: r.data || [], autoStartConfigured: !!Deno.env.get("AUDIOBOOK_GITHUB_ACTIONS_TOKEN") });
     }
 
     if (op === "jobStatus") {
@@ -722,6 +765,7 @@ Deno.serve(async (req: Request) => {
       }).eq("id", jobId);
       if (r.error) throw r.error;
       await logEvent(jobId, "info", "JOB_REQUEUED", "Job queued for automatic retry.");
+      scheduleQueueWake();
       return json({ ok: true });
     }
 

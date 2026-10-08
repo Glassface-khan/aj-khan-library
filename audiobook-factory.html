@@ -156,14 +156,18 @@ pre{white-space:pre-wrap;word-break:break-word;font-size:11px;background:#11100d
  <div class="row"><h2 id="downloadTitle" class="grow">Hörbuch herunterladen</h2><button id="closeDownloads">Schließen</button></div>
  <p class="muted">Private M4B-Dateien mit Kapiteln und MP3-ZIPs. Große Bücher werden in nummerierte Teile aufgeteilt.</p>
  <button id="prepareDownloads" class="primary">M4B + MP3-ZIP vorbereiten</button>
- <p id="downloadStatus" role="status" class="muted"></p><div id="downloadLinks"></div>
+ <p id="downloadStatus" role="status" class="muted"></p>
+ <button id="saveDrive" type="button">AUF GOOGLE DRIVE SICHERN</button>
+ <p class="muted">Alle M4B-Teile direkt in deinen privaten Drive-Ordner kopieren. Du kannst dieses Fenster danach schließen.</p>
+ <p id="driveStatus" role="status" aria-live="polite" class="muted"></p><a id="driveFolder" class="hidden" target="_blank" rel="noopener noreferrer" style="color:var(--gold)">Ordner auf Google Drive öffnen</a>
+ <div id="downloadLinks"></div>
 </dialog>
 </main>
 <script>
 try{
   const u=new URL(location.href);
-  if(u.searchParams.get('v')!=='20261007b'){
-    history.replaceState(null,'',location.pathname+'?v=20261007b');
+  if(u.searchParams.get('v')!=='20261008drive1'){
+    history.replaceState(null,'',location.pathname+'?v=20261008drive1');
   }
 }catch(_){}
 const API='https://ipoqyjrojljmbqslmxxf.supabase.co/functions/v1/audiobook-factory';
@@ -790,6 +794,24 @@ async function startCatalogEpub_(id){
  }
  finally{clearInterval(ticker);elapsed.textContent='';epubStartBusy=false;epubActiveBookId='';renderNotStarted_()}
 }
+let driveLoading='',drivePoll=null;
+async function checkDriveBackup_(request=false){
+ if(driveLoading===downloadBookId||!downloadBookId)return;
+ const id=downloadBookId;driveLoading=id;$('#saveDrive').disabled=true;
+ try{
+   const d=await api({op:request?'requestDriveBackup':'driveBackupStatus',bookId:id});
+   if(downloadBookId!==id)return;
+   const waiting=['queued','copying'].includes(d.status);
+   $('#saveDrive').disabled=waiting||d.status==='ready';
+   $('#saveDrive').textContent=d.status==='ready'?'AUF GOOGLE DRIVE GESICHERT':'AUF GOOGLE DRIVE SICHERN';
+   $('#driveStatus').textContent=d.status==='ready'?'✓ Alle M4B-Teile auf Google Drive gesichert und geprüft.':d.status==='copying'?'Kopiere nach Google Drive · '+d.progressDone+' von '+d.progressTotal+' Dateien.':d.status==='queued'?'✓ Sicherung angefordert. Download-Dateien werden bei Bedarf vorbereitet; danach startet die Kopie automatisch.':d.error||'Sicherung als M4B mit Kapitelmarken. Kein Download auf dein iPhone nötig.';
+   $('#driveFolder').classList.toggle('hidden',!d.folderUrl);
+   if(d.folderUrl)$('#driveFolder').href=d.folderUrl;else $('#driveFolder').removeAttribute('href');
+   if(waiting&&!drivePoll)drivePoll=setInterval(()=>{if(!document.hidden)void checkDriveBackup_()},15000);
+   if(!waiting&&drivePoll){clearInterval(drivePoll);drivePoll=null}
+ }catch(e){if(downloadBookId===id){$('#driveStatus').textContent='Drive-Sicherung konnte nicht geprüft werden: '+e.message;$('#saveDrive').disabled=false}}
+ finally{if(driveLoading===id)driveLoading=''}
+}
 let downloadBookId='',downloadPoll=null,downloadLoading=false,downloadFiles=[];
 async function downloadApi_(op){
  const result=await requestJsonWithTimeout_('https://ipoqyjrojljmbqslmxxf.supabase.co/functions/v1/audio-library',{method:'POST',headers:{'Content-Type':'application/json'},cache:'no-store',body:JSON.stringify({op,bookId:downloadBookId,adminToken:token,factorySession})},25000);
@@ -827,6 +849,10 @@ function openDownloads_(id){
  const b=libraryBooks.find(x=>x.id===id);if(!b)return;
  if(downloadPoll)clearInterval(downloadPoll);
  downloadBookId=id;downloadFiles=[];
+ if(drivePoll)clearInterval(drivePoll);drivePoll=null;
+ $('#driveStatus').textContent='Prüfe Drive-Sicherung …';$('#driveFolder').classList.add('hidden');$('#driveFolder').removeAttribute('href');
+ $('#saveDrive').disabled=true;$('#saveDrive').textContent='AUF GOOGLE DRIVE SICHERN';
+ void checkDriveBackup_();
  $('#downloadTitle').textContent=b.title+' · Downloads';
  $('#downloadLinks').innerHTML='';
  $('#downloadDialog').showModal();
@@ -847,7 +873,7 @@ function ensureFactoryPlayer_(){
      else resolve(window.AJKAudioLibrary);
    };
    const timer=setTimeout(()=>finish(new Error('Player konnte nicht geladen werden. Bitte erneut auf Hören tippen.')),15000);
-   script.src='./audio-library.js?v=20261007b';
+   script.src='./audio-library.js?v=20261008drive1';
    script.onload=()=>finish(window.AJKAudioLibrary?null:new Error('Player nicht verfügbar.'));
    script.onerror=()=>finish(new Error('Player konnte nicht geladen werden. Bitte erneut versuchen.'));
    document.head.appendChild(script);
@@ -874,9 +900,10 @@ $('#audioOverview').addEventListener('click',event=>{
  const button=event.target.closest('[data-download-book]');
  if(button)openDownloads_(button.dataset.downloadBook);
 });
+$('#saveDrive').onclick=()=>void checkDriveBackup_(true);
 $('#prepareDownloads').onclick=()=>{void checkDownloads_(true);if(!downloadPoll)downloadPoll=setInterval(()=>{if(!document.hidden)void checkDownloads_()},15000)};
 $('#closeDownloads').onclick=()=>$('#downloadDialog').close();
-$('#downloadDialog').addEventListener('close',()=>{if(downloadPoll)clearInterval(downloadPoll);downloadPoll=null;downloadBookId=''});
+$('#downloadDialog').addEventListener('close',()=>{if(downloadPoll)clearInterval(downloadPoll);downloadPoll=null;if(drivePoll)clearInterval(drivePoll);drivePoll=null;downloadBookId=''});
 
 async function loadLibraryOverview(){
  libraryLoaded=false;
