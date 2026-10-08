@@ -157,8 +157,12 @@ pre{white-space:pre-wrap;word-break:break-word;font-size:11px;background:#11100d
  <p class="muted">Private M4B-Dateien mit Kapiteln und MP3-ZIPs. Große Bücher werden in nummerierte Teile aufgeteilt.</p>
  <button id="prepareDownloads" class="primary">M4B + MP3-ZIP vorbereiten</button>
  <p id="downloadStatus" role="status" class="muted"></p>
+ <label for="driveBookFolder">Zugehöriger Buchordner auf Google Drive</label>
+ <input id="driveBookFolder" type="text" placeholder="Google-Drive-Ordnerlink">
+ <button id="saveDriveFolder" type="button">Buchordner zuordnen</button>
+ <p id="driveTargetStatus" class="muted">Ablage: Buchordner → Hörbuch → Stimme und Sprache. Der Ordner muss für die Factory über Google freigegeben sein.</p>
  <button id="saveDrive" type="button">AUF GOOGLE DRIVE SICHERN</button>
- <p class="muted">Alle M4B-Teile direkt in deinen privaten Drive-Ordner kopieren. Du kannst dieses Fenster danach schließen.</p>
+ <p class="muted">Alle M4B-Teile direkt in den zugeordneten privaten Buchordner kopieren. Du kannst dieses Fenster danach schließen.</p>
  <p id="driveStatus" role="status" aria-live="polite" class="muted"></p><a id="driveFolder" class="hidden" target="_blank" rel="noopener noreferrer" style="color:var(--gold)">Ordner auf Google Drive öffnen</a>
  <div id="downloadLinks"></div>
 </dialog>
@@ -166,8 +170,8 @@ pre{white-space:pre-wrap;word-break:break-word;font-size:11px;background:#11100d
 <script>
 try{
   const u=new URL(location.href);
-  if(u.searchParams.get('v')!=='20261008drive1'){
-    history.replaceState(null,'',location.pathname+'?v=20261008drive1');
+  if(u.searchParams.get('v')!=='20261008drive2'){
+    history.replaceState(null,'',location.pathname+'?v=20261008drive2');
   }
 }catch(_){}
 const API='https://ipoqyjrojljmbqslmxxf.supabase.co/functions/v1/audiobook-factory';
@@ -802,7 +806,9 @@ async function checkDriveBackup_(request=false){
    const d=await api({op:request?'requestDriveBackup':'driveBackupStatus',bookId:id});
    if(downloadBookId!==id)return;
    const waiting=['queued','copying'].includes(d.status);
-   $('#saveDrive').disabled=waiting||d.status==='ready';
+   if(document.activeElement!==$('#driveBookFolder'))$('#driveBookFolder').value=d.targetFolderId?'https://drive.google.com/drive/folders/'+d.targetFolderId:'';
+   $('#driveTargetStatus').textContent=d.targetFolderId?'Ziel zugeordnet: Buchordner → Hörbuch → Stimme und Sprache. Google-Freigabe für die Factory erforderlich.':'Bitte zuerst den zugehörigen Buchordner zuordnen.';
+   $('#saveDrive').disabled=waiting||d.status==='ready'||!d.targetFolderId;
    $('#saveDrive').textContent=d.status==='ready'?'AUF GOOGLE DRIVE GESICHERT':'AUF GOOGLE DRIVE SICHERN';
    $('#driveStatus').textContent=d.status==='ready'?'✓ Alle M4B-Teile auf Google Drive gesichert und geprüft.':d.status==='copying'?'Kopiere nach Google Drive · '+d.progressDone+' von '+d.progressTotal+' Dateien.':d.status==='queued'?'✓ Sicherung angefordert. Download-Dateien werden bei Bedarf vorbereitet; danach startet die Kopie automatisch.':d.error||'Sicherung als M4B mit Kapitelmarken. Kein Download auf dein iPhone nötig.';
    $('#driveFolder').classList.toggle('hidden',!d.folderUrl);
@@ -873,7 +879,7 @@ function ensureFactoryPlayer_(){
      else resolve(window.AJKAudioLibrary);
    };
    const timer=setTimeout(()=>finish(new Error('Player konnte nicht geladen werden. Bitte erneut auf Hören tippen.')),15000);
-   script.src='./audio-library.js?v=20261008drive1';
+   script.src='./audio-library.js?v=20261008drive2';
    script.onload=()=>finish(window.AJKAudioLibrary?null:new Error('Player nicht verfügbar.'));
    script.onerror=()=>finish(new Error('Player konnte nicht geladen werden. Bitte erneut versuchen.'));
    document.head.appendChild(script);
@@ -900,6 +906,16 @@ $('#audioOverview').addEventListener('click',event=>{
  const button=event.target.closest('[data-download-book]');
  if(button)openDownloads_(button.dataset.downloadBook);
 });
+$('#saveDriveFolder').onclick=async()=>{
+ const id=downloadBookId;if(!id)return;
+ const value=$('#driveBookFolder').value.trim();
+ const match=value.match(/^https:\/\/drive\.google\.com\/drive\/(?:u\/\d+\/)?folders\/([a-zA-Z0-9_-]{10,200})(?:[?#].*)?$/);
+ if(!match){$('#driveTargetStatus').textContent='Bitte einen gültigen Google-Drive-Ordnerlink einfügen.';return}
+ $('#saveDriveFolder').disabled=true;
+ try{await api({op:'setDriveBackupTarget',bookId:id,folderId:match[1]});if(downloadBookId===id)await checkDriveBackup_()}
+ catch(e){$('#driveTargetStatus').textContent='Zuordnung fehlgeschlagen: '+e.message}
+ finally{$('#saveDriveFolder').disabled=false}
+};
 $('#saveDrive').onclick=()=>void checkDriveBackup_(true);
 $('#prepareDownloads').onclick=()=>{void checkDownloads_(true);if(!downloadPoll)downloadPoll=setInterval(()=>{if(!document.hidden)void checkDownloads_()},15000)};
 $('#closeDownloads').onclick=()=>$('#downloadDialog').close();

@@ -1,12 +1,28 @@
 import { downloadSnapshot, downloadFilePath } from "./download_helpers.ts";
 const table = "audiobook_drive_backups";
 function checked(result: any) { if (result.error) throw result.error; return result.data; }
+async function bookTarget(db: any, book: any) {
+ const key = book.site_book_id || "audio:"+book.id;
+ const target = checked(await db.from("audiobook_drive_targets").select("folder_id").eq("book_key",key).maybeSingle());
+ return {key, folderId:target?.folder_id || null};
+}
 export async function driveBackupOperation(db: any, op: string, body: any, runId: number | null) {
   const now = () => new Date().toISOString();
-  if (op === "driveBackupStatus" || op === "requestDriveBackup") {
+  if (op === "driveBackupStatus" || op === "requestDriveBackup" || op === "setDriveBackupTarget") {
     const snapshot = await downloadSnapshot(db, String(body.bookId || ""));
+    let target = await bookTarget(db,snapshot.book);
+    if (op === "setDriveBackupTarget") {
+      const folderId = String(body.folderId || "").trim();
+      if (!/^[a-zA-Z0-9_-]{10,200}$/.test(folderId)) throw new Error("INVALID_DRIVE_FOLDER");
+      const related = snapshot.book.site_book_id ? checked(await db.from("audio_books").select("id").eq("site_book_id",snapshot.book.site_book_id)) : [{id:snapshot.book.id}];
+      const busy = checked(await db.from(table).select("id").in("audio_book_id",related.map((b:any)=>b.id)).in("status",["queued","copying"]).limit(1));
+      if (busy?.length) throw new Error("DRIVE_BACKUP_IN_PROGRESS");
+      checked(await db.from("audiobook_drive_targets").upsert({book_key:target.key,folder_id:folderId,updated_at:now()}));
+      return {ok:true,targetFolderId:folderId};
+    }
     let job = checked(await db.from(table).select("*").eq("audio_book_id", snapshot.book.id).eq("source_fingerprint", snapshot.fingerprint).maybeSingle());
     if (op === "requestDriveBackup") {
+      if (!target.folderId) throw new Error("DRIVE_BOOK_FOLDER_REQUIRED");
       // Packaging and backup are independent queues; never regenerate spoken audio.
       checked(await db.from("audiobook_download_jobs").upsert({audio_book_id: snapshot.book.id, source_fingerprint: snapshot.fingerprint}, {onConflict:"audio_book_id,source_fingerprint",ignoreDuplicates:true}));
       checked(await db.from("audiobook_download_jobs").update({status:"queued",error_detail:null,updated_at:now()}).eq("audio_book_id", snapshot.book.id).eq("source_fingerprint", snapshot.fingerprint).eq("status","failed"));
@@ -17,7 +33,7 @@ export async function driveBackupOperation(db: any, op: string, body: any, runId
       }
       job = checked(await db.from(table).select("*").eq("audio_book_id", snapshot.book.id).eq("source_fingerprint", snapshot.fingerprint).single());
     }
-    return {ok:true,status:job?.status || "not_requested",progressDone:job?.progress_done || 0,progressTotal:job?.progress_total || 0,
+    return {ok:true,targetFolderId:target.folderId,status:job?.status || "not_requested",progressDone:job?.progress_done || 0,progressTotal:job?.progress_total || 0,
       folderUrl:job?.status === "ready" && job.folder_id ? "https://drive.google.com/drive/folders/"+job.folder_id : null,
       error:job?.error_detail || null};
   }
@@ -29,6 +45,11 @@ export async function driveBackupOperation(db: any, op: string, body: any, runId
       const snapshot = await downloadSnapshot(db,candidate.audio_book_id).catch(()=>null);
       if (!snapshot || snapshot.fingerprint !== candidate.source_fingerprint) {
         checked(await db.from(table).update({status:"failed",error_detail:"Hörbuchfassung geändert. Bitte Sicherung erneut anfordern.",updated_at:now()}).eq("id",candidate.id).eq("status","queued"));
+        continue;
+      }
+      const target = await bookTarget(db,snapshot.book);
+      if (!target.folderId) {
+        checked(await db.from(table).update({status:"failed",error_detail:"Buchordner noch nicht zugeordnet.",updated_at:now()}).eq("id",candidate.id).eq("status","queued"));
         continue;
       }
       const downloads = checked(await db.from("audiobook_download_jobs").select("*").eq("audio_book_id",candidate.audio_book_id).eq("source_fingerprint",candidate.source_fingerprint).maybeSingle());
@@ -47,7 +68,7 @@ export async function driveBackupOperation(db: any, op: string, body: any, runId
         const link = checked(await db.storage.from("audiobook-downloads").createSignedUrl(file.path,3600));
         sources.push({name:file.name,bytes:file.bytes,url:link.signedUrl});
       }
-      return {ok:true,job,book:snapshot.book,files:sources};
+      return {ok:true,job,book:snapshot.book,targetFolderId:target.folderId,files:sources};
     }
     return {ok:true,job:null};
   }
@@ -74,8 +95,8 @@ export async function driveBackupOperation(db: any, op: string, body: any, runId
       seen.add(f.name);files.push({name:f.name,id:f.id,bytes:f.bytes,md5:f.md5});
     }
   }
-  const connection = body.reason === "connection_required";
+  const connection = ["connection_required","folder_access_required"].includes(body.reason);
   checked(await db.from(table).update({status:success?"ready":connection?"connection_required":"failed",folder_id:success?body.folderId:job.folder_id,files:success?files:job.files,progress_done:success?job.progress_total:job.progress_done,
-    error_detail:success?null:connection?"Google Drive noch nicht verbunden. Einmalige Einrichtung erforderlich.":"Drive-Sicherung fehlgeschlagen. Bitte erneut versuchen.",updated_at:now()}).eq("id",job.id).eq("worker_run_id",runId).eq("status","copying"));
+    error_detail:success?null:connection?(body.reason === "folder_access_required"?"Bitte diesen Buchordner für die Factory über Google freigeben.":"Google Drive noch nicht verbunden. Einmalige Einrichtung erforderlich."):"Drive-Sicherung fehlgeschlagen. Bitte erneut versuchen.",updated_at:now()}).eq("id",job.id).eq("worker_run_id",runId).eq("status","copying"));
   return {ok:true};
 }

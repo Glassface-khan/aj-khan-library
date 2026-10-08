@@ -5,6 +5,7 @@ import os
 import tempfile
 import urllib.parse
 import urllib.request
+import urllib.error
 from pathlib import Path
 from download_worker import api
 
@@ -12,6 +13,9 @@ SCOPE = 'https://www.googleapis.com/auth/drive.file'
 BASE = 'https://www.googleapis.com/drive/v3'
 
 class ConnectionRequired(Exception):
+    pass
+
+class FolderAccessRequired(ConnectionRequired):
     pass
 
 class Drive:
@@ -123,10 +127,21 @@ class Drive:
 
 def copy_backup(claim, drive):
     job, book = claim['job'], claim['book']
-    root = drive.folder('ajkAudioBackupRoot', 'v1', 'Audio')
+    root = claim.get('targetFolderId')
+    if not root:
+        raise FolderAccessRequired()
+    try:
+        drive.check_private(root)
+    except urllib.error.HTTPError as exc:
+        if exc.code in (403,404):
+            raise FolderAccessRequired() from None
+        raise
+    audio_folder = drive.folder('ajkBookAudio', root, 'Hörbuch', root)
     edition = job['audio_book_id'] + ':' + job['source_fingerprint']
-    name = ' – '.join(str(book.get(k) or '') for k in ['title', 'narrator_name', 'language_code']).strip(' –')
-    folder_id = drive.folder('ajkAudioEdition', edition, name, root)
+    name = ' – '.join(str(book.get(k) or '') for k in ['narrator_name', 'language_code']).strip(' –') or 'Hörbuch'
+    # Separate editions retain their own folder, labeled by backup date.
+    name += ' – ' + str(job.get('created_at') or '')[:10]
+    folder_id = drive.folder('ajkAudioEdition', edition, name, audio_folder)
     files = []
     with tempfile.TemporaryDirectory() as tmp:
         for index, source in enumerate(claim['files']):
@@ -144,6 +159,7 @@ def copy_backup(claim, drive):
             path.unlink()
             api('driveBackupProgress', jobId=job['id'], done=index+1)
     drive.check_private(root)
+    drive.check_private(audio_folder)
     drive.check_private(folder_id)
     api('driveBackupFinish', jobId=job['id'], success=True, folderId=folder_id, files=files)
 
@@ -157,7 +173,7 @@ def main():
         try:
             copy_backup(claim, Drive())
         except Exception as exc:
-            reason = 'connection_required' if isinstance(exc, ConnectionRequired) else 'failed'
+            reason = 'folder_access_required' if isinstance(exc, FolderAccessRequired) else 'connection_required' if isinstance(exc, ConnectionRequired) else 'failed'
             api('driveBackupFinish', jobId=claim['job']['id'], success=False, reason=reason)
             # Never print tokens, signed URLs, upload-session URLs, or raw HTTP errors.
             print('Private Drive backup: ' + reason, flush=True)

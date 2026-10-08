@@ -1,5 +1,5 @@
 export async function downloadSnapshot(db: any, bookId: string) {
- const b=await db.from("audio_books").select("id,title,narrator_name,language_code,cover_url,status,is_active").eq("id",bookId).maybeSingle();
+ const b=await db.from("audio_books").select("id,site_book_id,title,narrator_name,language_code,cover_url,status,is_active").eq("id",bookId).maybeSingle();
  if(b.error)throw b.error;
  if(!b.data||!b.data.is_active||b.data.status!=="ready")throw new Error("DOWNLOAD_BOOK_UNAVAILABLE");
  const c=await db.from("audio_chapters").select("id,chapter_index,title,storage_path,duration_seconds,byte_size,updated_at").eq("audio_book_id",bookId).order("chapter_index");

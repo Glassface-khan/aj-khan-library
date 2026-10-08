@@ -431,7 +431,7 @@ Deno.serve(async (req: Request) => {
   const op = String(body?.op || "").trim();
 
   try {
-    if (["driveBackupStatus", "requestDriveBackup", "driveBackupClaim", "driveBackupProgress", "driveBackupFinish"].includes(op)) {
+    if (["driveBackupStatus", "requestDriveBackup", "setDriveBackupTarget", "driveBackupClaim", "driveBackupProgress", "driveBackupFinish"].includes(op)) {
       let runId: number | null = null;
       if (["driveBackupClaim", "driveBackupProgress", "driveBackupFinish"].includes(op)) {
         const claims = await verifyWorker(req, true);

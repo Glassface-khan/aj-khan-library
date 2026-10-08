@@ -10,6 +10,24 @@ class Response(io.BytesIO):
         super().__init__(json.dumps(value).encode())
 
 class DriveBackupTests(unittest.TestCase):
+    def test_missing_target_never_creates_fallback_audio_folder(self):
+        from unittest.mock import Mock
+        drive=Mock()
+        claim={'job':{'id':'fixture'},'book':{},'files':[]}
+        with self.assertRaises(worker.FolderAccessRequired): worker.copy_backup(claim,drive)
+        drive.folder.assert_not_called()
+
+    def test_book_folder_hierarchy_and_private_checks(self):
+        from unittest.mock import Mock
+        drive=Mock();drive.folder.side_effect=['audio_subfolder','edition_subfolder']
+        claim={'targetFolderId':'book_folder','job':{'id':'fixture','audio_book_id':'book','source_fingerprint':'fingerprint','created_at':'2026-10-08T00:00:00Z'},'book':{'narrator_name':'Arne B.','language_code':'DE'},'files':[]}
+        with patch.object(worker,'api') as backend:
+            worker.copy_backup(claim,drive)
+            self.assertEqual(drive.folder.call_args_list[0].args,('ajkBookAudio','book_folder','Hörbuch','book_folder'))
+            self.assertEqual(drive.folder.call_args_list[1].args[-1],'audio_subfolder')
+            self.assertEqual(backend.call_args.kwargs['folderId'],'edition_subfolder')
+        self.assertEqual([c.args[0] for c in drive.check_private.call_args_list],['book_folder','book_folder','audio_subfolder','edition_subfolder'])
+
     def test_missing_credentials_do_not_access_drive(self):
         with patch.dict(worker.os.environ,{},clear=True), patch.object(worker.urllib.request,'urlopen') as network:
             with self.assertRaises(worker.ConnectionRequired): worker.Drive()
