@@ -65,6 +65,25 @@ class EpubSourceTest(unittest.TestCase):
             self.assertEqual(sections[0].paragraphs[1], 'Hello dear reader. After the note.')
             self.assertIn('OEBPS/part.xhtml', diagnostics['narrative_files'])
 
+    def test_half_title_and_paragraph_part_subtitle(self):
+        with TemporaryDirectory() as d:
+            path = Path(d) / 'source.epub'
+            self.fixture(path)
+            with ZipFile(path) as z:
+                entries = [(n, z.read(n)) for n in z.namelist()]
+            with ZipFile(path, 'w') as z:
+                for n, data in entries:
+                    if n == 'OEBPS/content.opf':
+                        data = data.replace(b'</manifest>', b'<item id="half" href="half_title.xhtml" media-type="application/xhtml+xml"/><item id="part" href="part_1.xhtml" media-type="application/xhtml+xml"/></manifest>')
+                        data = data.replace(b'<itemref idref="chapter1"/>', b'<itemref idref="half"/><itemref idref="part"/><itemref idref="chapter1"/>')
+                    z.writestr(n, data)
+                z.writestr('OEBPS/half_title.xhtml', '<html><body><h1>Fixture Novel</h1></body></html>')
+                z.writestr('OEBPS/part_1.xhtml', '<html><body><h1>Part I</h1><p>The Life</p></body></html>')
+            _, sections, diagnostics = parse_epub(path, Section)
+            self.assertEqual(len(sections), 2)
+            self.assertEqual(sections[0].paragraphs[:2], ['Part I', 'The Life'])
+            self.assertIn('OEBPS/half_title.xhtml', diagnostics['non_narrative_files_skipped'])
+
     def test_unclassified_text_blocks_production(self):
         with TemporaryDirectory() as d:
             path = Path(d) / "source.epub"

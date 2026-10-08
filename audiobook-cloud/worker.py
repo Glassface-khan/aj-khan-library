@@ -777,11 +777,19 @@ def silence(seconds: float, sr: int) -> np.ndarray:
 
 
 def write_mp3(wav_path: Path, mp3_path: Path) -> None:
+    # Mono speech can use 64 kbps for long chapters while fitting the storage
+    # upload limit. Keep the established 96 kbps setting for ordinary chapters.
+    duration = sf.info(wav_path).duration
+    bitrate = 96 if duration * 12000 < 49 * 1024 * 1024 else 64
+    if duration * bitrate * 125 >= 49 * 1024 * 1024:
+        raise ValueError("Audio section exceeds upload limit even at 64 kbps; split the source section")
     subprocess.run([
         "ffmpeg", "-y", "-hide_banner", "-loglevel", "error",
         "-i", str(wav_path), "-ac", "1", "-ar", "24000",
-        "-codec:a", "libmp3lame", "-b:a", "96k", str(mp3_path),
+        "-codec:a", "libmp3lame", "-b:a", f"{bitrate}k", str(mp3_path),
     ], check=True)
+    if mp3_path.stat().st_size > 50 * 1024 * 1024:
+        raise ValueError("Encoded audio section exceeds upload limit")
 
 
 def preflight_sample_text(section: Section, max_words: int = 16) -> str:

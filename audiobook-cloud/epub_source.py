@@ -7,7 +7,7 @@ from zipfile import ZipFile
 
 EPUB_TYPE = '{http://www.idpf.org/2007/ops}type'
 LABEL = re.compile(r'^(?:chapter|kapitel|prologue|prolog|epilogue|epilog|coda|interlude|zwischenspiel)\b', re.I)
-META = re.compile(r'^(?:cover|title(?:page)?|copyright|imprint|impressum|dedication|widmung|epigraph|contents|table of contents|inhaltsverzeichnis|historical (?:note|background|context)|historische notiz|author.?s? note|afterword|nachwort|glossary|glossar|acknowledg(?:e)?ments?|about the author|scholar.?safety|notes on|reading group guide|timeline|endnotes|footnotes|bibliography|disclaimer|colophon)\b', re.I)
+META = re.compile(r'^(?:cover|half title|title(?:page)?|copyright|imprint|impressum|dedication|widmung|epigraph|contents|table of contents|inhaltsverzeichnis|historical (?:note|background|context)|historische notiz|author.?s? note|afterword|nachwort|glossary|glossar|acknowledg(?:e)?ments?|about the author|scholar.?safety|notes on|reading group guide|timeline|endnotes|footnotes|bibliography|disclaimer|colophon)\b', re.I)
 META_TYPES = {'cover', 'titlepage', 'copyright-page', 'dedication', 'toc', 'landmarks', 'loi', 'lot', 'index', 'glossary', 'bibliography', 'endnotes', 'footnotes', 'acknowledgments', 'colophon'}
 PART = re.compile(r'^(?:part|teil|book|buch)\s+(?:\d+|[ivxlcdm]+|one|two|three|four|five|six|seven|eight|nine|ten|eins|zwei|drei|vier|fünf)\b', re.I)
 SUPPLEMENT = re.compile(r'^(?:a note on history|note|context)$', re.I)
@@ -102,7 +102,11 @@ def parse_epub(path, section_class):
             # A heading-only part divider is not an empty chapter. Preserve its
             # spoken text at the start of the following narrative section.
             # Never apply this exception to a chapter or a page with body text.
-            if PART.match(first) and len(blocks) <= 2 and all(tag.startswith('h') and not LABEL.match(value) for tag, value in blocks):
+            if (PART.match(first) and len(blocks) <= 3
+                    and sum(len(value.split()) for _, value in blocks) <= 40
+                    and all(not LABEL.match(value) for _, value in blocks)
+                    and (all(tag.startswith('h') for tag, _ in blocks)
+                         or PART.match(filename))):
                 pending_part_headings.extend(value for _, value in blocks)
                 narrative_paths.append(name)
                 continue
