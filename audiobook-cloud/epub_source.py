@@ -7,10 +7,10 @@ from zipfile import ZipFile
 
 EPUB_TYPE = '{http://www.idpf.org/2007/ops}type'
 LABEL = re.compile(r'^(?:chapter|kapitel|prologue|prolog|epilogue|epilog|coda|interlude|zwischenspiel)\b', re.I)
-META = re.compile(r'^(?:cover|half title|title(?:page)?|copyright|imprint|impressum|dedication|widmung|epigraph|contents|table of contents|inhaltsverzeichnis|historical (?:note|background|context)|historische notiz|author.?s? note|afterword|nachwort|glossary|glossar|acknowledg(?:e)?ments?|about the author|scholar.?safety|notes on|reading group guide|timeline|endnotes|footnotes|bibliography|disclaimer|colophon)\b', re.I)
+META = re.compile(r'^(?:cover|half title|title(?:page)?|copyright|imprint|impressum|dedication|widmung|epigraph|contents|table of contents|inhaltsverzeichnis|historical (?:note|background|context)|historische notiz|author.?s? note|afterword|nachwort|glossary|glossar|acknowledg(?:e)?ments?|about the author|scholar.?safety|notes on|reading[ -]group guide|timeline|endnotes|footnotes|bibliography|disclaimer|colophon)\b', re.I)
 META_TYPES = {'cover', 'titlepage', 'copyright-page', 'dedication', 'toc', 'landmarks', 'loi', 'lot', 'index', 'glossary', 'bibliography', 'endnotes', 'footnotes', 'acknowledgments', 'colophon'}
 PART = re.compile(r'^(?:part|teil|book|buch)\s+(?:\d+|[ivxlcdm]+|one|two|three|four|five|six|seven|eight|nine|ten|eins|zwei|drei|vier|fünf)\b', re.I)
-SUPPLEMENT = re.compile(r'^(?:a note on history|note|context)$', re.I)
+SUPPLEMENT = re.compile(r'^(?:a note on history|note|context|series context)$', re.I)
 
 def local(tag):
     return tag.rsplit('}', 1)[-1].lower()
@@ -70,6 +70,14 @@ def parse_epub(path, section_class):
             headings = [text(n) for n in heading_nodes]
             first = headings[0] if headings else ''
             filename = re.sub(r'[_-]+', ' ', posixpath.basename(name).rsplit('.', 1)[0])
+            # Illustrated reader maps carry frontmatter semantics on a section,
+            # rather than necessarily on body. Do not generalize to prose pages.
+            if ('frontmatter' in semantic_types
+                    and re.search(r'\bmap\b', first + ' ' + filename, re.I)
+                    and any(local(n.tag) == 'img' for n in body.iter())
+                    and not any(LABEL.match(h) for h in headings)):
+                skipped.append(name)
+                continue
             if 'nav' in item.get('properties', '').split() or types & META_TYPES or META.match(first) or META.match(filename):
                 skipped.append(name)
                 continue
@@ -117,6 +125,14 @@ def parse_epub(path, section_class):
                 narrative_paths.append(name)
                 continue
             starts = [i for i, (tag, value) in enumerate(blocks) if tag.startswith('h') and LABEL.match(value)]
+            # Some exports place title, rights and contents together in ch001,
+            # even marking it bodymatter. Require all three signals to exclude it.
+            title_frontmatter = (first.casefold() == title.casefold()
+                and any(re.search(r'copyright|all rights reserved', value, re.I) for _, value in blocks)
+                and any(re.fullmatch(r'contents|table of contents|inhaltsverzeichnis', value, re.I) for _, value in blocks))
+            if title_frontmatter and not starts:
+                skipped.append(name)
+                continue
             # Preserve these editorial companion pages as spoken sections. Do
             # not silently discard ambiguous "note" or "context" content.
             supplement = bool(SUPPLEMENT.fullmatch(filename))
@@ -125,8 +141,11 @@ def parse_epub(path, section_class):
                 raise ValueError('EPUB section cannot be safely classified: ' + name + '. Please use an audiobook DOCX.')
             if not starts:
                 starts = [0]
-            elif starts[0] > 0 and any(tag == 'p' for tag, _ in blocks[:starts[0]]):
-                raise ValueError('Text before first narrative heading: ' + name)
+            # Leading epigraphs and part headings belong to the first chapter.
+            # Preserve them instead of failing or silently dropping their text.
+            leading = blocks[:starts[0]]
+            if title_frontmatter:
+                raise ValueError('Mixed title/contents and narrative EPUB section requires source review: ' + name)
             narrative_paths.append(name)
             for pos, start in enumerate(starts):
                 end = starts[pos + 1] if pos + 1 < len(starts) else len(blocks)
@@ -152,6 +171,8 @@ def parse_epub(path, section_class):
                 paragraphs = [value for _, value in chunk[offset:]]
                 if not paragraphs:
                     raise ValueError('Empty narrative EPUB section: ' + label)
+                if pos == 0 and leading:
+                    paragraphs = [value for _, value in leading] + paragraphs
                 if pending_part_headings:
                     paragraphs = pending_part_headings + paragraphs
                     pending_part_headings = []

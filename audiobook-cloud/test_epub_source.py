@@ -46,6 +46,34 @@ class EpubSourceTest(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "Empty narrative"):
                 parse_epub(path, Section)
 
+    def test_leading_text_is_preserved(self):
+        with TemporaryDirectory() as d:
+            path = Path(d) / 'source.epub'
+            self.fixture(path, '<html><body><h2>Part Two</h2><p>Opening epigraph.</p><h1>Chapter Two</h1><p>Second chapter.</p></body></html>')
+            _, sections, _ = parse_epub(path, Section)
+            self.assertEqual(sections[1].paragraphs, ['Part Two', 'Opening epigraph.', 'Second chapter.'])
+
+    def test_map_and_combined_frontmatter(self):
+        for page in (
+            '<html xmlns:epub="http://www.idpf.org/2007/ops"><body><section epub:type="frontmatter"><h1>Reader’s Map</h1><img src="map.jpg"/><p>Not to scale.</p></section></body></html>',
+            '<html><body><h1>Fixture Novel</h1><p>Copyright 2026. All rights reserved.</p><p>CONTENTS</p><p>Chapter One</p></body></html>',
+            '<html><body><h1>READING-GROUP GUIDE</h1><p>Discussion questions.</p></body></html>',
+        ):
+            with self.subTest(page=page), TemporaryDirectory() as d:
+                path = Path(d) / 'source.epub'
+                self.fixture(path)
+                with ZipFile(path) as z:
+                    entries = [(n, z.read(n)) for n in z.namelist()]
+                with ZipFile(path, 'w') as z:
+                    for n, data in entries:
+                        if n == 'OEBPS/content.opf':
+                            data = data.replace(b'</manifest>', b'<item id="extra" href="extra.xhtml" media-type="application/xhtml+xml"/></manifest>').replace(b'<itemref idref="chapter1"/>', b'<itemref idref="extra"/><itemref idref="chapter1"/>')
+                        z.writestr(n, data)
+                    z.writestr('OEBPS/extra.xhtml', page)
+                _, sections, diagnostics = parse_epub(path, Section)
+                self.assertEqual(len(sections), 2)
+                self.assertIn('OEBPS/extra.xhtml', diagnostics['non_narrative_files_skipped'])
+
     def test_part_divider_preserved_in_following_chapter(self):
         with TemporaryDirectory() as d:
             path = Path(d) / 'source.epub'

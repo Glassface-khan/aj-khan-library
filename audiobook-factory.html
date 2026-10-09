@@ -943,6 +943,9 @@ function jobRank_(j){
  if(j.status==='ready')return 3;
  return 4;
 }
+function isEpubImportProblem(j){
+ return /EPUB section cannot be safely classified|Text before first narrative heading|Empty narrative EPUB section|Mixed title\/contents and narrative EPUB section/.test(String(j.error_detail||''));
+}
 function sourceProblemText_(j){
  if(String(j.error_code||'')==='SOURCE_TITLE_MISMATCH'||String(j.stage||'')==='source_title_mismatch'){
    const requested=String(j.requested_title||'').trim();
@@ -959,6 +962,7 @@ function sourceProblemText_(j){
 }
 function statusLabel(j,queuePos){
  const complete=Number(j.progress_total||0)>0&&Number(j.progress_done||0)>=Number(j.progress_total||0);
+ if(isEpubImportProblem(j))return 'EPUB-Import prüfen';
  if(isSourceProblem(j))return 'Quelle korrigieren';
  if(j.status==='queued'){
    const p=queuePos?(' · Position '+queuePos):'';
@@ -970,10 +974,11 @@ function statusLabel(j,queuePos){
 }
 function renderJob(j,queuePos){
  const sourceProblem=isSourceProblem(j);
+ const importProblem=isEpubImportProblem(j);
  const pct=j.progress_total?Math.round(100*j.progress_done/j.progress_total):0;
  const complete=Number(j.progress_total||0)>0&&Number(j.progress_done||0)>=Number(j.progress_total||0);
  const title=j.requested_title||j.detected_title||j.source_file_name;
- const q=sourceProblem
+ const q=importProblem?'<span class="badge bad">EPUB-IMPORT</span>':sourceProblem
    ?'<span class="badge bad">QUELLE PRÜFEN</span>'
    :(j.qc_status==='passed'?'<span class="badge good">QC PASS</span>':j.qc_status==='failed'?'<span class="badge bad">QC FAIL</span>':'<span class="badge">QC '+esc(j.qc_status)+'</span>');
  let actions='';
@@ -986,11 +991,11 @@ function renderJob(j,queuePos){
    if(j.status==='needs_attention'||j.status==='failed')actions+='<button data-retry="'+j.id+'">Automatisch erneut versuchen</button>';
    if(['uploading','queued','preflight','qc_running','production','finalizing'].includes(j.status)&&!complete)actions+='<button data-cancel="'+j.id+'">Abbrechen</button>';
  }
- const progress=sourceProblem
+ const progress=(sourceProblem||importProblem)
    ?''
    :'<progress max="100" value="'+pct+'"></progress><div class="muted">'+j.progress_done+' / '+(j.progress_total||'?')+' Abschnitte · '+pct+'%</div>';
- const score=(!sourceProblem&&j.qc_score!=null)?'<span class="badge">QC '+Math.round(Number(j.qc_score))+'%</span>':'';
- const err=sourceProblem?'<p class="bad">'+esc(sourceProblemText_(j))+'</p>':(j.error_detail?'<p class="bad">'+esc(j.error_detail)+'</p>':'');
+ const score=(!sourceProblem&&!importProblem&&j.qc_score!=null)?'<span class="badge">QC '+Math.round(Number(j.qc_score))+'%</span>':'';
+ const err=importProblem?'<p class="bad">Der EPUB-Import wurde vor der Audioerstellung angehalten. Eine Wiederholung mit unverändertem Importer behebt diesen Fehler nicht.</p><p class="muted">'+esc(j.error_detail)+'</p>':sourceProblem?'<p class="bad">'+esc(sourceProblemText_(j))+'</p>':(j.error_detail?'<p class="bad">'+esc(j.error_detail)+'</p>':'');
  return '<div class="job"><div class="job-title">'+esc(title)+'</div>'+
  '<div class="job-meta">'+esc(j.voice_name)+' · '+esc(j.language_code)+' · '+esc(statusLabel(j,queuePos))+'</div>'+q+score+
  progress+err+'<div class="row">'+actions+'</div></div>';
