@@ -130,7 +130,7 @@ def parse_epub(path, section_class):
             title_frontmatter = (first.casefold() == title.casefold()
                 and any(re.search(r'copyright|all rights reserved', value, re.I) for _, value in blocks)
                 and any(re.fullmatch(r'contents|table of contents|inhaltsverzeichnis', value, re.I) for _, value in blocks))
-            if title_frontmatter and not starts:
+            if title_frontmatter and not starts and len(headings) == 1:
                 skipped.append(name)
                 continue
             # Preserve these editorial companion pages as spoken sections. Do

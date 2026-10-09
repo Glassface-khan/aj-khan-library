@@ -523,7 +523,7 @@ function isSourceProblem(j){
  const code=String(j&&j.error_code||'');
  const stage=String(j&&j.stage||'');
  const detail=String(j&&j.error_detail||'');
- return ['SOURCE_TITLE_MISMATCH','SOURCE_STRUCTURE_MISMATCH','SOURCE_LANGUAGE_MISMATCH'].includes(code) ||
+ return isEpubImportProblem(j) || ['SOURCE_TITLE_MISMATCH','SOURCE_STRUCTURE_MISMATCH','SOURCE_LANGUAGE_MISMATCH'].includes(code) ||
         ['source_title_mismatch','source_structure_mismatch','source_language_mismatch'].includes(stage) ||
         (code==='PREPRODUCTION_QC_FAILED' && /TOC\/body mismatch|has no body text|No chapter\/prologue structure/i.test(detail));
 }
