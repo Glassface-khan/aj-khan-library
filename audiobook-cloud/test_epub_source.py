@@ -53,11 +53,30 @@ class EpubSourceTest(unittest.TestCase):
             _, sections, _ = parse_epub(path, Section)
             self.assertEqual(sections[1].paragraphs, ['Part Two', 'Opening epigraph.', 'Second chapter.'])
 
+    def test_combined_title_contents_and_chapter(self):
+        with TemporaryDirectory() as d:
+            path = Path(d) / 'source.epub'
+            self.fixture(path, '<html xmlns:epub="http://www.idpf.org/2007/ops"><body><h1>Fixture Novel</h1><p>Copyright 2026</p><h2>Contents</h2><nav epub:type="toc"><h2>Chapter Two</h2><p>Navigation only</p></nav><p>CONTENTS</p><h1>Chapter Two</h1><p>First real paragraph.</p><h2>Chapter Three</h2><p>Last real paragraph.</p></body></html>')
+            _, sections, _ = parse_epub(path, Section)
+            self.assertEqual([s.label for s in sections], ['Chapter One', 'Chapter Two', 'Chapter Three'])
+            self.assertEqual(sections[1].paragraphs, ['First real paragraph.'])
+            self.assertEqual(sections[2].paragraphs, ['Last real paragraph.'])
+
+    def test_history_companion_heading_is_preserved(self):
+        with TemporaryDirectory() as d:
+            path = Path(d) / 'source.epub'
+            self.fixture(path, '<html><body><h1>A Note on the History</h1><p>Companion text must survive.</p></body></html>')
+            _, sections, _ = parse_epub(path, Section)
+            self.assertEqual(sections[1].paragraphs, ['Companion text must survive.'])
+
     def test_map_and_combined_frontmatter(self):
         for page in (
             '<html xmlns:epub="http://www.idpf.org/2007/ops"><body><section epub:type="frontmatter"><h1>Reader’s Map</h1><img src="map.jpg"/><p>Not to scale.</p></section></body></html>',
             '<html><body><h1>Fixture Novel</h1><p>Copyright 2026. All rights reserved.</p><p>CONTENTS</p><p>Chapter One</p></body></html>',
             '<html><body><h1>READING-GROUP GUIDE</h1><p>Discussion questions.</p></body></html>',
+            '<html><body><h1>Inhalt</h1><p>Kapitel 1</p></body></html>',
+            '<html><body><h1>Content Note</h1><p>Content warning.</p></body></html>',
+            '<html><body><h1>Über den Autor</h1><p>Biography.</p></body></html>',
         ):
             with self.subTest(page=page), TemporaryDirectory() as d:
                 path = Path(d) / 'source.epub'

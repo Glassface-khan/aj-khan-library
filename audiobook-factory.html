@@ -640,7 +640,7 @@ function updateLibrarySummary_(){
  $('#librarySummary').textContent=ready+' fertig · '+openLibraryJobs_().length+' offene Produktionen · '+seriesKeys.size+' Reihen · '+singles+' Einzelbände';
 }
 function renderOpenAudioRow_(j){
- const labels={uploading:'DOCX-Upload offen',queued:'In Warteschlange',preflight:'Vorprüfung',qc_running:'Qualitätsprüfung',production:'In Produktion',finalizing:'Endprüfung',needs_attention:'Prüfung nötig',failed:'Fehler – Wiederholung nötig',ready:'Veröffentlichung offen'};
+ const labels={uploading:'Quelldatei-Upload offen',queued:'In Warteschlange',preflight:'Vorprüfung',qc_running:'Qualitätsprüfung',production:'In Produktion',finalizing:'Endprüfung',needs_attention:'Prüfung nötig',failed:'Fehler – Wiederholung nötig',ready:'Veröffentlichung offen'};
  const total=Number(j.progress_total)||0,done=Number(j.progress_done)||0;
  const progress=total?Math.min(100,Math.max(0,Math.round(done/total*100))):0;
  const meta=[esc(j.voice_name||j.voice_key||'Ohne Sprecher'),esc(String(j.language_code||'').toUpperCase()),total?(done+' / '+total+' Abschnitte'):''].filter(Boolean).join(' · ');
@@ -742,6 +742,27 @@ function catalogVoiceOptions_(lang,selected=''){
  const options=voices.filter(v=>v.languageCode===lang&&v.ready);
  const preferred=selected||localStorage.getItem('ajk_factory_voice_'+lang);
  return options.length?options.map(v=>'<option value="'+esc(v.key)+'" '+(v.key===preferred?'selected':'')+'>'+esc(v.name)+'</option>').join(''):'<option value="">Keine Stimme bereit</option>';
+}
+async function resumeCatalogUpload_(jobId){
+ const j=currentJobs.find(x=>x.id===jobId);
+ if(!j||j.status!=='uploading'||epubStartBusy)return;
+ epubStartBusy=true;
+ const status=$('#error');
+ try{
+   status.textContent='Lade das vorhandene EPUB erneut für „'+(j.requested_title||'Buch')+'“ …';
+   const params=new URLSearchParams({action:'getPrivateEpub',bookTitle:j.requested_title,langCode:j.language_code,intent:'download',adminToken:token});
+   const result=await requestJsonWithTimeout_(AUTHOR_SCRIPT_URL,{method:'POST',body:params,cache:'no-store'},30000);
+   const data=result.data;
+   if(!result.response.ok||!data.ok||!data.dataBase64)throw new Error(data.error||'EPUB konnte nicht geladen werden.');
+   const raw=atob(data.dataBase64);
+   if(!raw.length||raw.length>20*1024*1024)throw new Error('Ungültige EPUB-Größe.');
+   const bytes=Uint8Array.from(raw,c=>c.charCodeAt(0));
+   if(bytes[0]!==80||bytes[1]!==75)throw new Error('Ungültiges EPUB-Archiv.');
+   const file=new File([bytes],j.source_file_name,{type:'application/epub+zip'});
+   await uploadSourceWithRetry_(file,j.id);
+   status.textContent='EPUB hochgeladen. Der vorhandene Job wartet auf die Vorprüfung.';
+ }catch(e){status.textContent='Upload nicht bestätigt: '+String(e.message||e)}
+ finally{epubStartBusy=false;await loadJobs()}
 }
 async function startCatalogEpub_(id){
  if(epubStartBusy)return;
@@ -982,12 +1003,15 @@ function renderJob(j,queuePos){
    ?'<span class="badge bad">QUELLE PRÜFEN</span>'
    :(j.qc_status==='passed'?'<span class="badge good">QC PASS</span>':j.qc_status==='failed'?'<span class="badge bad">QC FAIL</span>':'<span class="badge">QC '+esc(j.qc_status)+'</span>');
  let actions='';
- if(sourceProblem){
+ if(importProblem){
+   actions='<button data-fix-source="'+j.id+'">ANDERE QUELLE AUSWÄHLEN</button><button data-dismiss="'+j.id+'">Aus Liste ausblenden</button>';
+ }else if(sourceProblem){
    const fixLabel=(String(j.error_code||'')==='SOURCE_LANGUAGE_MISMATCH'||String(j.stage||'')==='source_language_mismatch')
      ?'SPRACHE / STIMME KORRIGIEREN'
      :'KORRIGIERTE DOCX AUSWÄHLEN';
    actions='<button data-fix-source="'+j.id+'">'+fixLabel+'</button><button data-dismiss="'+j.id+'">Aus Liste ausblenden</button>';
  }else{
+   if(j.status==='uploading'&&/\.epub$/i.test(j.source_file_name||'')&&j.site_book_id)actions+='<button data-resume-upload="'+j.id+'">EPUB-UPLOAD FORTSETZEN</button>';
    if(j.status==='needs_attention'||j.status==='failed')actions+='<button data-retry="'+j.id+'">Automatisch erneut versuchen</button>';
    if(['uploading','queued','preflight','qc_running','production','finalizing'].includes(j.status)&&!complete)actions+='<button data-cancel="'+j.id+'">Abbrechen</button>';
  }
@@ -995,7 +1019,7 @@ function renderJob(j,queuePos){
    ?''
    :'<progress max="100" value="'+pct+'"></progress><div class="muted">'+j.progress_done+' / '+(j.progress_total||'?')+' Abschnitte · '+pct+'%</div>';
  const score=(!sourceProblem&&!importProblem&&j.qc_score!=null)?'<span class="badge">QC '+Math.round(Number(j.qc_score))+'%</span>':'';
- const err=importProblem?'<p class="bad">Der EPUB-Import wurde vor der Audioerstellung angehalten. Eine Wiederholung mit unverändertem Importer behebt diesen Fehler nicht.</p><p class="muted">'+esc(j.error_detail)+'</p>':sourceProblem?'<p class="bad">'+esc(sourceProblemText_(j))+'</p>':(j.error_detail?'<p class="bad">'+esc(j.error_detail)+'</p>':'');
+ const err=importProblem?'<p class="bad">Der EPUB-Import wurde vor der Audioerstellung angehalten. Der Importer konnte die Buchstruktur nicht zuordnen. Das bedeutet nicht, dass dein Manuskript fehlerhaft ist.</p><p class="muted">'+esc(j.error_detail)+'</p>':sourceProblem?'<p class="bad">'+esc(sourceProblemText_(j))+'</p>':(j.error_detail?'<p class="bad">'+esc(j.error_detail)+'</p>':'');
  return '<div class="job"><div class="job-title">'+esc(title)+'</div>'+
  '<div class="job-meta">'+esc(j.voice_name)+' · '+esc(j.language_code)+' · '+esc(statusLabel(j,queuePos))+'</div>'+q+score+
  progress+err+'<div class="row">'+actions+'</div></div>';
@@ -1040,6 +1064,7 @@ async function loadJobs(){
    const published=currentJobs.filter(j=>j.status==='ready'&&j.stage==='published').length;
    $('#jobs').innerHTML=(visible.length?visible.map(j=>renderJob(j,qpos.get(j.id))).join(''):'<p class="muted">Keine aktiven Cloud-Jobs.</p>')+
      (published?'<p class="muted" style="margin-top:18px">✓ '+published+' abgeschlossene/veröffentlichte Jobs sind hier ausgeblendet und in der Audio-Bibliothek verfügbar.</p>':'');
+   document.querySelectorAll('[data-resume-upload]').forEach(b=>b.onclick=()=>resumeCatalogUpload_(b.dataset.resumeUpload));
    document.querySelectorAll('[data-retry]').forEach(b=>b.onclick=async()=>{try{await api({op:'retryJob',jobId:b.dataset.retry});await loadJobs()}catch(e){$('#error').textContent=e.message}});
    document.querySelectorAll('[data-cancel]').forEach(b=>b.onclick=async()=>{if(confirm('Job wirklich abbrechen?')){await api({op:'cancelJob',jobId:b.dataset.cancel});await loadJobs()}});
    document.querySelectorAll('[data-dismiss]').forEach(b=>b.onclick=async()=>{if(confirm('Diesen fehlerhaften Job aus der Liste ausblenden?')){await api({op:'cancelJob',jobId:b.dataset.dismiss});await loadJobs()}});
