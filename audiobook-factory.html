@@ -103,6 +103,7 @@ pre{white-space:pre-wrap;word-break:break-word;font-size:11px;background:#11100d
         <input id="voiceFile" type="file" accept=".wav,.mp3,audio/wav,audio/mpeg">
         <label style="text-transform:none;letter-spacing:0"><input id="voiceRights" type="checkbox"> Ich bestätige, dass ich die erforderliche Einwilligung/Rechte zur Nutzung dieser Referenzstimme für Voice Cloning habe.</label>
         <button id="uploadVoice">Referenzstimme speichern</button>
+        <p id="voiceUploadStatus" class="muted" role="status" aria-live="polite"></p>
       </div>
       <div class="full" id="gate">
         <strong>Automatisches Qualitäts-Gate vor der Produktion</strong>
@@ -344,10 +345,13 @@ function renderVoices(){
   voices.filter(v=>v.languageCode===lang).forEach(v=>{
     const o=document.createElement('option');o.value=v.key;o.textContent=v.name+(v.ready?'':' · Referenz fehlt');s.appendChild(o);
   });
-  if([...s.options].some(o=>o.value===prev))s.value=prev;
+  // An explicitly selected voice must never be overwritten by an old
+  // localStorage preference during catalog refresh or after file selection.
   const preferred=localStorage.getItem('ajk_factory_voice_'+lang);
-  if(preferred&&[...s.options].some(o=>o.value===preferred))s.value=preferred;
-  if(!s.value&&s.options.length)s.value=s.options[0].value;
+  const optionExists=key=>!!key&&[...s.options].some(o=>o.value===key);
+  if(optionExists(prev))s.value=prev;
+  else if(optionExists(preferred))s.value=preferred;
+  else if(s.options.length)s.value=s.options[0].value;
   updateVoiceInfo();
 }
 function updateVoiceInfo(){
@@ -413,23 +417,55 @@ function syncBookLanguage(){
  renderVoices();
  updateStartAvailability();
 }
+let voiceUploadBusy_=false;
 async function uploadMissingVoice(){
+  if(voiceUploadBusy_)return;
   $('#error').textContent='';
+  const feedback=$('#voiceUploadStatus');
+  const button=$('#uploadVoice');
   try{
     const file=$('#voiceFile').files[0];if(!file)throw new Error('Bitte WAV- oder MP3-Datei auswählen.');
     if(!$('#voiceRights').checked)throw new Error('Bitte Nutzungsrechte/Einwilligung bestätigen.');
     const selected=voices.find(v=>v.key===$('#voice').value&&v.sourceType==='asset');
     if(!selected)throw new Error('Bitte eine Stimme mit eigener Referenz auswählen.');
+    // Gandalf's references must never replace an unrelated established voice.
+    const fname=file.name.toLowerCase();
+    const namedGandalf=/gandalf[ _.-]*(?:de|en)/.exec(fname);
+    if(namedGandalf){
+      const intended=/gandalf[ _.-]*de/.test(fname)?'gandalf_de':'gandalf_en';
+      if(selected.key!==intended)throw new Error('Falsche Stimme ausgewählt: '+file.name+' gehört zu '+(intended==='gandalf_de'?'Gandalf DE':'Gandalf EN')+', nicht zu '+selected.name+'. Bitte oben im Feld „Stimme“ korrigieren.');
+    }
+    const replacing=!!selected.ready;
+    if(replacing&&!window.confirm('ACHTUNG: Die vorhandene Referenzstimme „'+selected.name+'“ würde dauerhaft überschrieben. Möchtest du genau diese Stimme wirklich ersetzen?'))return;
+    voiceUploadBusy_=true;
+    button.disabled=true;
+    const selectedKey=selected.key;
+    feedback.textContent='Lade „'+file.name+'“ ausschließlich für „'+selected.name+'“ hoch … Bitte warten.';
     const r=await fetch(API,{method:'POST',headers:{
-      'x-ajk-op':'upload-voice','x-admin-token':token,'x-factory-session':factorySession,'x-voice-key':selected.key,'x-voice-format':(file.name.toLowerCase().endsWith('.mp3')?'mp3':'wav'),'Content-Type':file.type||'application/octet-stream'
+      'x-ajk-op':'upload-voice','x-admin-token':token,'x-factory-session':factorySession,
+      'x-voice-key':selectedKey,
+      'x-voice-format':(fname.endsWith('.mp3')?'mp3':'wav'),
+      'x-ajk-confirm-replace':replacing?'yes':'no',
+      'Content-Type':file.type||'application/octet-stream'
     },body:file});
-    const d=await r.json();if(!r.ok||!d.ok)throw new Error(d.error||'Upload fehlgeschlagen');
+    const d=await r.json();
+    if(!r.ok||!d.ok)throw new Error(d.detail||d.error||'Upload fehlgeschlagen');
+    // Keep chosen voice selected even if refresh occurs during the upload.
+    try{localStorage.setItem('ajk_factory_voice_'+$('#lang').value,selectedKey)}catch(_){}
+    await loadVoices();
+    if([...$('#voice').options].some(o=>o.value===selectedKey))$('#voice').value=selectedKey;
+    updateVoiceInfo();
     $('#voiceFile').value='';
     $('#voiceRights').checked=false;
-    await loadVoices();
-    $('#voice').value=selected.key;
-    updateVoiceInfo();
-  }catch(e){$('#error').textContent=e.message}
+    feedback.textContent='✓ „'+selected.name+'“ ist gespeichert und einsatzbereit.';
+    void checkExistingEdition();
+  }catch(e){
+    $('#error').textContent=String(e.message||e);
+    feedback.textContent='Upload nicht abgeschlossen. Deine ausgewählte Datei bleibt erhalten.';
+  }finally{
+    voiceUploadBusy_=false;
+    button.disabled=false;
+  }
 }
 function selectedJobKey(file,b,voice){
  const bookKey=b?b.id:standaloneBookIdFromFilename(file.name);
@@ -1150,7 +1186,18 @@ $('#source').onchange=()=>{
 };
 $('#book').onchange=()=>{resetJobSubmitState();syncBookLanguage();void checkExistingEdition()};
 $('#lang').onchange=()=>{resetJobSubmitState();renderVoices();updateStartAvailability();void checkExistingEdition()};
-$('#voice').onchange=()=>{resetJobSubmitState();updateVoiceInfo();void checkExistingEdition()};
+$('#voice').onchange=()=>{
+ resetJobSubmitState();
+ try{localStorage.setItem('ajk_factory_voice_'+$('#lang').value,$('#voice').value)}catch(_){}
+ updateVoiceInfo();
+ const f=$('#voiceFile').files[0];
+ if(f)$('#voiceUploadStatus').textContent='Ausgewählte Datei: '+f.name+' · Zielstimme: '+($('#voice').selectedOptions[0]?.textContent||'')+'. Bitte vor dem Hochladen prüfen.';
+ void checkExistingEdition();
+};
+$('#voiceFile').onchange=()=>{
+ const f=$('#voiceFile').files[0];
+ $('#voiceUploadStatus').textContent=f?('Datei ausgewählt: '+f.name+' · Zielstimme: '+($('#voice').selectedOptions[0]?.textContent||'')+'.'):'';
+};
 $('#replaceEditionAck').onchange=updateStartAvailability;
 $('#start').onclick=()=>startJob();
 $('#refresh').onclick=loadJobs;
