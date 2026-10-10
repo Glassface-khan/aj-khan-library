@@ -145,7 +145,7 @@ def is_section_label(text: str) -> bool:
 
     if re.fullmatch(
         r"(?:PROLOGUE|PROLOG|EPILOGUE|EPILOG|CODA|INTERLUDE|ZWISCHENSPIEL)"
-        r"(?:\s*[:—–-]\s*[^\n]{1,100})?",
+        r"(?:\s*[:—–·-]\s*[^\n]{1,100})?",
         raw,
         re.I,
     ):
@@ -154,12 +154,20 @@ def is_section_label(text: str) -> bool:
     if re.fullmatch(r"[A-ZÄÖÜ][A-Za-zÄÖÜäöüß-]+\s+KAPITEL", raw, re.I):
         return True
 
+    # Some literary DOCX masters number chapters without the word CHAPTER:
+    # "1 · Now, Day 40 · The Notice" and "46a · The Measure of Water".
+    # Require a short, standalone numbered heading separated by a middle dot;
+    # plain numbered prose or a list item must not be treated as a chapter.
+    numeric_heading = re.fullmatch(r"(\d{1,2}[a-i]?)\s*·\s*([^\n]{2,125})", raw, re.I)
+    if numeric_heading and len(words(numeric_heading.group(2))) <= 18:
+        return True
+
     m = re.match(r"^(CHAPTER|KAPITEL)\s+(.+)$", raw, re.I)
     if not m:
         return False
 
     rest = m.group(2).strip()
-    parts = re.split(r"\s*:\s*|\s+[—–]\s+|\s+-\s+", rest, maxsplit=1)
+    parts = re.split(r"\s*:\s*|\s+[—–]\s+|\s+-\s+|\s*·\s*", rest, maxsplit=1)
     ordinal = parts[0].strip()
     title = parts[1].strip() if len(parts) > 1 else ""
 
