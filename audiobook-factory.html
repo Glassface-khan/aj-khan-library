@@ -21,8 +21,8 @@ button.primary{background:var(--ink);color:#171510}button:disabled{opacity:.45;c
 .badge{display:inline-block;border:1px solid var(--rule);border-radius:999px;padding:4px 8px;font-size:11px;margin-right:5px}
 .good{color:var(--good)}.bad{color:var(--bad)}.gold{color:var(--gold)}
 progress{width:100%;height:18px;accent-color:var(--gold)}
-.job{border-top:1px solid var(--rule);padding:16px 0}.job:first-child{border-top:0}
-.job-title{font-family:Georgia,serif;font-size:23px}.job-meta{font-size:12px;color:var(--muted);margin:5px 0 10px}
+.job{border-top:1px solid var(--rule);padding:16px 0;min-width:0}.job:first-child{border-top:0}
+.job-title{font-family:Georgia,serif;font-size:23px;overflow-wrap:anywhere;word-break:break-word}.job-meta{font-size:12px;color:var(--muted);margin:5px 0 10px}
 pre{white-space:pre-wrap;word-break:break-word;font-size:11px;background:#11100d;padding:10px;border-radius:8px;max-height:220px;overflow:auto}
 #gate{border-left:4px solid var(--gold)}#error{color:var(--bad);min-height:1.2em}
 .edition-warning{margin-top:12px;padding:14px 15px;border:1px solid var(--gold);border-left:4px solid var(--gold);border-radius:10px;background:rgba(199,155,74,.08)}
@@ -1022,7 +1022,12 @@ function isSevereVoiceQc_(j){
    Number.isFinite(score) && score<15 && Number(j.progress_total||0)>0 &&
    Number(j.progress_done||0)===0;
 }
+function isRecoverableHeadingProblem_(j){
+ return String(j&&j.error_detail||'').trim()==='No chapter/prologue structure could be detected'
+   && /\.docx$/i.test(String(j&&j.source_file_name||''));
+}
 function sourceProblemText_(j){
+ if(isRecoverableHeadingProblem_(j))return 'Die Kapitelüberschriften dieser DOCX wurden bisher nicht erkannt. Der Importer wurde aktualisiert. Du kannst dieselbe Datei unverändert neu prüfen lassen; anschließend ist die Stimmen-QC weiterhin erforderlich.';
  if(String(j.error_code||'')==='SOURCE_TITLE_MISMATCH'||String(j.stage||'')==='source_title_mismatch'){
    const requested=String(j.requested_title||'').trim();
    const detected=String(j.detected_title||'').trim();
@@ -1062,10 +1067,14 @@ function renderJob(j,queuePos){
  if(importProblem){
    actions='<button data-fix-source="'+j.id+'">ANDERE QUELLE AUSWÄHLEN</button><button data-dismiss="'+j.id+'">Aus Liste ausblenden</button>';
  }else if(sourceProblem){
-   const fixLabel=(String(j.error_code||'')==='SOURCE_LANGUAGE_MISMATCH'||String(j.stage||'')==='source_language_mismatch')
-     ?'SPRACHE / STIMME KORRIGIEREN'
-     :'KORRIGIERTE DOCX AUSWÄHLEN';
-   actions='<button data-fix-source="'+j.id+'">'+fixLabel+'</button><button data-dismiss="'+j.id+'">Aus Liste ausblenden</button>';
+   if(isRecoverableHeadingProblem_(j)){
+     actions='<button data-retry-heading="'+j.id+'">KAPITELERKENNUNG ERNEUT PRÜFEN</button><button data-fix-source="'+j.id+'">ANDERE DOCX AUSWÄHLEN</button><button data-dismiss="'+j.id+'">Aus Liste ausblenden</button>';
+   }else{
+     const fixLabel=(String(j.error_code||'')==='SOURCE_LANGUAGE_MISMATCH'||String(j.stage||'')==='source_language_mismatch')
+       ?'SPRACHE / STIMME KORRIGIEREN'
+       :'KORRIGIERTE DOCX AUSWÄHLEN';
+     actions='<button data-fix-source="'+j.id+'">'+fixLabel+'</button><button data-dismiss="'+j.id+'">Aus Liste ausblenden</button>';
+   }
  }else{
    if(j.status==='uploading'&&/\.epub$/i.test(j.source_file_name||'')&&j.site_book_id){
      const busy=!!uploadFeedback_.get(j.id)?.busy;
@@ -1136,6 +1145,13 @@ async function loadJobs(){
      updateVoiceInfo();
      $('#voiceUploadStatus').textContent='Bitte für „'+(j.voice_name||'diese Stimme')+'“ eine verbesserte Referenz auswählen oder einen anderen Erzähler wählen.';
      $('#newJob').scrollIntoView({behavior:'smooth',block:'start'});
+   });
+   document.querySelectorAll('[data-retry-heading]').forEach(b=>b.onclick=async()=>{
+     if(!confirm('Die vorhandene DOCX wird unverändert mit der verbesserten Kapitelerkennung erneut geprüft. Danach läuft auch die Stimmen-QC. Jetzt starten?'))return;
+     const button=b;button.disabled=true;
+     try{await api({op:'retryJob',jobId:button.dataset.retryHeading});await loadJobs()}
+     catch(e){$('#error').textContent=String(e.message||e)}
+     finally{button.disabled=false}
    });
    document.querySelectorAll('[data-retry]').forEach(b=>b.onclick=async()=>{
      const j=currentJobs.find(x=>x.id===b.dataset.retry);
