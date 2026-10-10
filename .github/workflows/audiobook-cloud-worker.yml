@@ -5,6 +5,7 @@ name: Audiobook Cloud Worker
 # storage-path repair wake-up: 2026-10-04
 # queue recovery wake-up: das-verlassen-2026-10-04
 # queue wake-up: hand-that-sees-segmentation-2026-10-10
+# queue wake-up: weight-of-the-air-maggie-2026-10-10
 
 on:
   push:
