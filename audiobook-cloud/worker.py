@@ -821,12 +821,13 @@ def load_tts(language: str, voice_source: str, workdir: Path, temp: float | None
             ], check=True)
             voice_path = str(normalized_voice)
 
-    if voice_key == "gandalf_de":
-        # Exactly the 4-17 second reference crop passed both independent
-        # German ASR/QC probes; the original 36 second reference failed.
+    if voice_key in {"gandalf_de", "gandalf_en"}:
+        # Independently validated 4-17s crops for each Gandalf voice:
+        # German with native temp; English with temp 0.3 passed 3/3 probes.
+        # Keep these exact prompts in preflight and full production.
         if normalized_voice is None:
-            raise ValueError("Gandalf DE requires the signed voice recording")
-        clipped_voice = workdir / "voice_gandalf_de_4_17.wav"
+            raise ValueError("Gandalf voice requires the signed voice recording")
+        clipped_voice = workdir / f"voice_{voice_key}_4_17.wav"
         subprocess.run([
             "ffmpeg", "-y", "-hide_banner", "-loglevel", "error",
             "-ss", "4", "-i", str(normalized_voice), "-t", "13",
@@ -834,7 +835,7 @@ def load_tts(language: str, voice_source: str, workdir: Path, temp: float | None
             str(clipped_voice),
         ], check=True)
         if sf.info(clipped_voice).duration < 12.5:
-            raise ValueError("Gandalf DE reference crop is incomplete")
+            raise ValueError("Gandalf reference crop is incomplete")
         voice_path = str(clipped_voice)
 
     state = model.get_state_for_audio_prompt(voice_path)
@@ -1113,7 +1114,7 @@ def prepare(args: argparse.Namespace) -> int:
                     model, state = load_tts_from_prepared(
                         voice["ttsLanguage"],
                         preflight_state_path,
-                        temp=(None if voice.get("key") in {"gandalf_de", "jessica_de"} else max(0.20, 0.30 - 0.05 * sample_attempt)),
+                        temp=(None if voice.get("key") in {"gandalf_de", "jessica_de"} else 0.30 if voice.get("key") == "gandalf_en" else max(0.20, 0.30 - 0.05 * sample_attempt)),
                     )
 
             assert result is not None
@@ -1223,7 +1224,7 @@ def produce_section(job: dict[str, Any], section: Section, model, state, asr: As
                 break
             model, state = load_tts_from_prepared(
                 job["tts_language"], Path(job["voice_state_path"]),
-                temp=(None if job.get("voice_key") in {"gandalf_de", "jessica_de"} else max(0.20, 0.30 - 0.05 * attempt)),
+                temp=(None if job.get("voice_key") in {"gandalf_de", "jessica_de"} else 0.30 if job.get("voice_key") == "gandalf_en" else max(0.20, 0.30 - 0.05 * attempt)),
             )
             sr = model.sample_rate
         if not success:
