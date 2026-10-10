@@ -1,0 +1,75 @@
+name: Private Jessica Narrator QC
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/jessica-voice-diagnostic.yml"
+      - "audiobook-cloud/jessica_voice_diagnostic.py"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: ajk-private-jessica-qc
+  cancel-in-progress: false
+
+jobs:
+  probe:
+    name: Jessica ${{ matrix.voice }} read-only QC
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        voice: [jessica_de, jessica_en]
+    env:
+      HF_TOKEN: ${{ secrets.HF_TOKEN }}
+      OMP_NUM_THREADS: "2"
+      MKL_NUM_THREADS: "2"
+      TOKENIZERS_PARALLELISM: "false"
+      HF_HUB_DISABLE_TELEMETRY: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: audiobook-cloud/requirements.txt
+      - name: Obtain private signed reference through narrow OIDC access
+        shell: bash
+        env:
+          VOICE: ${{ matrix.voice }}
+        run: |
+          set -euo pipefail
+          OIDC_JSON="$(curl --fail --silent --show-error -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=ajk-audiobook-factory")"
+          OIDC_TOKEN="$(printf '%s' "$OIDC_JSON" | jq -r '.value')"
+          jq -n --arg key "$VOICE" '{op:"workerVoice",voiceKey:$key}' > /tmp/private-voice-request.json
+          curl --fail --silent --show-error \
+            -H "Authorization: Bearer $OIDC_TOKEN" \
+            -H "Content-Type: application/json" \
+            --data-binary @/tmp/private-voice-request.json \
+            "https://ipoqyjrojljmbqslmxxf.supabase.co/functions/v1/audiobook-factory" \
+            > /tmp/private-jessica-voice.json
+          jq -e --arg key "$VOICE" '.ok == true and .voice.key == $key' /tmp/private-jessica-voice.json >/dev/null
+      - name: Prepare synthesizer and private ASR runtime
+        shell: bash
+        run: |
+          set -euo pipefail
+          command -v ffmpeg >/dev/null || (sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg libsndfile1)
+          python -m pip install torch --index-url https://download.pytorch.org/whl/cpu
+          python -m pip install -r audiobook-cloud/requirements.txt
+      - name: Compare natural and trimmed Jessica references, verify three phrases each
+        shell: bash
+        env:
+          VOICE: ${{ matrix.voice }}
+        run: |
+          set -euo pipefail
+          python audiobook-cloud/jessica_voice_diagnostic.py --voice-key "$VOICE" --response-file /tmp/private-jessica-voice.json --workdir /tmp/private-jessica-qc
+      - name: Remove ephemeral voice material and credentials
+        if: always()
+        run: |
+          rm -f /tmp/private-jessica-voice.json /tmp/private-voice-request.json
+          rm -rf /tmp/private-jessica-qc
