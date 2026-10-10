@@ -1015,6 +1015,13 @@ function jobRank_(j){
 function isEpubImportProblem(j){
  return /EPUB section cannot be safely classified|Text before first narrative heading|Empty narrative EPUB section|Mixed title\/contents and narrative EPUB section/.test(String(j.error_detail||''));
 }
+function isSevereVoiceQc_(j){
+ const score=Number(j&&j.qc_score);
+ return String(j&&j.error_code||'')==='PREPRODUCTION_QC_FAILED' &&
+   String(j&&j.qc_status||'')==='failed' && j.qc_score!=null &&
+   Number.isFinite(score) && score<15 && Number(j.progress_total||0)>0 &&
+   Number(j.progress_done||0)===0;
+}
 function sourceProblemText_(j){
  if(String(j.error_code||'')==='SOURCE_TITLE_MISMATCH'||String(j.stage||'')==='source_title_mismatch'){
    const requested=String(j.requested_title||'').trim();
@@ -1044,6 +1051,7 @@ function statusLabel(j,queuePos){
 function renderJob(j,queuePos){
  const sourceProblem=isSourceProblem(j);
  const importProblem=isEpubImportProblem(j);
+ const voiceQcProblem=isSevereVoiceQc_(j);
  const pct=j.progress_total?Math.round(100*j.progress_done/j.progress_total):0;
  const complete=Number(j.progress_total||0)>0&&Number(j.progress_done||0)>=Number(j.progress_total||0);
  const title=j.requested_title||j.detected_title||j.source_file_name;
@@ -1063,14 +1071,17 @@ function renderJob(j,queuePos){
      const busy=!!uploadFeedback_.get(j.id)?.busy;
      actions+='<button data-resume-upload="'+j.id+'" aria-busy="'+busy+'" '+(busy?'disabled':'')+'>'+(busy?'EPUB WIRD GELADEN …':'EPUB-UPLOAD FORTSETZEN')+'</button>';
    }
-   if(j.status==='needs_attention'||j.status==='failed')actions+='<button data-retry="'+j.id+'">Automatisch erneut versuchen</button>';
+   if(j.status==='needs_attention'||j.status==='failed'){
+     if(voiceQcProblem)actions+='<button data-voice-qc="'+j.id+'">STIMME / REFERENZ PRÜFEN</button><button data-retry="'+j.id+'">NACH KORREKTUR ERNEUT VERSUCHEN</button>';
+     else actions+='<button data-retry="'+j.id+'">Automatisch erneut versuchen</button>';
+   }
    if(['uploading','queued','preflight','qc_running','production','finalizing'].includes(j.status)&&!complete)actions+='<button data-cancel="'+j.id+'">Abbrechen</button>';
  }
  const progress=(sourceProblem||importProblem)
    ?''
    :'<progress max="100" value="'+pct+'"></progress><div class="muted">'+j.progress_done+' / '+(j.progress_total||'?')+' Abschnitte · '+pct+'%</div>';
  const score=(!sourceProblem&&!importProblem&&j.qc_score!=null)?'<span class="badge">QC '+Math.round(Number(j.qc_score))+'%</span>':'';
- const err=importProblem?'<p class="bad">Der EPUB-Import wurde vor der Audioerstellung angehalten. Der Importer konnte die Buchstruktur nicht zuordnen. Das bedeutet nicht, dass dein Manuskript fehlerhaft ist.</p><p class="muted">'+esc(j.error_detail)+'</p>':sourceProblem?'<p class="bad">'+esc(sourceProblemText_(j))+'</p>':(j.error_detail?'<p class="bad">'+esc(j.error_detail)+'</p>':'');
+ const err=importProblem?'<p class="bad">Der EPUB-Import wurde vor der Audioerstellung angehalten. Der Importer konnte die Buchstruktur nicht zuordnen. Das bedeutet nicht, dass dein Manuskript fehlerhaft ist.</p><p class="muted">'+esc(j.error_detail)+'</p>':sourceProblem?'<p class="bad">'+esc(sourceProblemText_(j))+'</p>':voiceQcProblem?'<p class="bad">Die Stimmprobe „'+esc(j.voice_name||j.voice_key||'')+'“ ist bei der Texttreue-Prüfung massiv gescheitert (QC '+Math.round(Number(j.qc_score))+' %). Bitte zuerst die Stimmreferenz verbessern oder einen anderen Erzähler wählen. Wiederholungen ohne Änderung beheben das in der Regel nicht.</p>':(j.error_detail?'<p class="bad">'+esc(j.error_detail)+'</p>':'');
  return '<div class="job"><div class="job-title">'+esc(title)+'</div>'+
  '<div class="job-meta">'+esc(j.voice_name)+' · '+esc(j.language_code)+' · '+esc(statusLabel(j,queuePos))+'</div>'+q+score+
  progress+err+'<div class="row">'+actions+'</div><p class="muted" role="status" aria-live="polite" data-upload-feedback="'+esc(j.id)+'">'+esc(uploadFeedback_.get(j.id)?.message||'')+'</p></div>';
@@ -1116,7 +1127,21 @@ async function loadJobs(){
    $('#jobs').innerHTML=(visible.length?visible.map(j=>renderJob(j,qpos.get(j.id))).join(''):'<p class="muted">Keine aktiven Cloud-Jobs.</p>')+
      (published?'<p class="muted" style="margin-top:18px">✓ '+published+' abgeschlossene/veröffentlichte Jobs sind hier ausgeblendet und in der Audio-Bibliothek verfügbar.</p>':'');
    document.querySelectorAll('[data-resume-upload]').forEach(b=>b.onclick=()=>resumeCatalogUpload_(b.dataset.resumeUpload));
-   document.querySelectorAll('[data-retry]').forEach(b=>b.onclick=async()=>{try{await api({op:'retryJob',jobId:b.dataset.retry});await loadJobs()}catch(e){$('#error').textContent=e.message}});
+   document.querySelectorAll('[data-voice-qc]').forEach(b=>b.onclick=()=>{
+     const j=currentJobs.find(x=>x.id===b.dataset.voiceQc);
+     if(!j)return;
+     $('#lang').value=String(j.language_code||'EN').toUpperCase();
+     renderVoices();
+     if([...$('#voice').options].some(o=>o.value===j.voice_key))$('#voice').value=j.voice_key;
+     updateVoiceInfo();
+     $('#voiceUploadStatus').textContent='Bitte für „'+(j.voice_name||'diese Stimme')+'“ eine verbesserte Referenz auswählen oder einen anderen Erzähler wählen.';
+     $('#newJob').scrollIntoView({behavior:'smooth',block:'start'});
+   });
+   document.querySelectorAll('[data-retry]').forEach(b=>b.onclick=async()=>{
+     const j=currentJobs.find(x=>x.id===b.dataset.retry);
+     if(isSevereVoiceQc_(j)&&!confirm('Bisherige Sprachprobe erreichte nur '+Math.round(Number(j.qc_score))+' % QC. Hast du die Referenz korrigiert? Ohne Änderung ist ein erneuter Fehler wahrscheinlich. Trotzdem neu starten?'))return;
+     try{await api({op:'retryJob',jobId:b.dataset.retry});await loadJobs()}catch(e){$('#error').textContent=e.message}
+   });
    document.querySelectorAll('[data-cancel]').forEach(b=>b.onclick=async()=>{if(confirm('Job wirklich abbrechen?')){await api({op:'cancelJob',jobId:b.dataset.cancel});await loadJobs()}});
    document.querySelectorAll('[data-dismiss]').forEach(b=>b.onclick=async()=>{if(confirm('Diesen fehlerhaften Job aus der Liste ausblenden?')){await api({op:'cancelJob',jobId:b.dataset.dismiss});await loadJobs()}});
    document.querySelectorAll('[data-fix-source]').forEach(b=>b.onclick=()=>prepareSourceReplacement_(b.dataset.fixSource));
