@@ -785,12 +785,14 @@ def transcript_pass(scores: dict[str, float], language_code: str, source_words: 
     return not reasons, reasons
 
 
-def load_tts(language: str, voice_source: str, workdir: Path, temp: float = 0.3):
+def load_tts(language: str, voice_source: str, workdir: Path, temp: float | None = 0.3, voice_key: str = ""):
     from pocket_tts import TTSModel
-    model = TTSModel.load_model(language=language, temp=temp)
+    # Validated 2026-10-10: Gandalf DE needs the German native temperature.
+    model = TTSModel.load_model(language=language, temp=(None if voice_key == "gandalf_de" else temp))
     voice_path = voice_source
     downloaded_voice: Path | None = None
     normalized_voice: Path | None = None
+    clipped_voice: Path | None = None
 
     if voice_source.startswith("http://") or voice_source.startswith("https://"):
         lower = voice_source.lower()
@@ -819,9 +821,25 @@ def load_tts(language: str, voice_source: str, workdir: Path, temp: float = 0.3)
             ], check=True)
             voice_path = str(normalized_voice)
 
+    if voice_key == "gandalf_de":
+        # Exactly the 4-17 second reference crop passed both independent
+        # German ASR/QC probes; the original 36 second reference failed.
+        if normalized_voice is None:
+            raise ValueError("Gandalf DE requires the signed voice recording")
+        clipped_voice = workdir / "voice_gandalf_de_4_17.wav"
+        subprocess.run([
+            "ffmpeg", "-y", "-hide_banner", "-loglevel", "error",
+            "-ss", "4", "-i", str(normalized_voice), "-t", "13",
+            "-ac", "1", "-ar", "24000", "-c:a", "pcm_s16le",
+            str(clipped_voice),
+        ], check=True)
+        if sf.info(clipped_voice).duration < 12.5:
+            raise ValueError("Gandalf DE reference crop is incomplete")
+        voice_path = str(clipped_voice)
+
     state = model.get_state_for_audio_prompt(voice_path)
 
-    for temp_path in (downloaded_voice, normalized_voice):
+    for temp_path in (downloaded_voice, normalized_voice, clipped_voice):
         if temp_path is not None:
             try:
                 temp_path.unlink(missing_ok=True)
@@ -830,7 +848,7 @@ def load_tts(language: str, voice_source: str, workdir: Path, temp: float = 0.3)
     return model, state
 
 
-def load_tts_from_prepared(language: str, state_path: Path, temp: float = 0.3):
+def load_tts_from_prepared(language: str, state_path: Path, temp: float | None = 0.3):
     from pocket_tts import TTSModel
     model = TTSModel.load_model(language=language, temp=temp)
     state = model.get_state_for_audio_prompt(str(state_path))
@@ -1049,7 +1067,7 @@ def prepare(args: argparse.Namespace) -> int:
     )
 
     try:
-        model, state = load_tts(voice["ttsLanguage"], voice["source"], workdir)
+        model, state = load_tts(voice["ttsLanguage"], voice["source"], workdir, voice_key=voice["key"])
         asr = AsrChecker(job["language_code"])
         picks = sorted(set([0, len(sections) // 2, len(sections) - 1]))
         sample_results = []
@@ -1095,7 +1113,7 @@ def prepare(args: argparse.Namespace) -> int:
                     model, state = load_tts_from_prepared(
                         voice["ttsLanguage"],
                         preflight_state_path,
-                        temp=max(0.20, 0.30 - 0.05 * sample_attempt),
+                        temp=(None if voice.get("key") == "gandalf_de" else max(0.20, 0.30 - 0.05 * sample_attempt)),
                     )
 
             assert result is not None
@@ -1205,7 +1223,7 @@ def produce_section(job: dict[str, Any], section: Section, model, state, asr: As
                 break
             model, state = load_tts_from_prepared(
                 job["tts_language"], Path(job["voice_state_path"]),
-                temp=max(0.20, 0.30 - 0.05 * attempt),
+                temp=(None if job.get("voice_key") == "gandalf_de" else max(0.20, 0.30 - 0.05 * attempt)),
             )
             sr = model.sample_rate
         if not success:
@@ -1289,11 +1307,11 @@ def produce(args: argparse.Namespace) -> int:
         try:
             if model is None or sections_since_reload >= MODEL_RELOAD_EVERY_SECTIONS:
                 if not voice_state_path.exists():
-                    model, state = load_tts(voice["ttsLanguage"], voice["source"], workdir)
+                    model, state = load_tts(voice["ttsLanguage"], voice["source"], workdir, voice_key=voice["key"])
                     from pocket_tts import export_model_state
                     export_model_state(state, voice_state_path)
                 else:
-                    model, state = load_tts_from_prepared(tts_language, voice_state_path)
+                    model, state = load_tts_from_prepared(tts_language, voice_state_path, temp=(None if job_ctx.get("voice_key") == "gandalf_de" else 0.3))
                 sections_since_reload = 0
             passed, detail = produce_section(job_ctx, section, model, state, asr, outdir, job_id)
             api("workerSectionResult", {
