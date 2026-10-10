@@ -428,12 +428,17 @@ async function uploadMissingVoice(){
     if(!$('#voiceRights').checked)throw new Error('Bitte Nutzungsrechte/Einwilligung bestätigen.');
     const selected=voices.find(v=>v.key===$('#voice').value&&v.sourceType==='asset');
     if(!selected)throw new Error('Bitte eine Stimme mit eigener Referenz auswählen.');
-    // Gandalf's references must never replace an unrelated established voice.
+    // Protect named custom reference files against accidental overwrite of
+    // unrelated existing narrators (especially on mobile catalog refreshes).
     const fname=file.name.toLowerCase();
-    const namedGandalf=/gandalf[ _.-]*(?:de|en)/.exec(fname);
-    if(namedGandalf){
-      const intended=/gandalf[ _.-]*de/.test(fname)?'gandalf_de':'gandalf_en';
-      if(selected.key!==intended)throw new Error('Falsche Stimme ausgewählt: '+file.name+' gehört zu '+(intended==='gandalf_de'?'Gandalf DE':'Gandalf EN')+', nicht zu '+selected.name+'. Bitte oben im Feld „Stimme“ korrigieren.');
+    const namedCustomVoice=fname.match(/(?:gandalf|jessica|jessice)[ _.-]*(de|en)(?=[ _.-]|$)/);
+    if(namedCustomVoice){
+      const family=/gandalf/.test(namedCustomVoice[0])?'gandalf':'jessica';
+      const intended=family+'_'+namedCustomVoice[1];
+      if(selected.key!==intended){
+        const proper=(family==='gandalf'?'Gandalf':'Jessica')+' '+namedCustomVoice[1].toUpperCase();
+        throw new Error('Falsche Stimme ausgewählt: '+file.name+' gehört zu '+proper+', nicht zu '+selected.name+'. Bitte oben im Feld „Stimme“ korrigieren.');
+      }
     }
     const replacing=!!selected.ready;
     if(replacing&&!window.confirm('ACHTUNG: Die vorhandene Referenzstimme „'+selected.name+'“ würde dauerhaft überschrieben. Möchtest du genau diese Stimme wirklich ersetzen?'))return;
