@@ -49,7 +49,7 @@ class Section:
     def spoken_text(self) -> str:
         parts: list[str] = []
         chapter_label = bool(re.match(r"^(?:CHAPTER|KAPITEL)\s+|^[A-ZÄÖÜ][A-Za-zÄÖÜäöüß-]+\s+KAPITEL$", self.title, re.I))
-        if self.title and not chapter_label:
+        if self.title and not chapter_label and self.kind != "continuation":
             parts.append(self.title.strip().rstrip(".:") + ".")
         for p in self.paragraphs:
             if SCENE_RE.match(p.strip()):
@@ -346,8 +346,87 @@ def parse_source(path: Path) -> tuple[str, list[Section], dict[str, Any]]:
         is_epub = "META-INF/container.xml" in archive.namelist()
     if is_epub:
         from epub_source import parse_epub
-        return parse_epub(path, Section)
-    return parse_docx(path)
+        title, sections, diagnostics = parse_epub(path, Section)
+    else:
+        title, sections, diagnostics = parse_docx(path)
+    sections, diagnostics = split_oversized_audio_sections(sections, diagnostics)
+    return title, sections, diagnostics
+
+
+# A single 75,000-word chapter cannot fit in a 50 MiB audio upload, even at
+# 64 kbps. Split such sections before preflight, not after production, so the
+# server's section manifest, per-track QC, and playback chapters all agree.
+MAX_AUDIO_SECTION_WORDS = 4500
+
+
+def split_oversized_audio_sections(sections: list[Section], diagnostics: dict[str, Any]) -> tuple[list[Section], dict[str, Any]]:
+    result: list[Section] = []
+    split_details: list[dict[str, Any]] = []
+
+    for original in sections:
+        if original.word_count <= MAX_AUDIO_SECTION_WORDS:
+            result.append(Section(len(result), original.kind, original.label, original.title, list(original.paragraphs)))
+            continue
+
+        # Keep original paragraph order and all words. Only unusually large
+        # individual paragraphs need a last-resort word-boundary split.
+        paragraphs: list[str] = []
+        for paragraph in original.paragraphs:
+            if len(words(paragraph)) <= MAX_AUDIO_SECTION_WORDS:
+                paragraphs.append(paragraph)
+                continue
+            tokens = paragraph.split()
+            partial: list[str] = []
+            partial_words = 0
+            for token in tokens:
+                token_words = len(words(token))
+                if partial and partial_words + token_words > MAX_AUDIO_SECTION_WORDS:
+                    paragraphs.append(" ".join(partial))
+                    partial = []
+                    partial_words = 0
+                partial.append(token)
+                partial_words += token_words
+            if partial:
+                paragraphs.append(" ".join(partial))
+
+        batches: list[list[str]] = []
+        current: list[str] = []
+        current_words = 0
+        for paragraph in paragraphs:
+            paragraph_words = len(words(paragraph))
+            if current and current_words + paragraph_words > MAX_AUDIO_SECTION_WORDS:
+                batches.append(current)
+                current = []
+                current_words = 0
+            current.append(paragraph)
+            current_words += paragraph_words
+        if current:
+            batches.append(current)
+
+        if len(batches) < 2:
+            raise ValueError("Oversized audio section could not be segmented safely")
+        split_details.append({"source_label": original.label, "source_words": original.word_count, "tracks": len(batches)})
+        for part, body in enumerate(batches):
+            first = part == 0
+            title = original.title if first else f"{original.title} (Part {part + 1} of {len(batches)})"
+            result.append(Section(
+                len(result), original.kind if first else "continuation",
+                original.label if first else f"{original.label} · {part + 1}/{len(batches)}",
+                title, body,
+            ))
+
+    if not split_details:
+        return result, diagnostics
+
+    diagnostics = dict(diagnostics)
+    diagnostics["original_body_section_count"] = len(sections)
+    diagnostics["body_section_count"] = len(result)
+    diagnostics["expected_sections"] = len(result)
+    diagnostics["audio_section_max_words"] = MAX_AUDIO_SECTION_WORDS
+    diagnostics["oversized_sections_split"] = split_details
+    # A table of contents refers to original chapters, not to audio tracks.
+    diagnostics["toc_count_advisory_only"] = True
+    return result, diagnostics
 
 
 def parse_docx(path: Path) -> tuple[str, list[Section], dict[str, Any]]:
@@ -567,7 +646,7 @@ def chunks_for(section: Section) -> list[Chunk]:
         section.title or "",
         re.I,
     ))
-    if section.title and not chapter_label:
+    if section.title and not chapter_label and section.kind != "continuation":
         title = section.title.strip().rstrip(".:") + "."
         if title:
             chunks.append(Chunk(title, PARAGRAPH_PAUSE))
