@@ -4,6 +4,7 @@ name: Audiobook Cloud Worker
 # queue wake-up: 2026-10-03
 # storage-path repair wake-up: 2026-10-04
 # queue recovery wake-up: das-verlassen-2026-10-04
+# queue wake-up: hand-that-sees-segmentation-2026-10-10
 
 on:
   push:
