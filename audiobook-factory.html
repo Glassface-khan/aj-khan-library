@@ -356,7 +356,7 @@ function renderVoices(){
 }
 function updateVoiceInfo(){
   const v=voices.find(x=>x.key===$('#voice').value);
-  $('#voiceInfo').textContent=v?(v.ready?'Bereit · '+v.name:(v.name+' · Referenz fehlt')):'';
+  $('#voiceInfo').textContent=v?(v.referenceIssue?('⚠ '+v.name+' · '+v.referenceIssue):(v.ready?'Bereit · '+v.name:(v.name+' · Referenz fehlt'))):'';
   const canUpload=!!(v&&v.sourceType==='asset');
   $('#voiceUploadBox').classList.toggle('hidden',!canUpload);
   if(canUpload){
