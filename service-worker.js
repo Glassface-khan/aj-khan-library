@@ -1,3 +1,4 @@
+// v68 -> v69 (11.10.2026): refresh The Trembling Olive catalog and author-approved same-origin cover.
 // v56 -> v57 (04.10.2026): persist audiobook badges across grid rebuilds and harden Audio-Rechte taps on iOS.
 // v55 -> v56 (03.10.2026): force fresh independent audiobook badges and Audio-Rechte handler on iOS.
 // v54 -> v55 (03.10.2026): direct audiobook availability badges on covers.
@@ -54,8 +55,8 @@
 // payloads in IndexedDB for fast reopening; force clients to fetch the new JS.
 // v26 -> v27 (24.09.2026): books-live.json is the immediate catalog fallback;
 // BooksData remains canonical and replaces it whenever the live request succeeds.
-// v37 -> v38 (28.09.2026): force iOS to reload the exact-order cover grid.\n// v39 -> v40 (28.09.2026): deploy THE GUEST catalog entry, cover and EPUB; force clients to refresh the catalog fallback.\n// v40 -> v41 (28.09.2026): deploy THE NIGHT SIDE catalog entry, cover and EPUB; force clients to refresh the catalog fallback.\nconst SHELL_CACHE = 'ajk-shell-v68';
-const DATA_CACHE = 'ajk-data-v68';
+// v37 -> v38 (28.09.2026): force iOS to reload the exact-order cover grid.\n// v39 -> v40 (28.09.2026): deploy THE GUEST catalog entry, cover and EPUB; force clients to refresh the catalog fallback.\n// v40 -> v41 (28.09.2026): deploy THE NIGHT SIDE catalog entry, cover and EPUB; force clients to refresh the catalog fallback.\nconst SHELL_CACHE = 'ajk-shell-v69';
+const DATA_CACHE = 'ajk-data-v69';
 const SHELL_FILES = ['./', './index.html', './books-live.json', './manifest.webmanifest', './icons/icon-192.png', './icons/icon-512.png'];
 
 // Aktionen, deren Antwort für Offline-Nutzung zwischengespeichert werden
@@ -150,7 +151,7 @@ async function injectAudioLibrary_(response) {
     if (now - lastCheck < 30000) return;
     lastCheck = now;
 
-    navigator.serviceWorker.register('./service-worker.js?v=66', {
+    navigator.serviceWorker.register('./service-worker.js?v=69', {
       scope: './',
       updateViaCache: 'none'
     }).then(function (reg) {
