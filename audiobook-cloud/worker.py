@@ -788,7 +788,7 @@ def transcript_pass(scores: dict[str, float], language_code: str, source_words: 
 def load_tts(language: str, voice_source: str, workdir: Path, temp: float | None = 0.3, voice_key: str = ""):
     from pocket_tts import TTSModel
     # Validated 2026-10-10: Gandalf DE needs the German native temperature.
-    model = TTSModel.load_model(language=language, temp=(None if voice_key == "gandalf_de" else temp))
+    model = TTSModel.load_model(language=language, temp=(None if voice_key in {"gandalf_de", "jessica_de"} else temp))
     voice_path = voice_source
     downloaded_voice: Path | None = None
     normalized_voice: Path | None = None
@@ -1113,7 +1113,7 @@ def prepare(args: argparse.Namespace) -> int:
                     model, state = load_tts_from_prepared(
                         voice["ttsLanguage"],
                         preflight_state_path,
-                        temp=(None if voice.get("key") == "gandalf_de" else max(0.20, 0.30 - 0.05 * sample_attempt)),
+                        temp=(None if voice.get("key") in {"gandalf_de", "jessica_de"} else max(0.20, 0.30 - 0.05 * sample_attempt)),
                     )
 
             assert result is not None
@@ -1223,7 +1223,7 @@ def produce_section(job: dict[str, Any], section: Section, model, state, asr: As
                 break
             model, state = load_tts_from_prepared(
                 job["tts_language"], Path(job["voice_state_path"]),
-                temp=(None if job.get("voice_key") == "gandalf_de" else max(0.20, 0.30 - 0.05 * attempt)),
+                temp=(None if job.get("voice_key") in {"gandalf_de", "jessica_de"} else max(0.20, 0.30 - 0.05 * attempt)),
             )
             sr = model.sample_rate
         if not success:
@@ -1311,7 +1311,7 @@ def produce(args: argparse.Namespace) -> int:
                     from pocket_tts import export_model_state
                     export_model_state(state, voice_state_path)
                 else:
-                    model, state = load_tts_from_prepared(tts_language, voice_state_path, temp=(None if job_ctx.get("voice_key") == "gandalf_de" else 0.3))
+                    model, state = load_tts_from_prepared(tts_language, voice_state_path, temp=(None if job_ctx.get("voice_key") in {"gandalf_de", "jessica_de"} else 0.3))
                 sections_since_reload = 0
             passed, detail = produce_section(job_ctx, section, model, state, asr, outdir, job_id)
             api("workerSectionResult", {
