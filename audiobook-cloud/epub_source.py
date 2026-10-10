@@ -10,7 +10,7 @@ LABEL = re.compile(r'^(?:chapter|kapitel|prologue|prolog|epilogue|epilog|coda|in
 META = re.compile(r'^(?:cover|half title|title(?:page)?|copyright|imprint|impressum|dedication|widmung|epigraph|contents|table of contents|inhaltsverzeichnis|historical (?:note|background|context)|historische notiz|author.?s? note|afterword|nachwort|glossary|glossar|acknowledg(?:e)?ments?|about (?:the )?author|über den autor|anmerkung des autors|scholar.?safety|notes on|reading[ -]group guide|timeline|endnotes|footnotes|bibliography|disclaimer|colophon)\b', re.I)
 META_TYPES = {'cover', 'titlepage', 'copyright-page', 'dedication', 'toc', 'landmarks', 'loi', 'lot', 'index', 'glossary', 'bibliography', 'endnotes', 'footnotes', 'acknowledgments', 'colophon'}
 PART = re.compile(r'^(?:part|teil|book|buch)\s+(?:\d+|[ivxlcdm]+|one|two|three|four|five|six|seven|eight|nine|ten|eins|zwei|drei|vier|fünf)\b', re.I)
-SUPPLEMENT = re.compile(r'^(?:a note on (?:the )?history|history|note|setting note|a note on (?:the )?setting|context|series context|transplantation|zu transplantation und fiktion)
+SUPPLEMENT = re.compile(r'^(?:a note on (?:the )?history|history|note|setting note|a note on (?:the )?setting|context|series context|transplantation|zu transplantation und fiktion)$', re.I)
 
 def local(tag):
     return tag.rsplit('}', 1)[-1].lower()
