@@ -1,0 +1,74 @@
+name: Audiobook EPUB Parser Check
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/audiobook-parser-check.yml"
+      - "audiobook-cloud/epub_source.py"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Compile worker and EPUB parser
+        run: python -m py_compile audiobook-cloud/worker.py audiobook-cloud/epub_source.py
+      - name: Classify a narrated Setting Note without losing prose
+        shell: bash
+        run: |
+          python - <<'PY'
+          import sys, tempfile
+          from dataclasses import dataclass
+          from pathlib import Path
+          from zipfile import ZipFile
+          sys.path.insert(0, "audiobook-cloud")
+          from epub_source import parse_epub
+          @dataclass
+          class Section:
+              index: int
+              kind: str
+              label: str
+              title: str
+              paragraphs: list
+          container = """<?xml version="1.0"?>
+          <container xmlns="urn:oasis:names:tc:opendocument:xmlns:container">
+            <rootfiles><rootfile full-path="EPUB/package.opf" media-type="application/oebps-package+xml"/></rootfiles>
+          </container>"""
+          opf = """<?xml version="1.0"?>
+          <package xmlns="http://www.idpf.org/2007/opf" version="3.0">
+           <metadata xmlns:dc="http://purl.org/dc/elements/1.1/"><dc:title>Parser Test Book</dc:title></metadata>
+           <manifest>
+             <item id="p" href="text/prologue.xhtml" media-type="application/xhtml+xml"/>
+             <item id="n" href="text/setting_note.xhtml" media-type="application/xhtml+xml"/>
+             <item id="c" href="text/chapter_01.xhtml" media-type="application/xhtml+xml"/>
+           </manifest>
+           <spine><itemref idref="p"/><itemref idref="n"/><itemref idref="c"/></spine>
+          </package>"""
+          def page(title, body):
+              return ('<html xmlns="http://www.w3.org/1999/xhtml"><head><title>'+title+
+                      '</title></head><body><h1>'+title+'</h1><p>'+body+'</p></body></html>')
+          with tempfile.TemporaryDirectory() as folder:
+              path=Path(folder)/"fixture.epub"
+              with ZipFile(path,'w') as zip:
+                  zip.writestr('META-INF/container.xml',container)
+                  zip.writestr('EPUB/package.opf',opf)
+                  zip.writestr('EPUB/text/prologue.xhtml',page('Prologue','A young reader walked into the library.'))
+                  zip.writestr('EPUB/text/setting_note.xhtml',page('Setting Note','The mountain village was built above the river.'))
+                  zip.writestr('EPUB/text/chapter_01.xhtml',page('Chapter 1','The lantern was still burning when he arrived.'))
+              title,sections,diag=parse_epub(path,Section)
+          assert title=="Parser Test Book",title
+          assert len(sections)==3,[(x.label,x.paragraphs) for x in sections]
+          assert any("mountain village" in p for p in sections[1].paragraphs),sections[1]
+          assert any("setting_note.xhtml" in p for p in diag["narrative_files"]),diag
+          assert not diag["non_narrative_files_skipped"],diag
+          print("EPUB parser syntax + Setting Note preservation: PASS")
+          PY
