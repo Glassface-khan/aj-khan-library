@@ -1,0 +1,67 @@
+name: Private Gandalf DE Voice Probe
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/gandalf-voice-diagnostic.yml"
+      - "audiobook-cloud/voice_diagnostic.py"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: ajk-gandalf-de-diagnostic
+  cancel-in-progress: false
+
+jobs:
+  probe:
+    name: Read-only German voice QC
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    env:
+      HF_TOKEN: ${{ secrets.HF_TOKEN }}
+      OMP_NUM_THREADS: "2"
+      MKL_NUM_THREADS: "2"
+      TOKENIZERS_PARALLELISM: "false"
+      HF_HUB_DISABLE_TELEMETRY: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: audiobook-cloud/requirements.txt
+      - name: Fetch private Gandalf DE reference through worker OIDC
+        shell: bash
+        run: |
+          set -euo pipefail
+          OIDC_JSON="$(curl --fail --silent --show-error -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=ajk-audiobook-factory")"
+          OIDC_TOKEN="$(printf '%s' "$OIDC_JSON" | jq -r '.value')"
+          curl --fail --silent --show-error \
+            -H "Authorization: Bearer $OIDC_TOKEN" \
+            -H "Content-Type: application/json" \
+            -d '{"op":"workerVoice","voiceKey":"gandalf_de"}' \
+            "https://ipoqyjrojljmbqslmxxf.supabase.co/functions/v1/audiobook-factory" \
+            > /tmp/private-gandalf-voice.json
+          jq -e '.ok == true and .voice.key == "gandalf_de"' /tmp/private-gandalf-voice.json > /dev/null
+      - name: Prepare speech dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          command -v ffmpeg || (sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg libsndfile1)
+          python -m pip install torch --index-url https://download.pytorch.org/whl/cpu
+          python -m pip install -r audiobook-cloud/requirements.txt
+      - name: Compare official German model variants with unchanged QC
+        shell: bash
+        run: |
+          set -euo pipefail
+          python audiobook-cloud/voice_diagnostic.py --voice-response-file /tmp/private-gandalf-voice.json
+      - name: Remove ephemeral reference access
+        if: always()
+        shell: bash
+        run: |
+          rm -f /tmp/private-gandalf-voice.json
+          rm -rf /tmp/gandalf-de-probe
