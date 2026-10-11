@@ -1,0 +1,32 @@
+name: One-Time Stop Failed FOLLOWER Production
+
+on:
+  push:
+    branches: [main]
+    paths: [".github/workflows/one-time-stop-broken-follower.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: write
+
+jobs:
+  cancel-failed-follower:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 3
+    steps:
+      - name: Cancel only the known failed zero-progress audio run
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          url="https://api.github.com/repos/Glassface-khan/aj-khan-library/actions/runs/38150489102"
+          data="$(curl --fail --silent --show-error -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github+json" "$url")"
+          echo "$data" | jq -e '.name == "Audiobook Cloud Worker" and (.status=="in_progress" or .status=="queued")' >/dev/null
+          code="$(curl --silent --show-error -o /tmp/cancel-result -w '%{http_code}' -X POST \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            "$url/cancel")"
+          test "$code" = "202" || { echo "Cancellation API failed: HTTP $code"; exit 1; }
+          echo "FOLLOWER_FAILED_WORKER_CANCELLATION=REQUEST_ACCEPTED"
