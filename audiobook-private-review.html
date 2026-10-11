@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex,nofollow,noarchive">
+<meta name="referrer" content="no-referrer">
+<title>DIE ORDNUNG – Private Hörprüfung</title>
+<style>
+:root{color-scheme:dark;font-family:system-ui,-apple-system,Segoe UI,sans-serif}
+body{margin:0;background:#11191e;color:#f0e9dc;padding:22px 15px;line-height:1.5}
+main{max-width:660px;margin:0 auto}
+h1{font-size:1.8rem;font-family:Georgia,serif;margin:10px 0}
+h2{font-size:1.15rem}
+a{color:#e1c18b}
+.card{background:#1e282d;border:1px solid #4e4840;border-radius:15px;padding:20px;margin-top:18px}
+.muted{color:#c6c1b7}
+label{display:block;margin:12px 0 8px}
+input,select,button{font:inherit;border:1px solid #746758;border-radius:8px;padding:12px;color:#f0e9dc;background:#26333a;box-sizing:border-box}
+input,select,button.primary,a.buttonlike{width:100%}
+button{cursor:pointer;min-height:48px}
+button.primary{background:#846329;color:#fff;border-color:#aa874b;font-weight:650;margin-top:12px}
+select{margin-bottom:12px}
+audio{width:100%;margin:14px 0}
+#playArea[hidden],#authBox[hidden]{display:none}
+.status{min-height:25px}
+.note{border-left:3px solid #bc9d61;padding-left:13px}
+a.buttonlike{display:block;text-align:center;text-decoration:none;border:1px solid #746758;border-radius:8px;padding:11px;box-sizing:border-box;margin:10px 0}
+</style>
+</head>
+<body>
+<main>
+<a href="./audiobook-factory.html">← Zur Audiobook Factory</a>
+<h1>DIE ORDNUNG</h1>
+<p class="muted">Jessica DE · 67 Kapitel · private Hörprüfung</p>
+<p class="note">Die Produktion ist abgeschlossen, die Veröffentlichung bleibt gesperrt. Du kannst die Kapitel hier privat anhören und besonders ihre Anfänge kontrollieren.</p>
+<section class="card" id="authBox" hidden>
+<h2>Autorenzugang</h2>
+<p class="muted">Bitte denselben Admin-Zugang wie in der Audiobook Factory verwenden. Auf diesem Gerät wird das Passwort nicht gespeichert.</p>
+<label for="adminToken">Admin-Zugang</label><input id="adminToken" type="password" autocomplete="off">
+<button class="primary" id="login">Privat anmelden</button>
+</section>
+<section class="card">
+<h2>Kapitelprobe anhören</h2>
+<label for="chapter">Kapitel auswählen</label>
+<select id="chapter" disabled><option>Lade Kapitelübersicht …</option></select>
+<button class="primary" id="load" disabled>Kapitel laden</button>
+<div id="playArea" hidden>
+<audio id="audio" controls preload="none" playsinline></audio>
+<a id="openAudio" class="buttonlike" target="_blank" rel="noopener noreferrer">Audio im Browser öffnen</a>
+</div>
+<p id="status" class="muted status" role="status" aria-live="polite">Prüfe geschützten Zugriff …</p>
+</section>
+<section class="card">
+<h2>So prüfst du die Qualität</h2>
+<p>Höre zuerst den Prolog, danach den Beginn eines frühen, eines mittleren und eines späten Kapitels. Stimmen Wörter und Sprache? Beginnt der Erzähler verständlich, ohne Fantasiesilben oder lange Stille?</p>
+<p class="muted">Diese Prüfung veröffentlicht oder verändert keine Audiodateien. Audiolinks sind jeweils nur 15 Minuten gültig.</p>
+</section>
+</main>
+<script>
+'use strict';
+const API='https://ipoqyjrojljmbqslmxxf.supabase.co/functions/v1/audiobook-factory';
+const JOB='7d6f04c8-9d4f-40d6-b0a2-72c2cd81b3aa';
+const el=id=>document.getElementById(id);
+let session=localStorage.getItem('ajk_factory_session')||'',admin='',chapters=[],selectedJob=JOB;
+function status(msg){el('status').textContent=msg}
+async function request(op,extra={}){
+ const controller=new AbortController();
+ const timer=setTimeout(()=>controller.abort(),30000);
+ try{
+  const response=await fetch(API,{method:'POST',headers:{'Content-Type':'application/json'},
+   cache:'no-store',signal:controller.signal,
+   body:JSON.stringify({op,jobId:JOB,adminToken:admin,factorySession:session,...extra})});
+  const data=await response.json();
+  if(!response.ok||!data.ok)throw new Error(data.error||'Zugriff nicht möglich');
+  return data;
+ }finally{clearTimeout(timer)}
+}
+async function initialize(){
+ try{
+  const data=await request('previewUnpublishedEdition');
+  chapters=data.chapters||[];
+  if(!chapters.length)throw new Error('Noch keine Kapitel zum Anhören vorhanden');
+  const select=el('chapter');select.replaceChildren();
+  chapters.forEach((ch,i)=>{
+   const option=document.createElement('option');
+   option.value=String(ch.index);option.textContent=ch.title||'Abschnitt '+ch.index;
+   select.appendChild(option);
+  });
+  select.disabled=false;el('load').disabled=false;el('authBox').hidden=true;
+  status(chapters.length+' Kapitel verfügbar. Kapitel auswählen und „Kapitel laden“ tippen.');
+ }catch(e){
+  if(/unauthorized|access|session/i.test(String(e.message))){
+   el('authBox').hidden=false;
+   status('Bitte mit deinem Factory-Adminzugang anmelden.');
+  }else status('Konnte Kapitel nicht laden: '+e.message);
+ }
+}
+async function loadChapter(){
+ const chapter=Number(el('chapter').value);
+ el('load').disabled=true;status('Lade geschütztes Audio …');
+ const player=el('audio');player.pause();player.removeAttribute('src');player.load();
+ el('playArea').hidden=true;
+ try{
+  const data=await request('previewUnpublishedEdition',{chapterIndex:chapter});
+  const url=new URL(data.signedUrl||'');
+  if(url.protocol!=='https:'||!url.hostname.endsWith('.supabase.co'))throw new Error('Ungültige Hörprobenadresse');
+  player.src=data.signedUrl;player.load();
+  el('openAudio').href=data.signedUrl;
+  el('playArea').hidden=false;
+  status('Kapitel bereit. Auf ▶ tippen. Der Link ist 15 Minuten gültig.');
+ }catch(e){status('Kapitel konnte nicht geladen werden: '+e.message)}
+ finally{el('load').disabled=false}
+}
+el('chapter').addEventListener('change',()=>{const a=el('audio');a.pause();a.removeAttribute('src');a.load();el('playArea').hidden=true;status('Anderes Kapitel ausgewählt. Bitte „Kapitel laden“ tippen.')});
+el('load').onclick=loadChapter;
+el('login').onclick=async()=>{
+ admin=el('adminToken').value.trim();
+ if(!admin){status('Admin-Zugang eingeben.');return}
+ el('login').disabled=true;
+ try{
+  const result=await request('adminSession');
+  if(result.factorySession){session=result.factorySession;localStorage.setItem('ajk_factory_session',session)}
+  el('adminToken').value='';admin='';
+  await initialize();
+ }catch(e){status('Anmeldung fehlgeschlagen: '+e.message)}
+ finally{el('login').disabled=false}
+};
+void initialize();
+</script>
+</body>
+</html>
