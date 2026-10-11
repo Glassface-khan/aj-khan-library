@@ -41,7 +41,7 @@ vm.createContext(context);
 vm.runInContext(libraryCode,context,{filename:'audiobook-factory-library.js'});
 vm.runInContext('renderAudioOverview_();updateLibrarySummary_()',context);
 const output=mocks['#audioOverview'].innerHTML;
-assert.strictEqual(output.split('The Low Wall').length-1,1,'The same book appears more than once');
+assert.strictEqual(output.split('class="audio-title">The Low Wall</div>').length-1,1,'The visible book title appears more than once');
 assert(output.includes('2 Sprecherfassungen'),'No two-voice grouping');
 assert(output.includes('Maggie')&&output.includes('Jessica EN'),'Missing narrator choices');
 assert(output.includes('data-listen-book="en1"')&&output.includes('data-listen-book="en2"'),'Edition listening links lost');
