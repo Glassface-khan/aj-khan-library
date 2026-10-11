@@ -1007,7 +1007,7 @@ def preflight_sample_text(section: Section, max_words: int = 16) -> str:
     return " ".join(text.split()[:max_words])
 
 
-def german_chunk_text_pass(source: str, recognized: str) -> tuple[bool, dict[str, Any]]:
+def german_chunk_text_pass(source: str, recognized: str, *, chapter_opener: bool = False) -> tuple[bool, dict[str, Any]]:
     """Independent per-chunk text check; whole-chapter averages hide nonsense.
 
     The threshold is intentionally tighter than the old 0.32 WER floor.
@@ -1016,8 +1016,11 @@ def german_chunk_text_pass(source: str, recognized: str) -> tuple[bool, dict[str
     ref_n = len(words(source))
     hyp_n = len(words(recognized))
     scores = transcript_scores(source, recognized)
-    recall_min = 0.63 if ref_n >= 8 else 0.50
-    wer_min = 0.50 if ref_n >= 8 else 0.30
+    # First two spoken phrases are independently screened more strictly.
+    # In prior Arne-B. titles the beginning of every chapter was corrupted
+    # even when the later narration sounded normal.
+    recall_min = (0.78 if chapter_opener else 0.63) if ref_n >= 8 else 0.50
+    wer_min = (0.70 if chapter_opener else 0.50) if ref_n >= 8 else 0.30
     reasons = []
     if hyp_n == 0 or scores["word_recall"] < recall_min:
         reasons.append("chunk_low_word_recall")
@@ -1306,8 +1309,11 @@ def produce_section(job: dict[str, Any], section: Section, model, state, asr: As
                 try:
                     sf.write(probe, audio, sr, subtype="PCM_16")
                     heard = asr.transcribe(probe)
-                    intelligible, transcript_detail = german_chunk_text_pass(ch.text, heard)
+                    intelligible, transcript_detail = german_chunk_text_pass(
+                        ch.text, heard, chapter_opener=(ci < 2)
+                    )
                     last_detail.update({
+                        "chapter_opener": ci < 2,
                         "word_recall": transcript_detail["word_recall"],
                         "wer_similarity": transcript_detail["wer_similarity"],
                         "sequence_similarity": transcript_detail["sequence_similarity"],
