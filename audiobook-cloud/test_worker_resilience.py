@@ -63,6 +63,18 @@ def test_natural_sentence_packing():
     assert worker.words(" ".join(prose)) == worker.words(" ".join(c.text for c in divided))
 
 
+def test_chapter_opener_is_not_isolated():
+    # The previous German production failed on many 3-word opening prompts,
+    # especially when the following sentence filled the whole TTS window.
+    first = "Es war still."
+    second = "Die junge Frau stand mitten auf dem Platz und beobachtete die Menschen, die um sie herum eilten, ohne auch nur ein einziges Mal aufzublicken."
+    section = worker.Section(3, "chapter", "Kapitel 3", "Kapitel 3", [first,second,"Der Himmel wurde langsam dunkler."])
+    chunks = worker.chunks_for(section)
+    assert chunks and chunks[0].word_count >= 10,[(c.text,c.word_count) for c in chunks]
+    assert worker.words(" ".join(x.text for x in chunks)) == worker.words(" ".join(section.paragraphs))
+    assert all(c.word_count<=worker.MAX_CHUNK_WORDS and len(c.text)<=worker.MAX_CHUNK_CHARS for c in chunks)
+
+
 def test_german_chunk_transcript_gate():
     source = "Er ging am Morgen in den Garten und sah seine Schwester neben dem alten Baum stehen."
     good = "Er ging am Morgen in den Garten und sah seine Schwester neben dem alten Baum stehen."
@@ -126,6 +138,7 @@ def test_transient_upload_retry():
 if __name__ == "__main__":
     test_tiny_chunk_merge()
     test_natural_sentence_packing()
+    test_chapter_opener_is_not_isolated()
     test_german_chunk_transcript_gate()
     test_transient_upload_retry()
     print("RESILIENCE_TESTS=PASS")
