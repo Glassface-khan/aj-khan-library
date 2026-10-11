@@ -9,6 +9,15 @@ for(const id of ['expandLibraryGroups','collapseLibraryGroups','libraryStatus','
 }
 const ids=[...html.matchAll(/\bid="([^"]+)"/g)].map(x=>x[1]);
 assert.strictEqual(ids.length,new Set(ids).size,'Duplicate document IDs');
+for(const id of ['factoryMaintenance','maintenanceReason','authRetry','authCard']){
+ assert(html.includes('id="'+id+'"'),'Missing quota maintenance component '+id);
+}
+assert(html.includes("response.json()}catch(_)"),'Non-JSON 402 response must preserve HTTP code');
+assert(html.includes("r.status===402"),'Quota restriction must have specific UX');
+assert(html.includes("$('#factoryMaintenance').classList.remove('hidden')"),'Unreachable private API must show maintenance UI');
+assert(html.includes("['newJob','libraryCard','jobsCard','notStartedCard'].forEach"),'Private controls must stay unavailable during outage');
+assert(html.includes("Deine Anmeldung bleibt gespeichert"),'Wartungsmodus must not confuse outage with wrong admin password');
+
 const start=jsSource.indexOf("const esc="),end=jsSource.indexOf("function catalogNotStarted_(){",start);
 assert(start>=0&&end>start,'Cannot isolate library renderer');
 const libraryCode=jsSource.slice(start,end);
