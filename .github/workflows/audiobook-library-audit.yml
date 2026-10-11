@@ -1,0 +1,63 @@
+name: Private Completed Audiobook Quality Audit
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/audiobook-library-audit.yml"
+      - "audiobook-cloud/audit_existing_audiobooks.py"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: private-audiobook-catalog-audit
+  cancel-in-progress: false
+
+jobs:
+  audit:
+    name: Audio quality shard ${{ matrix.shard }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [0]
+    env:
+      OMP_NUM_THREADS: "2"
+      MKL_NUM_THREADS: "2"
+      TOKENIZERS_PARALLELISM: "false"
+      HF_HUB_DISABLE_TELEMETRY: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Obtain audit-only GitHub OIDC identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --fail --silent --show-error \
+            -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
+            "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=ajk-audiobook-factory" \
+            | jq -er '.value' > /tmp/private-audit-oidc
+      - name: Install ASR and audiobook parsing dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          command -v ffmpeg >/dev/null || (sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg)
+          python -m pip install 'numpy>=2,<3' 'requests>=2.32,<3' 'soundfile>=0.13,<1' \
+            'python-docx==1.2.0' 'rapidfuzz>=3.10,<4' 'faster-whisper==1.2.1'
+      - name: Read-only audit of finished audio samples
+        shell: bash
+        env:
+          SHARD: ${{ matrix.shard }}
+        run: |
+          set -euo pipefail
+          export AUDIT_OIDC_TOKEN="$(cat /tmp/private-audit-oidc)"
+          python audiobook-cloud/audit_existing_audiobooks.py --shard "$SHARD" --shards 8 --manifest-only
+      - name: Erase ephemeral audit credentials
+        if: always()
+        run: rm -f /tmp/private-audit-oidc
