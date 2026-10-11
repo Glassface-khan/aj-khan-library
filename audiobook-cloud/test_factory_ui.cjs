@@ -54,6 +54,11 @@ for(const id of ['deleteEditionDialog','deleteEditionInput','confirmEditionDelet
 assert(html.includes("op:'deleteAudioEdition'")&&html.includes("confirmDelete:'LÖSCHEN'"),'Deletion must call confirmed protected API');
 assert(html.includes("confirmTitle:b.title")&&html.includes("confirmVoiceKey:b.voice_key"),'Deletion requires original edition identity');
 assert(html.includes("editionDeleteInProgress_"),'Missing double-delete protection');
+assert(html.includes("data-publish-reviewed")&&html.includes("op:'publishReviewedEdition'"),'Manually reviewed releases must use a dedicated, authenticated endpoint');
+assert(html.includes("confirmPublication:'ICH_HABE_DIE_AUFNAHME_GEPRUEFT'"),'Author must explicitly confirm manual release');
+assert(html.includes("j.status==='ready'&&j.stage==='ready_not_published'"),'Release button must be limited to withheld completed editions');
+assert(html.includes("confirmTitle:j.requested_title")&&html.includes("confirmVoiceKey:j.voice_key"),'Release must target exact title and narrator');
+
 assert(output.includes('data-library-group="singles"')&&output.includes('data-library-group="series:the_vessel"'),'Missing fold group');
 assert(output.includes('Bücher')&&mocks['#librarySummary'].textContent.includes('2 Bücher'),'Bad unique book count');
 assert(!output.includes('data-library-group="singles" open'),'Singles must be collapsed initially');
