@@ -22,7 +22,11 @@ button{cursor:pointer;min-height:48px}
 button.primary{background:#846329;color:#fff;border-color:#aa874b;font-weight:650;margin-top:12px}
 select{margin-bottom:12px}
 audio{width:100%;margin:14px 0}
-#playArea[hidden],#authBox[hidden]{display:none}
+#playArea[hidden],#authBox[hidden],#reviewApproval[hidden]{display:none}
+.approval-check{display:flex;align-items:flex-start;gap:10px}
+.approval-check input{margin-top:5px;flex:none;width:20px;height:20px}
+.approval-check span{flex:1}
+#releaseEdition:disabled{opacity:.45;cursor:not-allowed}
 .status{min-height:25px}
 .note{border-left:3px solid #bc9d61;padding-left:13px}
 a.buttonlike{display:block;text-align:center;text-decoration:none;border:1px solid #746758;border-radius:8px;padding:11px;box-sizing:border-box;margin:10px 0}
@@ -56,6 +60,16 @@ a.buttonlike{display:block;text-align:center;text-decoration:none;border:1px sol
 <p>Höre zuerst den Prolog, danach den Beginn eines frühen, eines mittleren und eines späten Kapitels. Stimmen Wörter und Sprache? Beginnt der Erzähler verständlich, ohne Fantasiesilben oder lange Stille?</p>
 <p class="muted">Diese Prüfung veröffentlicht oder verändert keine Audiodateien. Audiolinks sind jeweils nur 15 Minuten gültig.</p>
 </section>
+<section class="card" id="reviewApproval" hidden>
+ <h2>Nach der Hörprüfung freigeben</h2>
+ <p class="muted">Erst freigeben, wenn du mit Verständlichkeit und Erzählfluss zufrieden bist. Nur DIE ORDNUNG mit Jessica DE wird in deiner privaten Hörbibliothek sichtbar. Die andere Stimme und sämtliche Manuskripte bleiben unberührt.</p>
+ <label class="approval-check" for="reviewConfirmed">
+   <input id="reviewConfirmed" type="checkbox">
+   <span>Ich habe die Aufnahme selbst angehört und akzeptiere die Hörqualität dieser Sprecherfassung.</span>
+ </label>
+ <button id="releaseEdition" class="primary" type="button" disabled>Jetzt für meine Hörbibliothek freigeben</button>
+ <p id="releaseStatus" class="muted status" aria-live="polite" role="status"></p>
+</section>
 </main>
 <script>
 'use strict';
@@ -88,6 +102,7 @@ async function initialize(){
    select.appendChild(option);
   });
   select.disabled=false;el('load').disabled=false;el('authBox').hidden=true;
+  el('reviewApproval').hidden=false;
   status(chapters.length+' Kapitel verfügbar. Kapitel auswählen und „Kapitel laden“ tippen.');
  }catch(e){
   if(/unauthorized|access|session/i.test(String(e.message))){
@@ -114,6 +129,33 @@ async function loadChapter(){
 }
 el('chapter').addEventListener('change',()=>{const a=el('audio');a.pause();a.removeAttribute('src');a.load();el('playArea').hidden=true;status('Anderes Kapitel ausgewählt. Bitte „Kapitel laden“ tippen.')});
 el('load').onclick=loadChapter;
+let releaseBusy=false;
+el('reviewConfirmed').onchange=()=>{el('releaseEdition').disabled=releaseBusy||!el('reviewConfirmed').checked};
+el('releaseEdition').onclick=async()=>{
+ if(releaseBusy||!el('reviewConfirmed').checked)return;
+ if(!confirm('DIE ORDNUNG mit Jessica DE jetzt nach deiner Hörprüfung für die private Hörbibliothek freigeben? Andere Hörbücher bleiben unverändert.'))return;
+ releaseBusy=true;el('releaseEdition').disabled=true;
+ el('releaseStatus').textContent='Freigabe wird sicher gespeichert …';
+ try{
+  const r=await request('publishReviewedEdition',{
+   confirmTitle:'DIE ORDNUNG',confirmVoiceKey:'jessica_de',
+   confirmPublication:'ICH_HABE_DIE_AUFNAHME_GEPRUEFT'
+  });
+  if(r.published!==true||r.jobId!==JOB)throw new Error('Freigabe wurde nicht bestätigt');
+  el('releaseStatus').textContent='✓ DIE ORDNUNG · Jessica DE ist jetzt in deiner privaten Hörbibliothek. Keine Neuvertonung erforderlich.';
+  el('reviewConfirmed').disabled=true;
+  el('releaseEdition').textContent='✓ Freigegeben';
+  el('releaseEdition').disabled=true;
+  const player=el('audio');player.pause();
+  const link=document.createElement('a');
+  link.className='buttonlike';link.href='./audiobook-factory.html?v=20261011approve1#libraryCard';
+  link.textContent='Zur freigegebenen Hörbuchfassung';
+  el('reviewApproval').appendChild(link);
+ }catch(error){
+  el('releaseStatus').textContent='Freigabe fehlgeschlagen: '+String(error.message||error)+'. Bitte erneut versuchen.';
+  releaseBusy=false;el('releaseEdition').disabled=!el('reviewConfirmed').checked;
+ }
+};
 el('login').onclick=async()=>{
  admin=el('adminToken').value.trim();
  if(!admin){status('Admin-Zugang eingeben.');return}
