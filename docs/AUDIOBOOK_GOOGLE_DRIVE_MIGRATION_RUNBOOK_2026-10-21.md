@@ -50,3 +50,9 @@ Database: 58 `audio_books` rows (57 ready, 1 draft); 2634 `audio_chapters` rows.
 
 ## Safety
 PRIVATE ONLY. No public object links, no anyone-with-link Drive sharing, no secrets in git, chat or logs, no bulk deletion, no modification of currently locked manuscript/EPUB archives.
+
+## Actual isolated GitHub preflight (12 October)
+- Private staging Drive folder metadata readback: **PASS** (owner-only, shared=false, no public/domain permissions).
+- GitHub Actions run `38185372622` (`Private Google Drive Migration Preflight`): **FAILED before attempting any Drive upload**, with sanitized diagnostic `google_oauth_secrets_not_configured`. No audiobook source or destination data changed.
+- This means the workflow did not receive all three needed environment variables: `GOOGLE_DRIVE_CLIENT_ID`, `GOOGLE_DRIVE_CLIENT_SECRET`, `GOOGLE_DRIVE_REFRESH_TOKEN`. It does **not** yet prove whether the GitHub secrets are absent or unavailable to that workflow; inspect the repo's Actions secrets/environment policy with the account owner. Never paste their values into the repository, logs or chat.
+- Resume with a new private OAuth preflight after the owner completes one-time secure GitHub Actions setup. **No automatic bulk transfer is currently ready.**
