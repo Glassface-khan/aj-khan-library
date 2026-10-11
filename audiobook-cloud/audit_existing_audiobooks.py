@@ -17,6 +17,7 @@ import subprocess
 import sys
 import tempfile
 import time
+import traceback
 import unicodedata
 
 import requests
@@ -158,6 +159,9 @@ def main():
                                    "sample_second":round(offset,1)})
                 except Exception as e:
                     sample["sample_error"]=type(e).__name__
+                    frame=traceback.extract_tb(e.__traceback__)[-1]
+                    sample["error_site"]=str(frame.name)+"@"+str(frame.lineno)
+                    sample["error_module"]=Path(frame.filename).name
                 finally:
                     for f in (folder/("chapter"+str(index)+".mp3"),folder/("clip"+str(index)+".wav")):
                         f.unlink(missing_ok=True)
@@ -169,6 +173,9 @@ def main():
               else:reviews+=1
         except Exception as exc:
           result["reason"]=type(exc).__name__
+          frame=traceback.extract_tb(exc.__traceback__)[-1]
+          result["error_site"]=str(frame.name)+"@"+str(frame.lineno)
+          result["error_module"]=Path(frame.filename).name
           reviews+=1
         # Print no source text, transcripts, audio data or signed URLs.
         print("AUDIO_AUDIT_EDITION "+json.dumps(result,ensure_ascii=False,sort_keys=True),flush=True)
