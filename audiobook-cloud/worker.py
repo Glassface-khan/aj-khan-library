@@ -741,6 +741,24 @@ def chunks_for(section: Section) -> list[Chunk]:
                 packed[-1] = Chunk(candidate, item.pause_after)
                 continue
         packed.append(item)
+    # Previously, a three-word introductory line followed by a full
+    # 24-word chunk stayed isolated. Such tiny TTS prompts often produced
+    # gibberish at the start of every chapter. Borrow a prefix from the
+    # following prose without changing the word order or crossing scenes.
+    if len(packed) >= 2 and packed[0].word_count < 8 and packed[0].pause_after < SCENE_PAUSE:
+        lead_words = packed[0].text.split()
+        following_words = packed[1].text.split()
+        for take in range(1, len(following_words)):
+            first_text = " ".join(lead_words + following_words[:take])
+            remaining_text = " ".join(following_words[take:])
+            if (10 <= len(words(first_text)) <= MAX_CHUNK_WORDS
+                    and len(first_text) <= MAX_CHUNK_CHARS
+                    and len(words(remaining_text)) >= 6
+                    and len(remaining_text) <= MAX_CHUNK_CHARS):
+                original_pause = packed[1].pause_after
+                packed[0] = Chunk(first_text, TECHNICAL_CHUNK_PAUSE)
+                packed[1] = Chunk(remaining_text, original_pause)
+                break
     if packed:
         packed[-1].pause_after = 0.0
     return packed
@@ -1210,7 +1228,51 @@ def prepare(args: argparse.Namespace) -> int:
             result["attempt_count"] = len(attempts)
             sample_results.append(result)
 
-        samples_pass = all(x["passed"] for x in sample_results)
+        # Gate the REAL start of a German chapter, not just a long, hand-
+        # picked prose sample. A previous book passed voice preflight at
+        # 90.87% but failed every production chapter opening. Abort before
+        # launching four expensive workers when this happens.
+        opening_results = []
+        if str(job.get("language_code") or "").upper() == "DE":
+            for section in sections[:2]:
+                real_chunks = chunks_for(section)[:2]
+                for ci, chunk in enumerate(real_chunks):
+                    attempts = []
+                    passed_chunk = False
+                    for sample_attempt in range(1, MAX_CHUNK_RETRIES + 1):
+                        audio = gen_audio(model, state, chunk.text)
+                        m = signal_metrics(audio, model.sample_rate, chunk.word_count)
+                        cheap_ok, cheap_reasons = cheap_audio_pass(m, chunk.word_count)
+                        text_ok, text_detail = False, {"reasons": ["signal_qc_failed"]}
+                        if cheap_ok:
+                            opener_wav = workdir / f"opening_{section.index}_{ci}_a{sample_attempt}.wav"
+                            sf.write(opener_wav, audio, model.sample_rate, subtype="PCM_16")
+                            try:
+                                recognized = asr.transcribe(opener_wav)
+                                text_ok, text_detail = german_chunk_text_pass(
+                                    chunk.text, recognized, chapter_opener=True
+                                )
+                            finally:
+                                opener_wav.unlink(missing_ok=True)
+                        passed_chunk = cheap_ok and text_ok
+                        attempts.append({"attempt": sample_attempt,"passed":passed_chunk,
+                            "word_count":chunk.word_count,
+                            "reasons":cheap_reasons + text_detail.get("reasons",[]),
+                            "word_recall":text_detail.get("word_recall",0),
+                            "wer_similarity":text_detail.get("wer_similarity",0)})
+                        api("workerHeartbeat", {"jobId": job_id})
+                        if passed_chunk:
+                            break
+                        if sample_attempt < MAX_CHUNK_RETRIES and preflight_state_path is not None:
+                            model, state = load_tts_from_prepared(
+                                voice["ttsLanguage"], preflight_state_path,
+                                temp=(None if voice.get("key") in {"gandalf_de","jessica_de"}
+                                      else 0.30),
+                            )
+                    opening_results.append({"section_index":section.index,
+                        "chunk_index":ci,"passed":passed_chunk,"attempts":attempts})
+        opening_pass = all(x["passed"] for x in opening_results)
+        samples_pass = all(x["passed"] for x in sample_results) and opening_pass
         structure_pass = (
             bool(diagnostics.get("toc_count_advisory_only"))
             or diagnostics.get("toc_count", 0) in (0, len(sections))
@@ -1234,12 +1296,15 @@ def prepare(args: argparse.Namespace) -> int:
             "title_aliases": title_aliases,
             "title_alias_match": title_alias_match,
             "sample_sections": sample_results,
+            "chapter_opening_samples": opening_results,
+            "chapter_opening_pass": opening_pass,
             "samples_pass": samples_pass,
             "structure_pass": structure_pass,
             "title_pass": title_pass,
             "policy": {
                 "full_production_requires_all_preflight_samples_pass": True,
                 "preflight_sample_max_attempts": 3,
+                "german_real_chapter_openings_must_pass": True,
                 "failed_samples_are_rerendered_without_lowering_qc_thresholds": True,
                 "asr_model": "base.en" if job["language_code"] == "EN" else "base",
                 "private_inputs_never_uploaded_as_github_artifacts": True,
