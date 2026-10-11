@@ -162,6 +162,7 @@ def main():
                     frame=traceback.extract_tb(e.__traceback__)[-1]
                     sample["error_site"]=str(frame.name)+"@"+str(frame.lineno)
                     sample["error_module"]=Path(frame.filename).name
+                    sample["error_detail"]=re.sub(r"https?://[^\\s]+","[private-url]",str(e))[:180]
                 finally:
                     for f in (folder/("chapter"+str(index)+".mp3"),folder/("clip"+str(index)+".wav")):
                         f.unlink(missing_ok=True)
