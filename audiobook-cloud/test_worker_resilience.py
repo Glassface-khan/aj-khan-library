@@ -71,6 +71,11 @@ def test_german_chunk_transcript_gate():
     passed,detail=worker.german_chunk_text_pass(source,nonsense)
     assert not passed and detail["reasons"],detail
     assert not worker.german_chunk_text_pass("Nein.","")[0], "Empty speech must never be accepted"
+    # A partial sentence can pass relaxed QC but must fail the chapter opener.
+    partial = "Er ging am Morgen in den Garten und sah seine Schwester neben dem Baum."
+    strict_ok, strict_detail = worker.german_chunk_text_pass(source, partial, chapter_opener=True)
+    assert not strict_ok and strict_detail["reasons"], strict_detail
+    assert worker.german_chunk_text_pass(source, good, chapter_opener=True)[0]
 
 
 def test_transient_upload_retry():
