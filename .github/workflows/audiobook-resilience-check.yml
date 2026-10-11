@@ -1,0 +1,29 @@
+name: Audiobook Worker Resilience Check
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/audiobook-resilience-check.yml"
+      - "audiobook-cloud/worker.py"
+      - "audiobook-cloud/test_worker_resilience.py"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  resilience:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install lightweight parser test dependencies
+        run: python -m pip install 'numpy>=1.26,<3' 'requests>=2.31,<3' 'soundfile>=0.12,<1'
+      - name: Compile audiobook code and verify non-lossy recovery
+        run: |
+          python -m py_compile audiobook-cloud/worker.py audiobook-cloud/epub_source.py
+          python audiobook-cloud/test_worker_resilience.py
