@@ -22,7 +22,7 @@ jobs:
           python-version: "3.12"
       - name: Compile worker and EPUB parser
         run: python -m py_compile audiobook-cloud/worker.py audiobook-cloud/epub_source.py
-      - name: Classify a narrated Setting Note without losing prose
+      - name: Preserve Setting Note and Readers Note narrative pages
         shell: bash
         run: |
           python - <<'PY'
@@ -49,9 +49,10 @@ jobs:
            <manifest>
              <item id="p" href="text/prologue.xhtml" media-type="application/xhtml+xml"/>
              <item id="n" href="text/setting_note.xhtml" media-type="application/xhtml+xml"/>
+             <item id="r" href="text/readers_note.xhtml" media-type="application/xhtml+xml"/>
              <item id="c" href="text/chapter_01.xhtml" media-type="application/xhtml+xml"/>
            </manifest>
-           <spine><itemref idref="p"/><itemref idref="n"/><itemref idref="c"/></spine>
+           <spine><itemref idref="p"/><itemref idref="n"/><itemref idref="r"/><itemref idref="c"/></spine>
           </package>"""
           def page(title, body):
               return ('<html xmlns="http://www.w3.org/1999/xhtml"><head><title>'+title+
@@ -63,12 +64,15 @@ jobs:
                   zip.writestr('EPUB/package.opf',opf)
                   zip.writestr('EPUB/text/prologue.xhtml',page('Prologue','A young reader walked into the library.'))
                   zip.writestr('EPUB/text/setting_note.xhtml',page('Setting Note','The mountain village was built above the river.'))
+                  zip.writestr('EPUB/text/readers_note.xhtml',page("Reader's Note",'The narrator would like to thank every reader.'))
                   zip.writestr('EPUB/text/chapter_01.xhtml',page('Chapter 1','The lantern was still burning when he arrived.'))
               title,sections,diag=parse_epub(path,Section)
           assert title=="Parser Test Book",title
-          assert len(sections)==3,[(x.label,x.paragraphs) for x in sections]
+          assert len(sections)==4,[(x.label,x.paragraphs) for x in sections]
           assert any("mountain village" in p for p in sections[1].paragraphs),sections[1]
           assert any("setting_note.xhtml" in p for p in diag["narrative_files"]),diag
+          assert any("reader" in p.lower() for p in sections[2].paragraphs),sections[2]
+          assert any("readers_note.xhtml" in p for p in diag["narrative_files"]),diag
           assert not diag["non_narrative_files_skipped"],diag
-          print("EPUB parser syntax + Setting Note preservation: PASS")
+          print("EPUB parser syntax + Setting/Reader Note preservation: PASS")
           PY
