@@ -1,0 +1,45 @@
+name: One-time Delete Rejected Arne Editions
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/audiobook-delete-rejected-arne.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  purge:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Obtain restricted OIDC identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --fail --silent --show-error \
+            -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
+            "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=ajk-audiobook-factory" \
+            | jq -er '.value' > /tmp/one-time-arne-token
+      - name: Remove exactly THE THREAD and DIE RÜCKFÜHRUNG Arne B audio
+        shell: bash
+        run: |
+          set -euo pipefail
+          jq -n '{op:"workerDeleteTwoRejectedArneEditions",confirm:"AUTHOR_REQUEST_TWO_ARNE_EDITIONS_ONLY"}' >/tmp/one-time-arne-request
+          curl --fail --silent --show-error \
+            -H "Authorization: Bearer $(cat /tmp/one-time-arne-token)" \
+            -H "Content-Type: application/json" \
+            --data-binary @/tmp/one-time-arne-request \
+            "https://ipoqyjrojljmbqslmxxf.supabase.co/functions/v1/audiobook-factory" \
+            >/tmp/one-time-arne-response
+          jq -e '.ok==true and (.outcomes | length)==2 and
+          .outcomes[0].voiceKey=="arne_b" and .outcomes[0].removedChapters==93 and
+          .outcomes[1].voiceKey=="arne_b" and .outcomes[1].removedChapters==82 and
+          (.outcomes|all(.originalManuscriptPreserved and .voiceReferencePreserved))' /tmp/one-time-arne-response >/dev/null
+          echo "ARNE_TWO_EDITION_DELETION=PASS; 175 MP3 chapters removed, source manuscripts and Arne reference preserved."
+      - name: Clear credentials
+        if: always()
+        run: rm -f /tmp/one-time-arne-token /tmp/one-time-arne-request /tmp/one-time-arne-response
