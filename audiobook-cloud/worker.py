@@ -674,7 +674,7 @@ def chunks_for(section: Section) -> list[Chunk]:
     chunks: list[Chunk] = []
 
     chapter_label = bool(re.match(
-        r"^(?:CHAPTER|KAPITEL)\\s+|^[A-ZÄÖÜ][A-Za-zÄÖÜäöüß-]+\\s+KAPITEL$",
+        r"^(?:CHAPTER|KAPITEL)\s+|^[A-ZÄÖÜ][A-Za-zÄÖÜäöüß-]+\s+KAPITEL$",
         section.title or "",
         re.I,
     ))
