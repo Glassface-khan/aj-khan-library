@@ -669,7 +669,7 @@ def split_long_part(text: str) -> list[str]:
     return out
 
 
-def chunks_for(section: Section) -> list[Chunk]:
+def chunks_for(section: Section, min_chunk_words: int = 0) -> list[Chunk]:
     """Preserve paragraph rhythm while splitting long text at natural boundaries."""
     chunks: list[Chunk] = []
 
@@ -759,6 +759,50 @@ def chunks_for(section: Section) -> list[Chunk]:
                 packed[0] = Chunk(first_text, TECHNICAL_CHUNK_PAUSE)
                 packed[1] = Chunk(remaining_text, original_pause)
                 break
+    # Pocket TTS German can hallucinate on isolated 4-10 word prompts
+    # even if the rest of a chapter sounds excellent. Balance adjacent
+    # speech pieces instead of blindly retrying identical short prompts.
+    # Preserve every written word and never blend across scene-break pauses.
+    if min_chunk_words > 0:
+        balanced: list[Chunk] = []
+        i = 0
+        while i < len(packed):
+            current = packed[i]
+            if current.word_count < min_chunk_words and i + 1 < len(packed) and current.pause_after < SCENE_PAUSE:
+                following = packed[i + 1]
+                combined = current.text.rstrip() + " " + following.text.lstrip()
+                if len(words(combined)) <= MAX_CHUNK_WORDS and len(combined) <= MAX_CHUNK_CHARS:
+                    packed[i + 1] = Chunk(combined, following.pause_after)
+                    i += 1
+                    continue
+                # When the next piece already fills the text window, borrow
+                # enough words to give the short piece useful speech context.
+                next_tokens = following.text.split()
+                for take in range(1, len(next_tokens)):
+                    leading = current.text.rstrip() + " " + " ".join(next_tokens[:take])
+                    trailing = " ".join(next_tokens[take:])
+                    if (min_chunk_words <= len(words(leading)) <= MAX_CHUNK_WORDS
+                            and min_chunk_words <= len(words(trailing)) <= MAX_CHUNK_WORDS
+                            and len(leading) <= MAX_CHUNK_CHARS
+                            and len(trailing) <= MAX_CHUNK_CHARS):
+                        balanced.append(Chunk(leading, TECHNICAL_CHUNK_PAUSE))
+                        packed[i + 1] = Chunk(trailing, following.pause_after)
+                        i += 1
+                        break
+                else:
+                    pass
+                if i > 0 and len(balanced) and balanced[-1].text == leading:
+                    continue
+            if current.word_count < min_chunk_words and balanced and balanced[-1].pause_after < SCENE_PAUSE:
+                prev = balanced[-1]
+                combined = prev.text.rstrip() + " " + current.text.lstrip()
+                if len(words(combined)) <= MAX_CHUNK_WORDS and len(combined) <= MAX_CHUNK_CHARS:
+                    balanced[-1] = Chunk(combined, current.pause_after)
+                    i += 1
+                    continue
+            balanced.append(current)
+            i += 1
+        packed = balanced
     if packed:
         packed[-1].pause_after = 0.0
     return packed
@@ -1235,7 +1279,7 @@ def prepare(args: argparse.Namespace) -> int:
         opening_results = []
         if str(job.get("language_code") or "").upper() == "DE":
             for section in sections[:2]:
-                real_chunks = chunks_for(section)[:2]
+                real_chunks = chunks_for(section, min_chunk_words=12)[:2]
                 for ci, chunk in enumerate(real_chunks):
                     attempts = []
                     passed_chunk = False
@@ -1351,7 +1395,7 @@ def section_from_json(path: Path) -> Section:
 
 
 def produce_section(job: dict[str, Any], section: Section, model, state, asr: AsrChecker, outdir: Path, job_id: str) -> tuple[bool, dict[str, Any]]:
-    chunks = chunks_for(section)
+    chunks = chunks_for(section, min_chunk_words=(12 if job.get("language_code") == "DE" else 0))
     if not chunks:
         return False, {"reasons": ["no_chunks"]}
     sr = model.sample_rate
