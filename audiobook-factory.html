@@ -32,7 +32,34 @@ pre{white-space:pre-wrap;word-break:break-word;font-size:11px;background:#11100d
 .edition-warning .edition-confirm input{margin-top:2px;flex:0 0 auto}
 .library-tools{display:grid;grid-template-columns:minmax(0,1fr) 150px 150px;gap:10px;margin:14px 0 6px}
 .library-series{border:1px solid var(--rule);border-radius:12px;overflow:hidden;margin-top:14px;background:rgba(255,255,255,.015)}
-.library-series-head{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:13px 14px;border-bottom:1px solid var(--rule);background:rgba(192,154,82,.055)}
+.library-series-head{display:flex;align-items:center;gap:12px;padding:13px 14px;background:rgba(192,154,82,.055);cursor:pointer;list-style:none;min-height:54px}
+.library-series-head::-webkit-details-marker,.section-fold>summary::-webkit-details-marker{display:none}
+.library-series-head::before{content:'▸';color:var(--gold);flex:none;width:16px;font-size:17px}
+.library-series[open]>.library-series-head::before{content:'▾'}
+.library-series-head .library-series-title{flex:1;min-width:0}
+.library-series[open]>.library-series-head{border-bottom:1px solid var(--rule)}
+.library-series-head:focus-visible,.section-fold>summary:focus-visible{outline:2px solid var(--gold);outline-offset:-2px}
+.library-fold-actions{display:flex;flex-wrap:wrap;gap:8px;margin:12px 0 0}
+.library-fold-actions button{min-height:38px;padding:8px 11px;font-size:12px;border-color:var(--rule)}
+.audio-book-variants{padding:11px 14px;border-top:1px solid rgba(74,66,53,.72)}
+.audio-book-head{display:flex;gap:11px;align-items:center}
+.audio-book-head .audio-title{flex:1;min-width:0}
+.audio-voice-count{font-size:11px;color:var(--gold);white-space:nowrap}
+.audio-edition-list{margin:9px 0 0 40px;border-left:2px solid var(--rule)}
+.audio-edition{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:10px 0 10px 12px}
+.audio-edition+.audio-edition{border-top:1px solid rgba(74,66,53,.55)}
+.audio-edition-info{flex:1;min-width:0}
+.audio-edition-name{font-size:14px;font-weight:650}
+.audio-edition .audio-state{white-space:normal;text-align:right}
+.section-fold>summary{cursor:pointer;list-style:none;display:flex;align-items:center;gap:12px;min-height:48px}
+.section-fold>summary::before{content:'▸';color:var(--gold);font-size:18px}
+.section-fold[open]>summary::before{content:'▾'}
+.section-fold>summary h2{margin:0}
+.section-fold>summary .muted{font-size:12px;margin-left:auto;text-align:right}
+.section-fold-content{padding-top:12px}
+.jump-links{display:flex;gap:8px;flex-wrap:wrap;margin:16px 0 6px}
+.jump-links a{color:var(--ink);text-decoration:none;border:1px solid var(--rule);border-radius:999px;padding:9px 12px;font-size:12px}
+.jump-links a:focus-visible{outline:2px solid var(--gold)}
 .library-series-title{font-family:Georgia,serif;font-size:20px;line-height:1.15}
 .library-series-meta{color:var(--gold);font-size:11px;letter-spacing:.08em;text-transform:uppercase;white-space:nowrap}
 .audio-row{display:grid;grid-template-columns:38px minmax(0,1fr) auto;gap:11px;align-items:center;padding:12px 14px;border-top:1px solid rgba(74,66,53,.72)}
@@ -52,6 +79,11 @@ pre{white-space:pre-wrap;word-break:break-word;font-size:11px;background:#11100d
   .audio-state{grid-column:2}
   .library-series-head{align-items:flex-start}
   .library-series-meta{white-space:normal;text-align:right}
+  .audio-book-head{flex-wrap:wrap}
+  .audio-voice-count{margin-left:41px}
+  .audio-edition{align-items:flex-start;flex-wrap:wrap}
+  .audio-edition .audio-state{width:100%;text-align:left}
+  .audio-edition-list{margin-left:32px}
 }
 .hidden{display:none!important}
 @media(max-width:650px){.grid{grid-template-columns:1fr}.full{grid-column:auto}.row>*{width:100%}}
@@ -63,6 +95,12 @@ pre{white-space:pre-wrap;word-break:break-word;font-size:11px;background:#11100d
     <div class="grow"><div class="gold">A. J. Khan</div><h1>Audiobook Factory</h1><div class="sub">Cloud-Produktion · kein Notebook erforderlich</div></div>
     <button id="back">← Bibliothek</button>
   </div>
+  <nav class="jump-links" aria-label="Zu den Bereichen springen">
+    <a href="#newJob">+ Neues Hörbuch</a>
+    <a href="#libraryCard">Audiobook-Bibliothek</a>
+    <a href="#jobsCard">Cloud-Jobs</a>
+    <a href="#notStartedCard">Noch nicht begonnen</a>
+  </nav>
 
   <section class="card" id="authCard">
     <h2>Admin-Zugang</h2>
@@ -139,20 +177,31 @@ pre{white-space:pre-wrap;word-break:break-word;font-size:11px;background:#11100d
         <option value="READY">Fertig</option>
       </select>
     </div>
+    <div class="library-fold-actions"><button id="expandLibraryGroups" type="button">Alle Gruppen öffnen</button><button id="collapseLibraryGroups" type="button">Alle Gruppen schließen</button></div>
     <p id="listenStatus" class="muted" role="status" aria-live="polite"></p>
     <div id="audioOverview"><p class="muted">Lade …</p></div>
   </section>
 
   <section class="card hidden" id="jobsCard">
-    <div class="row"><h2 class="grow">Cloud-Jobs</h2><button id="refresh">Aktualisieren</button></div>
-    <div id="jobs"><p class="muted">Lade …</p></div>
+    <details class="section-fold" id="jobsFold">
+      <summary><h2>Cloud-Jobs</h2><span class="muted" id="jobsSummary">Lade Aufträge …</span></summary>
+      <div class="section-fold-content">
+        <button id="refresh" type="button">Aktualisieren</button>
+        <div id="jobs"><p class="muted">Lade …</p></div>
+      </div>
+    </details>
   </section>
   <section class="card hidden" id="notStartedCard">
-    <div class="row"><div class="grow"><h2>Noch nicht begonnen</h2><div id="notStartedSummary" class="muted">Prüfe Bücher der Autorenseite …</div></div><button id="refreshNotStarted">Aktualisieren</button></div>
-    <p class="muted">Bücher ohne fertige Hörbuchfassung und ohne offenen Cloud-Job. Sprache und Stimme wählen, dann das geschützte EPUB direkt übernehmen.</p>
-    <input id="notStartedSearch" type="text" placeholder="Buchtitel suchen">
-    <div id="notStartedStatus" role="status" class="muted" style="margin-top:12px"></div><div id="notStartedElapsed" class="muted" style="margin-top:6px"></div>
-    <div id="notStartedBooks"></div>
+    <details class="section-fold" id="notStartedFold">
+      <summary><h2>Noch nicht begonnen</h2><span id="notStartedSummary" class="muted">Prüfe Buchkatalog …</span></summary>
+      <div class="section-fold-content">
+        <button id="refreshNotStarted" type="button">Aktualisieren</button>
+        <p class="muted">Bücher ohne fertige Hörbuchfassung und ohne offenen Cloud-Job. Sprache und Stimme wählen, dann das geschützte EPUB direkt übernehmen.</p>
+        <input id="notStartedSearch" type="text" placeholder="Buchtitel suchen">
+        <div id="notStartedStatus" role="status" class="muted" style="margin-top:12px"></div><div id="notStartedElapsed" class="muted" style="margin-top:6px"></div>
+        <div id="notStartedBooks"></div>
+      </div>
+    </details>
   </section>
 <dialog id="downloadDialog" style="background:var(--panel);color:var(--ink);border:1px solid var(--rule);border-radius:14px;max-width:580px;width:calc(100% - 40px)">
  <div class="row"><h2 id="downloadTitle" class="grow">Hörbuch herunterladen</h2><button id="closeDownloads">Schließen</button></div>
