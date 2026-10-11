@@ -1,0 +1,22 @@
+name: Audiobook Factory UI Check
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "audiobook-factory.html"
+      - "audiobook-cloud/test_factory_ui.cjs"
+      - ".github/workflows/audiobook-factory-ui-check.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  ui:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check JS syntax, narrator grouping, UI fold controls and links
+        run: node audiobook-cloud/test_factory_ui.cjs
