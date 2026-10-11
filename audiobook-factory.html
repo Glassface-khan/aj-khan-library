@@ -1216,6 +1216,7 @@ function renderJob(j,queuePos){
      const busy=!!uploadFeedback_.get(j.id)?.busy;
      actions+='<button data-resume-upload="'+j.id+'" aria-busy="'+busy+'" '+(busy?'disabled':'')+'>'+(busy?'EPUB WIRD GELADEN …':'EPUB-UPLOAD FORTSETZEN')+'</button>';
    }
+   if(j.status==='ready'&&j.stage==='ready_not_published'&&j.requested_title==='DIE ORDNUNG'&&j.voice_key==='jessica_de')actions+='<a href="./audiobook-private-review.html" style="display:inline-block;padding:10px 14px;border:1px solid #bba072;border-radius:8px;color:#e1c18b">▶ Privat anhören · Kapitel wählen</a>';
    if(j.status==='needs_attention'||j.status==='failed'){
      if(voiceQcProblem)actions+='<button data-voice-qc="'+j.id+'">STIMME / REFERENZ PRÜFEN</button><button data-retry="'+j.id+'">NACH KORREKTUR ERNEUT VERSUCHEN</button>';
      else actions+='<button data-retry="'+j.id+'">Automatisch erneut versuchen</button>';
