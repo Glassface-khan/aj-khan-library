@@ -5,6 +5,8 @@ on:
     branches: [main]
     paths:
       - "audiobook-factory.html"
+      - "audiobook-private-review.html"
+      - "audiobook-cloud/test_private_review.cjs"
       - "audiobook-cloud/test_factory_ui.cjs"
       - ".github/workflows/audiobook-factory-ui-check.yml"
   workflow_dispatch:
@@ -20,3 +22,5 @@ jobs:
       - uses: actions/checkout@v4
       - name: Check JS syntax, narrator grouping, UI fold controls and links
         run: node audiobook-cloud/test_factory_ui.cjs
+      - name: Validate private chapter preview and auth-aware link
+        run: node audiobook-cloud/test_private_review.cjs
