@@ -58,6 +58,12 @@ assert(html.includes("data-publish-reviewed")&&html.includes("op:'publishReviewe
 assert(html.includes("confirmPublication:'ICH_HABE_DIE_AUFNAHME_GEPRUEFT'"),'Author must explicitly confirm manual release');
 assert(html.includes("j.status==='ready'&&j.stage==='ready_not_published'"),'Release button must be limited to withheld completed editions');
 assert(html.includes("confirmTitle:j.requested_title")&&html.includes("confirmVoiceKey:j.voice_key"),'Release must target exact title and narrator');
+assert(html.includes("function qualityHold_(j)")&&html.includes("function qualityHoldExplanation_(j)"),'QC holds require clear root-cause explanation');
+assert(html.includes("Teilstichprobe ")&&html.includes("Qualitätsprüfung fehlgeschlagen"),'Failed overall QC must not display a misleading passing percentage');
+assert(html.includes("CORRECTION_REVIEWED_AND_APPROVED"),'QC failures must not permit silent retry without explicit correction acknowledgement');
+assert(html.includes("Nur nach Korrektur neu prüfen"),'Previous blind auto-retry CTA must be removed');
+assert(!html.includes(">Automatisch erneut versuchen</button>"),'No deceptive automatic retry CTA should remain');
+
 
 assert(output.includes('data-library-group="singles"')&&output.includes('data-library-group="series:the_vessel"'),'Missing fold group');
 assert(output.includes('Bücher')&&mocks['#librarySummary'].textContent.includes('2 Bücher'),'Bad unique book count');
