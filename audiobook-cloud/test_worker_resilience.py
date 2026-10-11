@@ -36,6 +36,43 @@ def test_tiny_chunk_merge():
          "No.", "He said he had seen the lights through the window."]
     ))
 
+def test_natural_sentence_packing():
+    prose = [
+        "The man unlocked the rusty garden gate.",
+        "His neighbor was waiting under the tree.",
+        "Neither of them had expected the visitor.",
+        "They walked slowly toward the empty house.",
+        "Someone had left a letter on the table.",
+        "The paper was wet from yesterday's rain.",
+        "He carefully opened it beside the window.",
+        "The first sentence was difficult to understand.",
+        "His neighbor asked him to continue reading.",
+        "Outside, the sky began to turn orange.",
+        "They had finally found the missing message.",
+    ]
+    section = worker.Section(6, "chapter", "Chapter Six", "Chapter Six", prose)
+    chunks = worker.chunks_for(section)
+    assert len(chunks) <= 5, (len(chunks), [c.text for c in chunks])
+    assert worker.words(" ".join(prose)) == worker.words(" ".join(c.text for c in chunks))
+    assert all(c.word_count <= worker.MAX_CHUNK_WORDS for c in chunks)
+    assert all(len(c.text) <= worker.MAX_CHUNK_CHARS for c in chunks)
+    # No chunk may join across a scene break.
+    marked = worker.Section(8, "chapter", "Chapter Eight", "Chapter Eight", prose[:4]+["*"]+prose[4:])
+    divided = worker.chunks_for(marked)
+    assert any(c.pause_after >= worker.SCENE_PAUSE for c in divided[:-1]),divided
+    assert worker.words(" ".join(prose)) == worker.words(" ".join(c.text for c in divided))
+
+
+def test_german_chunk_transcript_gate():
+    source = "Er ging am Morgen in den Garten und sah seine Schwester neben dem alten Baum stehen."
+    good = "Er ging am Morgen in den Garten und sah seine Schwester neben dem alten Baum stehen."
+    nonsense = "Bollek ach der brent Karhel ga na but ist wer"
+    assert worker.german_chunk_text_pass(source,good)[0]
+    passed,detail=worker.german_chunk_text_pass(source,nonsense)
+    assert not passed and detail["reasons"],detail
+    assert not worker.german_chunk_text_pass("Nein.","")[0], "Empty speech must never be accepted"
+
+
 def test_transient_upload_retry():
     class Response:
         def __init__(self, status, data):
@@ -83,5 +120,7 @@ def test_transient_upload_retry():
 
 if __name__ == "__main__":
     test_tiny_chunk_merge()
+    test_natural_sentence_packing()
+    test_german_chunk_transcript_gate()
     test_transient_upload_retry()
     print("RESILIENCE_TESTS=PASS")
