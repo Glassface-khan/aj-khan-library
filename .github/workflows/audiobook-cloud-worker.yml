@@ -56,7 +56,15 @@ jobs:
           OIDC_TOKEN="$(printf '%s' "$OIDC_JSON" | jq -r '.value')"
           JOB_ID=""
           for attempt in 1 2 3 4; do
-            curl --fail --silent --show-error               -H "Authorization: Bearer $OIDC_TOKEN"               -H "Content-Type: application/json"               -d '{"op":"workerClaim"}'               "https://ipoqyjrojljmbqslmxxf.supabase.co/functions/v1/audiobook-factory"               > claim.json
+            HTTP_STATUS="$(curl --silent --show-error -o claim.json -w '%{http_code}'               -H "Authorization: Bearer $OIDC_TOKEN"               -H "Content-Type: application/json"               -d '{"op":"workerClaim"}'               "https://ipoqyjrojljmbqslmxxf.supabase.co/functions/v1/audiobook-factory")"
+            if [ "$HTTP_STATUS" = "402" ]; then
+              echo "::error::Supabase returned HTTP 402. Check organization usage/billing restrictions. The German voice synthesis was not started; no audiobook files were changed."
+              exit 1
+            fi
+            if [ "$HTTP_STATUS" != "200" ]; then
+              echo "::error::Supabase audiobook worker claim HTTP $HTTP_STATUS; production not started."
+              exit 1
+            fi
             JOB_ID="$(jq -r '.job.id // empty' claim.json)"
             if [ -n "$JOB_ID" ]; then
               break
