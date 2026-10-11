@@ -243,8 +243,8 @@ button.edition-delete:focus-visible{outline:2px solid var(--bad)}
 <script>
 try{
   const u=new URL(location.href);
-  if(u.searchParams.get('v')!=='20261011approve1'){
-    history.replaceState(null,'',location.pathname+'?v=20261011approve1');
+  if(u.searchParams.get('v')!=='20261012qcstop1'){
+    history.replaceState(null,'',location.pathname+'?v=20261012qcstop1');
   }
 }catch(_){}
 const API='https://ipoqyjrojljmbqslmxxf.supabase.co/functions/v1/audiobook-factory';
@@ -1150,6 +1150,25 @@ function jobRank_(j){
 function isEpubImportProblem(j){
  return /EPUB section cannot be safely classified|Text before first narrative heading|Empty narrative EPUB section|Mixed title\/contents and narrative EPUB section/.test(String(j.error_detail||''));
 }
+function qualityHold_(j){
+ const stage=String(j?.stage||''),code=String(j?.error_code||'');
+ return ['preflight_qc_failed','production_qc_blocked','held_until_german_voice_qc_fixed',
+ 'held_for_german_voice_quality_repair'].includes(stage) ||
+ (['PREPRODUCTION_QC_FAILED','SECTION_QC_FAILED','GERMAN_VOICE_QC_INVESTIGATION',
+ 'GERMAN_CHAPTER_OPENING_QC_FAILURE'].includes(code) &&
+ ['needs_attention','failed'].includes(String(j?.status||'')));
+}
+function qualityHoldExplanation_(j){
+ const stage=String(j?.stage||''),info=j?.qc_summary||{};
+ if(stage.startsWith('held_'))return 'Vorsorglicher Sicherheitsstopp. Die Produktion wurde nicht gestartet; erst Stimme oder Produktionslogik kontrollieren.';
+ if(stage==='preflight_qc_failed'&&info.chapter_opening_pass===false)
+   return 'Der tatsächliche deutsche Kapitelanfang hat die Qualitätsprüfung nicht bestanden. Ein hoher Durchschnittswert anderer Proben ändert daran nichts.';
+ if(stage==='preflight_qc_failed')
+   return 'Mindestens eine Sprach- oder Texttreueprobe wurde nicht bestanden. Die vollständige Produktion wurde nicht gestartet.';
+ if(stage==='production_qc_blocked')
+   return 'Einzelne Kapitel haben die Sprach- oder Stilleprüfung nicht bestanden. Die fertigen Abschnitte bleiben erhalten; blinde Wiederholungen sind gestoppt.';
+ return 'Sprachqualität unzureichend. Erst Ursache korrigieren, dann gezielt erneut prüfen.';
+}
 function isSevereVoiceQc_(j){
  const score=Number(j&&j.qc_score);
  return String(j&&j.error_code||'')==='PREPRODUCTION_QC_FAILED' &&
@@ -1185,6 +1204,7 @@ function statusLabel(j,queuePos){
    return j.stage==='storage_path_rebuild'?('Sicherheits-Neuaufbau'+p):('Warteschlange'+p);
  }
  if(j.status==='ready'&&j.stage==='ready_not_published')return 'Produziert · Hörfreigabe ausstehend';
+ if(j.status==='needs_attention'&&qualityHold_(j))return String(j.stage||'').startsWith('held_')?'Sicherheitsstopp · nicht gestartet':'Qualitätsstopp · keine Produktion aktiv';
  if(j.status==='production'&&complete&&j.qc_status==='passed')return 'Finalisierung';
  const map={uploading:'Upload',preflight:'Vorprüfung',qc_running:'Qualitätsprüfung',production:'Produktion',finalizing:'Finalisierung',ready:'Fertig',needs_attention:'Prüfung nötig',failed:'Fehler',cancelled:'Abgebrochen'};
  return map[j.status]||j.status;
@@ -1193,6 +1213,7 @@ function renderJob(j,queuePos){
  const sourceProblem=isSourceProblem(j);
  const importProblem=isEpubImportProblem(j);
  const voiceQcProblem=isSevereVoiceQc_(j);
+ const qualityStopped=qualityHold_(j);
  const pct=j.progress_total?Math.round(100*j.progress_done/j.progress_total):0;
  const complete=Number(j.progress_total||0)>0&&Number(j.progress_done||0)>=Number(j.progress_total||0);
  const title=j.requested_title||j.detected_title||j.source_file_name;
@@ -1220,21 +1241,31 @@ function renderJob(j,queuePos){
    if(j.status==='ready'&&j.stage==='ready_not_published')
      actions+='<button data-publish-reviewed="'+esc(j.id)+'">✓ Nach Hörprüfung freigeben</button>';
    if(j.status==='needs_attention'||j.status==='failed'){
-     if(voiceQcProblem)actions+='<button data-voice-qc="'+j.id+'">STIMME / REFERENZ PRÜFEN</button><button data-retry="'+j.id+'">NACH KORREKTUR ERNEUT VERSUCHEN</button>';
-     else actions+='<button data-retry="'+j.id+'">Automatisch erneut versuchen</button>';
+     if(qualityStopped)actions+='<button data-voice-qc="'+j.id+'">Stimme / Referenz prüfen</button>'+
+       '<button data-retry="'+j.id+'">Nur nach Korrektur neu prüfen</button>';
+     else if(voiceQcProblem)actions+='<button data-voice-qc="'+j.id+'">STIMME / REFERENZ PRÜFEN</button>'+
+       '<button data-retry="'+j.id+'">NACH KORREKTUR ERNEUT VERSUCHEN</button>';
+     else actions+='<button data-retry="'+j.id+'">Erneut versuchen</button>';
    }
    if(['uploading','queued','preflight','qc_running','production','finalizing'].includes(j.status)&&!complete)actions+='<button data-cancel="'+j.id+'">Abbrechen</button>';
  }
  const progress=(sourceProblem||importProblem)
    ?''
-   :'<progress max="100" value="'+pct+'"></progress><div class="muted">'+j.progress_done+' / '+(j.progress_total||'?')+' Abschnitte · '+pct+'%</div>';
- const score=(!sourceProblem&&!importProblem&&j.qc_score!=null)?'<span class="badge">QC '+Math.round(Number(j.qc_score))+'%</span>':'';
+   :(qualityStopped&&Number(j.progress_done||0)===0
+     ?'<p class="muted">Produktion nicht erfolgreich gestartet · '+(j.progress_total||'?')+' Abschnitte vorgesehen</p>'
+     :'<progress max="100" value="'+pct+'"></progress><div class="muted">'+j.progress_done+' / '+(j.progress_total||'?')+' Abschnitte abgeschlossen · '+pct+'%</div>');
+ const score=(!sourceProblem&&!importProblem&&j.qc_score!=null)
+   ?'<span class="badge'+(qualityStopped?' bad':'')+'">'+
+     (qualityStopped?'Teilstichprobe ':'QC ')+Math.round(Number(j.qc_score))+
+     '%'+(qualityStopped?' · Qualitätsprüfung fehlgeschlagen':'')+'</span>':'';
  const manualReview=j.status==='ready'&&j.stage==='ready_not_published'
    ?'<p class="muted"><strong>100 % produziert – kein Hänger.</strong> Die automatische Veröffentlichung wurde aus Qualitätsgründen ausgeschaltet. Die Audiofassung wartet auf eine persönliche Hörprüfung und ist noch nicht in der Hörbibliothek freigegeben. QC PASS allein bestätigt nicht die Hörqualität.</p>':'';
+  const qualityNote=qualityStopped?'<p class="bad"><strong>'+esc(qualityHoldExplanation_(j))+
+   '</strong> Wiederholtes Aktualisieren oder Neustarten ohne Korrektur hilft hier nicht.</p>':'';
   const err=importProblem?'<p class="bad">Der EPUB-Import wurde vor der Audioerstellung angehalten. Der Importer konnte die Buchstruktur nicht zuordnen. Das bedeutet nicht, dass dein Manuskript fehlerhaft ist.</p><p class="muted">'+esc(j.error_detail)+'</p>':sourceProblem?'<p class="bad">'+esc(sourceProblemText_(j))+'</p>':voiceQcProblem?'<p class="bad">Die Stimmprobe „'+esc(j.voice_name||j.voice_key||'')+'“ ist bei der Texttreue-Prüfung massiv gescheitert (QC '+Math.round(Number(j.qc_score))+' %). Bitte zuerst die Stimmreferenz verbessern oder einen anderen Erzähler wählen. Wiederholungen ohne Änderung beheben das in der Regel nicht.</p>':(j.error_detail?'<p class="bad">'+esc(j.error_detail)+'</p>':'');
  return '<div class="job"><div class="job-title">'+esc(title)+'</div>'+
  '<div class="job-meta">'+esc(j.voice_name)+' · '+esc(j.language_code)+' · '+esc(statusLabel(j,queuePos))+'</div>'+q+score+
- progress+manualReview+err+'<div class="row">'+actions+'</div><p class="muted" role="status" aria-live="polite" data-upload-feedback="'+esc(j.id)+'">'+esc(uploadFeedback_.get(j.id)?.message||'')+'</p></div>';
+ progress+manualReview+qualityNote+(qualityStopped?'':err)+'<div class="row">'+actions+'</div><p class="muted" role="status" aria-live="polite" data-upload-feedback="'+esc(j.id)+'">'+esc(uploadFeedback_.get(j.id)?.message||'')+'</p></div>';
 }
 function prepareSourceReplacement_(jobId){
  const j=currentJobs.find(x=>x.id===jobId);if(!j)return;
@@ -1300,8 +1331,17 @@ async function loadJobs(){
    });
    document.querySelectorAll('[data-retry]').forEach(b=>b.onclick=async()=>{
      const j=currentJobs.find(x=>x.id===b.dataset.retry);
-     if(isSevereVoiceQc_(j)&&!confirm('Bisherige Sprachprobe erreichte nur '+Math.round(Number(j.qc_score))+' % QC. Hast du die Referenz korrigiert? Ohne Änderung ist ein erneuter Fehler wahrscheinlich. Trotzdem neu starten?'))return;
-     try{await api({op:'retryJob',jobId:b.dataset.retry});await loadJobs()}catch(e){$('#error').textContent=e.message}
+     if(!j)return;
+     const correction=qualityHold_(j);
+     if(correction&&!confirm('Qualitätsstopp bei '+(j.requested_title||'dem Hörbuch')+'.\\n\\nNur fortfahren, wenn die Stimmreferenz, Syntheselogik oder Quelle tatsächlich korrigiert wurde. Derselbe Versuch kann wieder fehlschlagen.\\n\\nHast du eine Korrektur vorgenommen und möchtest die Qualitätsprüfung bewusst erneut starten?'))return;
+     if(!correction&&isSevereVoiceQc_(j)&&!confirm('Die bisherige Sprachprobe ist gescheitert. Wurde die Referenz korrigiert? Trotzdem starten?'))return;
+     b.disabled=true;
+     try{
+       await api({op:'retryJob',jobId:b.dataset.retry,
+         ...(correction?{confirmAfterQualityCorrection:'CORRECTION_REVIEWED_AND_APPROVED'}:{})});
+       await loadJobs();
+     }catch(e){$('#error').textContent=String(e.message||e)}
+     finally{b.disabled=false}
    });
    document.querySelectorAll('[data-cancel]').forEach(b=>b.onclick=async()=>{if(confirm('Job wirklich abbrechen?')){await api({op:'cancelJob',jobId:b.dataset.cancel});await loadJobs()}});
    document.querySelectorAll('[data-dismiss]').forEach(b=>b.onclick=async()=>{if(confirm('Diesen fehlerhaften Job aus der Liste ausblenden?')){await api({op:'cancelJob',jobId:b.dataset.dismiss});await loadJobs()}});
