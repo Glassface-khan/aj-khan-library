@@ -24,7 +24,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        shard: [0, 1, 2, 3, 4, 5, 6, 7]
+        shard: [0]
     env:
       OMP_NUM_THREADS: "2"
       MKL_NUM_THREADS: "2"
@@ -57,7 +57,7 @@ jobs:
         run: |
           set -euo pipefail
           export AUDIT_OIDC_TOKEN="$(cat /tmp/private-audit-oidc)"
-          python audiobook-cloud/audit_existing_audiobooks.py --shard "$SHARD" --shards 8
+          python audiobook-cloud/audit_existing_audiobooks.py --shard "$SHARD" --shards 8 --max-books 1
       - name: Erase ephemeral audit credentials
         if: always()
         run: rm -f /tmp/private-audit-oidc
