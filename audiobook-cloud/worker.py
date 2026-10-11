@@ -778,6 +778,7 @@ def chunks_for(section: Section, min_chunk_words: int = 0) -> list[Chunk]:
                 # When the next piece already fills the text window, borrow
                 # enough words to give the short piece useful speech context.
                 next_tokens = following.text.split()
+                borrowed = False
                 for take in range(1, len(next_tokens)):
                     leading = current.text.rstrip() + " " + " ".join(next_tokens[:take])
                     trailing = " ".join(next_tokens[take:])
@@ -787,11 +788,10 @@ def chunks_for(section: Section, min_chunk_words: int = 0) -> list[Chunk]:
                             and len(trailing) <= MAX_CHUNK_CHARS):
                         balanced.append(Chunk(leading, TECHNICAL_CHUNK_PAUSE))
                         packed[i + 1] = Chunk(trailing, following.pause_after)
+                        borrowed = True
                         i += 1
                         break
-                else:
-                    pass
-                if i > 0 and len(balanced) and balanced[-1].text == leading:
+                if borrowed:
                     continue
             if current.word_count < min_chunk_words and balanced and balanced[-1].pause_after < SCENE_PAUSE:
                 prev = balanced[-1]
