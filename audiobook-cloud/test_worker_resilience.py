@@ -75,6 +75,40 @@ def test_chapter_opener_is_not_isolated():
     assert all(c.word_count<=worker.MAX_CHUNK_WORDS and len(c.text)<=worker.MAX_CHUNK_CHARS for c in chunks)
 
 
+def test_german_balanced_prompts_preserve_text():
+    chapters = [
+        worker.Section(7, "chapter", "Kapitel 7", "Die Schachtel", [
+            "Es war still.",
+            "Die junge Frau stand mitten auf dem Platz und beobachtete die Menschen, die um sie herum eilten, ohne auch nur ein einziges Mal aufzublicken.",
+            "Eine Stimme sagte leise, dass sie nicht mehr zurückkehren dürfe.",
+        ]),
+        worker.Section(9, "chapter", "Kapitel 9", "1971", [
+            "1971.",
+            "Niemand wusste, warum die Akte nach all den Jahren ausgerechnet auf seinem Schreibtisch landete.",
+            "*",
+            "Was ist geschehen?",
+            "Der Mann hob langsam den Kopf und erkannte das Gesicht sofort.",
+        ]),
+        worker.Section(5, "chapter", "Kapitel 5", "Die Rückführung", [
+            "Er glaubte, endlich zu Hause angekommen zu sein, obwohl er den Weg nicht mehr kannte.",
+            "Nein.",
+            "Das musste ein Fehler sein, sagte der Beamte und legte das Papier neben die vergilbte Mappe.",
+        ]),
+    ]
+    for section in chapters:
+        chunks = worker.chunks_for(section, min_chunk_words=12)
+        assert chunks, section
+        assert worker.words(" ".join(c.text for c in chunks)) == worker.words(
+            section.spoken_text.replace("[[SCENE_BREAK]]", " ")
+        ), (section, chunks)
+        assert all(0 < c.word_count <= worker.MAX_CHUNK_WORDS and
+                   len(c.text) <= worker.MAX_CHUNK_CHARS for c in chunks)
+        assert not (chunks[0].word_count < 10 and len(chunks)>1
+                    and chunks[0].pause_after < worker.SCENE_PAUSE),[(c.text,c.word_count) for c in chunks]
+        if "*" in section.paragraphs:
+            assert any(c.pause_after >= worker.SCENE_PAUSE for c in chunks[:-1])
+
+
 def test_german_chunk_transcript_gate():
     source = "Er ging am Morgen in den Garten und sah seine Schwester neben dem alten Baum stehen."
     good = "Er ging am Morgen in den Garten und sah seine Schwester neben dem alten Baum stehen."
@@ -139,6 +173,7 @@ if __name__ == "__main__":
     test_tiny_chunk_merge()
     test_natural_sentence_packing()
     test_chapter_opener_is_not_isolated()
+    test_german_balanced_prompts_preserve_text()
     test_german_chunk_transcript_gate()
     test_transient_upload_retry()
     print("RESILIENCE_TESTS=PASS")
