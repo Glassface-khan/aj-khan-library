@@ -69,6 +69,13 @@ pre{white-space:pre-wrap;word-break:break-word;font-size:11px;background:#11100d
 .audio-meta{font-size:12px;color:var(--muted);margin-top:4px;line-height:1.4}
 .audio-state{white-space:nowrap}
 .audio-actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px}
+.audio-actions button{min-height:40px;padding:8px 12px}
+button.edition-delete{border-color:var(--bad);color:var(--bad);font-size:12px}
+button.edition-delete:focus-visible{outline:2px solid var(--bad)}
+#deleteEditionDialog{background:var(--panel);color:var(--ink);border:1px solid var(--rule);border-radius:14px;max-width:540px;width:calc(100% - 36px);max-height:85dvh;overflow-y:auto}
+#deleteEditionDialog::backdrop{background:rgba(0,0,0,.75)}
+#deleteEditionDialog input{font-size:16px}
+#confirmEditionDelete{border-color:var(--bad);color:var(--bad)}
  #ajk-audio-launch{display:none!important}
 #ajk-audio-root{--bone:var(--panel);--bone-deep:var(--bg);--ink-2:var(--ink);--ink-3:var(--muted)}
 #ajk-audio-root .ajka-panel{padding-left:18px;padding-right:18px}
@@ -220,12 +227,24 @@ pre{white-space:pre-wrap;word-break:break-word;font-size:11px;background:#11100d
  <p id="driveStatus" role="status" aria-live="polite" class="muted"></p><a id="driveFolder" class="hidden" target="_blank" rel="noopener noreferrer" style="color:var(--gold)">Ordner auf Google Drive öffnen</a>
  <div id="downloadLinks"></div>
 </dialog>
+<dialog id="deleteEditionDialog" aria-labelledby="deleteEditionTitle">
+ <h2 id="deleteEditionTitle">Hörbuchfassung löschen</h2>
+ <p id="deleteEditionDescription"></p>
+ <p class="muted">Entfernt nur die gewählte Sprecherfassung: MP3, Factory-M4B/ZIP und Hörfortschritt. Originalmanuskript, Buch, andere Stimmen und Stimmreferenzen bleiben erhalten. Bereits auf iPhone oder extern auf Google Drive gespeicherte Kopien bleiben bestehen.</p>
+ <label for="deleteEditionInput">Zur Bestätigung LÖSCHEN eingeben</label>
+ <input id="deleteEditionInput" type="text" spellcheck="false" autocomplete="off" placeholder="LÖSCHEN">
+ <p id="deleteEditionStatus" role="status" aria-live="polite" class="muted"></p>
+ <div class="row">
+  <button id="cancelEditionDelete" type="button">Abbrechen</button>
+  <button id="confirmEditionDelete" type="button" disabled>Diese Sprecherfassung endgültig löschen</button>
+ </div>
+</dialog>
 </main>
 <script>
 try{
   const u=new URL(location.href);
-  if(u.searchParams.get('v')!=='20261011groups1'){
-    history.replaceState(null,'',location.pathname+'?v=20261011groups1');
+  if(u.searchParams.get('v')!=='20261011delete1'){
+    history.replaceState(null,'',location.pathname+'?v=20261011delete1');
   }
 }catch(_){}
 const API='https://ipoqyjrojljmbqslmxxf.supabase.co/functions/v1/audiobook-factory';
@@ -720,7 +739,7 @@ function renderAudioRow_(b,isSeries){
    '<div class="audio-number">'+esc(number)+'</div>'+
    '<div><div class="audio-title">'+esc(b.title||'Ohne Titel')+'</div>'+
    '<div class="audio-meta">'+parts.join(' · ')+'</div></div>'+
-   '<div class="audio-state">'+audioStateLabel_(b)+(b.status==='ready'?'<div class="audio-actions"><button data-listen-book="'+esc(b.id)+'" aria-label="'+esc(b.title+' · '+(b.narrator_name||'')+' hören')+'">▶ Hören</button><button data-download-book="'+esc(b.id)+'">Downloads</button></div>':'')+'</div>'+
+   '<div class="audio-state">'+audioStateLabel_(b)+(b.status==='ready'?'<div class="audio-actions"><button data-listen-book="'+esc(b.id)+'" aria-label="'+esc(b.title+' · '+(b.narrator_name||'')+' hören')+'">▶ Hören</button><button data-download-book="'+esc(b.id)+'">Downloads</button><button class="edition-delete" data-delete-book="'+esc(b.id)+'" aria-label="'+esc(b.title+' · '+(b.narrator_name||'')+' löschen')+'">Löschen</button></div>':'')+'</div>'+
    '</div>';
 }
 
@@ -739,7 +758,7 @@ function renderEditionGroup_(arr,isSeries){
   return '<div class="audio-edition"><div class="audio-edition-info"><div class="audio-edition-name">'+esc(b.narrator_name||'Ohne Sprecher')+'</div>'+
   '<div class="audio-meta">'+esc(meta)+'</div></div><div class="audio-state">'+audioStateLabel_(b)+
   (b.status==='ready'?'<div class="audio-actions"><button data-listen-book="'+esc(b.id)+'" aria-label="'+esc(b.title+' mit '+(b.narrator_name||'')+' hören')+'">▶ Hören</button>'+
-  '<button data-download-book="'+esc(b.id)+'">Downloads</button></div>':'')+'</div></div>';
+  '<button data-download-book="'+esc(b.id)+'">Downloads</button><button class="edition-delete" data-delete-book="'+esc(b.id)+'" aria-label="'+esc(b.title+' · '+(b.narrator_name||'')+' löschen')+'">Löschen</button></div>':'')+'</div></div>';
  }).join('')+'</div></div>';
 }
 const LIBRARY_FOLD_KEY_='ajk_factory_library_folds_v1';let libraryFoldStates_={};
@@ -1048,7 +1067,43 @@ async function listenFactoryBook_(id,button){
  }catch(error){$('#listenStatus').textContent=String(error.message||'Hörbuch konnte nicht geöffnet werden.')}
  finally{listenOpening_=false;button.disabled=false;button.textContent='▶ Hören'}
 }
+let deleteTargetBook_=null,editionDeleteInProgress_=false;
+function openEditionDelete_(id){
+ if(editionDeleteInProgress_)return;
+ const b=libraryBooks.find(item=>item.id===id && item.status==='ready');
+ if(!b)return;
+ deleteTargetBook_=b;
+ $('#deleteEditionDescription').textContent='Buch: '+b.title+' · Sprecher: '+(b.narrator_name||b.voice_key||'')+' · '+String(b.language_code||'')+'.';
+ $('#deleteEditionInput').value='';$('#deleteEditionStatus').textContent='';
+ $('#confirmEditionDelete').disabled=true;$('#cancelEditionDelete').disabled=false;
+ $('#deleteEditionDialog').showModal();
+}
+$('#deleteEditionInput').addEventListener('input',()=>{$('#confirmEditionDelete').disabled=editionDeleteInProgress_||$('#deleteEditionInput').value.trim()!=='LÖSCHEN'});
+$('#cancelEditionDelete').onclick=()=>{if(!editionDeleteInProgress_)$('#deleteEditionDialog').close()};
+$('#deleteEditionDialog').addEventListener('close',()=>{if(!editionDeleteInProgress_)deleteTargetBook_=null});
+$('#confirmEditionDelete').onclick=async()=>{
+ const b=deleteTargetBook_;
+ if(!b||editionDeleteInProgress_||$('#deleteEditionInput').value.trim()!=='LÖSCHEN')return;
+ editionDeleteInProgress_=true;$('#confirmEditionDelete').disabled=true;$('#cancelEditionDelete').disabled=true;
+ $('#deleteEditionStatus').textContent='Lösche die gewählte Fassung einschließlich Audiodateien …';
+ try{
+  const result=await api({op:'deleteAudioEdition',bookId:b.id,confirmTitle:b.title,confirmVoiceKey:b.voice_key,confirmDelete:'LÖSCHEN'});
+  if(result.deletedEditionId!==b.id)throw new Error('Server hat die Löschung nicht bestätigt.');
+  await Promise.all([loadLibraryOverview(),loadJobs()]);
+  $('#deleteEditionDialog').close();
+  $('#listenStatus').textContent='✓ '+b.title+' · '+(b.narrator_name||'')+' gelöscht. Dieselbe Stimme kann erneut verwendet werden.';
+  $('#lang').value=String(b.language_code||'DE').toUpperCase();renderVoices();
+  if([...$('#voice').options].some(o=>o.value===b.voice_key))$('#voice').value=b.voice_key;
+  updateVoiceInfo();
+  if([...$('#book').options].some(o=>o.value===b.site_book_id))$('#book').value=b.site_book_id;
+  updateStartAvailability();void checkExistingEdition();
+ }catch(error){
+  $('#deleteEditionStatus').textContent='Nicht vollständig gelöscht: '+String(error.message||error)+'. Bitte erneut versuchen.';
+ }finally{editionDeleteInProgress_=false;$('#cancelEditionDelete').disabled=false;$('#confirmEditionDelete').disabled=$('#deleteEditionInput').value.trim()!=='LÖSCHEN'}
+};
 $('#audioOverview').addEventListener('click',event=>{
+ const removal=event.target.closest('[data-delete-book]');
+ if(removal){openEditionDelete_(removal.dataset.deleteBook);return}
  const listen=event.target.closest('[data-listen-book]');
  if(listen){void listenFactoryBook_(listen.dataset.listenBook,listen);return}
  const button=event.target.closest('[data-download-book]');
