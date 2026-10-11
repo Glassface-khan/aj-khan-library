@@ -243,8 +243,8 @@ button.edition-delete:focus-visible{outline:2px solid var(--bad)}
 <script>
 try{
   const u=new URL(location.href);
-  if(u.searchParams.get('v')!=='20261011preview1'){
-    history.replaceState(null,'',location.pathname+'?v=20261011preview1');
+  if(u.searchParams.get('v')!=='20261011approve1'){
+    history.replaceState(null,'',location.pathname+'?v=20261011approve1');
   }
 }catch(_){}
 const API='https://ipoqyjrojljmbqslmxxf.supabase.co/functions/v1/audiobook-factory';
@@ -1217,6 +1217,8 @@ function renderJob(j,queuePos){
      actions+='<button data-resume-upload="'+j.id+'" aria-busy="'+busy+'" '+(busy?'disabled':'')+'>'+(busy?'EPUB WIRD GELADEN …':'EPUB-UPLOAD FORTSETZEN')+'</button>';
    }
    if(j.status==='ready'&&j.stage==='ready_not_published'&&j.requested_title==='DIE ORDNUNG'&&j.voice_key==='jessica_de')actions+='<a href="./audiobook-private-review.html" style="display:inline-block;padding:10px 14px;border:1px solid #bba072;border-radius:8px;color:#e1c18b">▶ Privat anhören · Kapitel wählen</a>';
+   if(j.status==='ready'&&j.stage==='ready_not_published')
+     actions+='<button data-publish-reviewed="'+esc(j.id)+'">✓ Nach Hörprüfung freigeben</button>';
    if(j.status==='needs_attention'||j.status==='failed'){
      if(voiceQcProblem)actions+='<button data-voice-qc="'+j.id+'">STIMME / REFERENZ PRÜFEN</button><button data-retry="'+j.id+'">NACH KORREKTUR ERNEUT VERSUCHEN</button>';
      else actions+='<button data-retry="'+j.id+'">Automatisch erneut versuchen</button>';
@@ -1304,6 +1306,31 @@ async function loadJobs(){
    document.querySelectorAll('[data-cancel]').forEach(b=>b.onclick=async()=>{if(confirm('Job wirklich abbrechen?')){await api({op:'cancelJob',jobId:b.dataset.cancel});await loadJobs()}});
    document.querySelectorAll('[data-dismiss]').forEach(b=>b.onclick=async()=>{if(confirm('Diesen fehlerhaften Job aus der Liste ausblenden?')){await api({op:'cancelJob',jobId:b.dataset.dismiss});await loadJobs()}});
    document.querySelectorAll('[data-fix-source]').forEach(b=>b.onclick=()=>prepareSourceReplacement_(b.dataset.fixSource));
+   document.querySelectorAll('[data-publish-reviewed]').forEach(button=>button.onclick=async()=>{
+     const j=currentJobs.find(x=>x.id===button.dataset.publishReviewed);
+     if(!j||j.status!=='ready'||j.stage!=='ready_not_published')return;
+     if(!confirm('Nur diese Hörbuchfassung freigeben?\\n\\n'+
+       (j.requested_title||'Hörbuch')+' · '+(j.voice_name||j.voice_key)+
+       '\\n\\nIch habe die Aufnahme selbst angehört und halte die Sprachqualität für geeignet. '+
+       'Die Fassung erscheint danach in meiner privaten Hörbibliothek und kann dort abgespielt oder heruntergeladen werden. Andere Fassungen bleiben unverändert.'))return;
+     button.disabled=true;
+     const previous=button.textContent;
+     button.textContent='Wird freigegeben …';
+     try{
+       const result=await api({op:'publishReviewedEdition',jobId:j.id,
+         confirmTitle:j.requested_title,confirmVoiceKey:j.voice_key,
+         confirmPublication:'ICH_HABE_DIE_AUFNAHME_GEPRUEFT'});
+       if(result.published!==true||result.jobId!==j.id)throw new Error('Keine bestätigte Freigabe.');
+       await Promise.all([loadLibraryOverview(),loadJobs()]);
+       $('#listenStatus').textContent='✓ '+j.requested_title+' · '+j.voice_name+
+         ' ist jetzt in der privaten Hörbibliothek. Audiodateien wurden nicht verändert.';
+       $('#libraryCard').scrollIntoView({behavior:'smooth',block:'start'});
+     }catch(error){
+       $('#error').textContent='Freigabe nicht abgeschlossen: '+String(error.message||error);
+       button.disabled=false;
+       button.textContent=previous;
+     }
+   });
  }catch(e){
    jobsLoaded=false;renderNotStarted_();
    $('#jobs').innerHTML='<p class="bad">'+esc(e.message)+'</p>';
