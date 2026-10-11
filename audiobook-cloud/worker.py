@@ -295,24 +295,48 @@ def api(op: str, payload: dict[str, Any] | None = None, timeout: int = 120) -> d
 
 
 def api_upload_section(job_id: str, section_index: int, mp3_path: Path) -> dict[str, Any]:
-    token = oidc_token()
-    with mp3_path.open("rb") as fh:
-        r = requests.post(
-            API,
-            data=fh,
-            headers={
-                "Authorization": "Bearer " + token,
-                "x-ajk-op": "worker-upload-section",
-                "x-job-id": job_id,
-                "x-section-index": str(section_index),
-                "Content-Type": "audio/mpeg",
-            },
-            timeout=300,
-        )
-    data = r.json() if r.content else {}
-    if not r.ok or not data.get("ok"):
-        raise RuntimeError(f"upload section failed: {r.status_code} {data}")
-    return data
+    """Idempotent upload with bounded retry for transient gateway/storage outages.
+
+    Keep the same storage path, job and section. Never retry invalid audio or
+    authorization errors, and never mark a section ready without server ACK.
+    """
+    last_error = "No upload attempt"
+    for attempt in range(1, 5):
+        try:
+            token = oidc_token()
+            with mp3_path.open("rb") as fh:
+                response = requests.post(
+                    API,
+                    data=fh,
+                    headers={
+                        "Authorization": "Bearer " + token,
+                        "x-ajk-op": "worker-upload-section",
+                        "x-job-id": job_id,
+                        "x-section-index": str(section_index),
+                        "Content-Type": "audio/mpeg",
+                    },
+                    timeout=300,
+                )
+            try:
+                result = response.json() if response.content else {}
+            except ValueError:
+                result = {}
+            if response.ok and result.get("ok"):
+                return result
+            error = str(result.get("error", ""))
+            transient = response.status_code in {408, 429, 500, 502, 503, 504} or (
+                response.status_code == 400
+                and error.lower() in {"bad gateway", "gateway timeout", "service unavailable"}
+            )
+            last_error = f"HTTP {response.status_code} {error[:120]}"
+            if not transient:
+                raise RuntimeError(f"upload section failed (non-retryable): {last_error}")
+        except requests.RequestException as exc:
+            last_error = f"{type(exc).__name__} during upload"
+        if attempt < 4:
+            print(f"Transient section upload error; retry {attempt}/3: {last_error}", flush=True)
+            time.sleep(min(2 ** attempt, 8))
+    raise RuntimeError(f"upload section failed after bounded retries: {last_error}")
 
 
 def gh_output(key: str, value: str) -> None:
@@ -679,9 +703,33 @@ def chunks_for(section: Section) -> list[Chunk]:
             chunks.append(Chunk(piece, pause_after))
 
     chunks = [ch for ch in chunks if ch.text.strip() and words(ch.text)]
-    if chunks:
-        chunks[-1].pause_after = 0.0
-    return chunks
+    # Pocket TTS can render an isolated one-word sentence as silence. Merge
+    # very short pieces with adjacent text without dropping or rewriting a
+    # single word. Keep scene-break boundaries and length caps intact.
+    coalesced: list[Chunk] = []
+    i = 0
+    while i < len(chunks):
+        item = chunks[i]
+        if item.word_count < 4:
+            if i + 1 < len(chunks) and item.pause_after < SCENE_PAUSE:
+                following = chunks[i + 1]
+                joined = item.text.rstrip() + " " + following.text.lstrip()
+                if len(words(joined)) <= MAX_CHUNK_WORDS and len(joined) <= MAX_CHUNK_CHARS:
+                    chunks[i + 1] = Chunk(joined, following.pause_after)
+                    i += 1
+                    continue
+            if coalesced and coalesced[-1].pause_after < SCENE_PAUSE:
+                preceding = coalesced[-1]
+                joined = preceding.text.rstrip() + " " + item.text.lstrip()
+                if len(words(joined)) <= MAX_CHUNK_WORDS and len(joined) <= MAX_CHUNK_CHARS:
+                    coalesced[-1] = Chunk(joined, item.pause_after)
+                    i += 1
+                    continue
+        coalesced.append(item)
+        i += 1
+    if coalesced:
+        coalesced[-1].pause_after = 0.0
+    return coalesced
 
 def ensure_mono_float(audio: np.ndarray) -> np.ndarray:
     x = np.asarray(audio, dtype=np.float32)
