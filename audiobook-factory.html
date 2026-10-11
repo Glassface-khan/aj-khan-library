@@ -297,7 +297,7 @@ const api=async body=>{
        headers:{'Content-Type':'application/json'},
        cache:'no-store',
        body:JSON.stringify({...body,adminToken:token,factorySession})
-     });
+     },body.op==='deleteAudioEdition'?90000:25000);
      const r=result.response,d=result.data;
      if(!r.ok||!d.ok){
        const err=new Error(d.error||d.detail||('HTTP '+r.status));
@@ -1080,6 +1080,7 @@ function openEditionDelete_(id){
 }
 $('#deleteEditionInput').addEventListener('input',()=>{$('#confirmEditionDelete').disabled=editionDeleteInProgress_||$('#deleteEditionInput').value.trim()!=='LÖSCHEN'});
 $('#cancelEditionDelete').onclick=()=>{if(!editionDeleteInProgress_)$('#deleteEditionDialog').close()};
+$('#deleteEditionDialog').addEventListener('cancel',event=>{if(editionDeleteInProgress_)event.preventDefault()});
 $('#deleteEditionDialog').addEventListener('close',()=>{if(!editionDeleteInProgress_)deleteTargetBook_=null});
 $('#confirmEditionDelete').onclick=async()=>{
  const b=deleteTargetBook_;
@@ -1089,8 +1090,9 @@ $('#confirmEditionDelete').onclick=async()=>{
  try{
   const result=await api({op:'deleteAudioEdition',bookId:b.id,confirmTitle:b.title,confirmVoiceKey:b.voice_key,confirmDelete:'LÖSCHEN'});
   if(result.deletedEditionId!==b.id)throw new Error('Server hat die Löschung nicht bestätigt.');
-  await Promise.all([loadLibraryOverview(),loadJobs()]);
   $('#deleteEditionDialog').close();
+  try{await Promise.all([loadLibraryOverview(),loadJobs()])}
+  catch(_){$('#listenStatus').textContent='Gelöscht. Bitte die Bibliothek aktualisieren.'}
   $('#listenStatus').textContent='✓ '+b.title+' · '+(b.narrator_name||'')+' gelöscht. Dieselbe Stimme kann erneut verwendet werden.';
   $('#lang').value=String(b.language_code||'DE').toUpperCase();renderVoices();
   if([...$('#voice').options].some(o=>o.value===b.voice_key))$('#voice').value=b.voice_key;
