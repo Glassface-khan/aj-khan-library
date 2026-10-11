@@ -46,6 +46,14 @@ assert(output.includes('2 Sprecherfassungen'),'No two-voice grouping');
 assert(output.includes('Maggie')&&output.includes('Jessica EN'),'Missing narrator choices');
 assert(output.includes('data-listen-book="en1"')&&output.includes('data-listen-book="en2"'),'Edition listening links lost');
 assert(output.includes('data-download-book="en1"')&&output.includes('data-download-book="en2"'),'Edition downloads lost');
+assert(output.includes('data-delete-book="en1"')&&output.includes('data-delete-book="en2"'),'Each narrator edition needs independent delete action');
+assert(output.includes('data-delete-book="vol1"'),'Single narrator books also need a delete action');
+for(const id of ['deleteEditionDialog','deleteEditionInput','confirmEditionDelete','cancelEditionDelete']){
+ assert(html.includes('id="'+id+'"'),'Deletion confirmation control missing: '+id);
+}
+assert(html.includes("op:'deleteAudioEdition'")&&html.includes("confirmDelete:'LÖSCHEN'"),'Deletion must call confirmed protected API');
+assert(html.includes("confirmTitle:b.title")&&html.includes("confirmVoiceKey:b.voice_key"),'Deletion requires original edition identity');
+assert(html.includes("editionDeleteInProgress_"),'Missing double-delete protection');
 assert(output.includes('data-library-group="singles"')&&output.includes('data-library-group="series:the_vessel"'),'Missing fold group');
 assert(output.includes('Bücher')&&mocks['#librarySummary'].textContent.includes('2 Bücher'),'Bad unique book count');
 assert(!output.includes('data-library-group="singles" open'),'Singles must be collapsed initially');
