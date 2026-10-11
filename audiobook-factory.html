@@ -25,6 +25,13 @@ progress{width:100%;height:18px;accent-color:var(--gold)}
 .job-title{font-family:Georgia,serif;font-size:23px;overflow-wrap:anywhere;word-break:break-word}.job-meta{font-size:12px;color:var(--muted);margin:5px 0 10px}
 pre{white-space:pre-wrap;word-break:break-word;font-size:11px;background:#11100d;padding:10px;border-radius:8px;max-height:220px;overflow:auto}
 #gate{border-left:4px solid var(--gold)}#error{color:var(--bad);min-height:1.2em}
+#factoryMaintenance{border-left:4px solid var(--gold)}
+#factoryMaintenance p{line-height:1.55}
+#factoryMaintenance a{color:var(--gold)}
+#factoryMaintenance .maint-links{display:flex;flex-wrap:wrap;gap:10px;margin-top:12px}
+#factoryMaintenance .maint-links a{display:inline-flex;align-items:center;border:1px solid var(--rule);border-radius:10px;padding:11px 13px;min-height:44px;text-decoration:none}
+#factoryMaintenance .maint-links a:focus-visible{outline:2px solid var(--gold)}
+
 .edition-warning{margin-top:12px;padding:14px 15px;border:1px solid var(--gold);border-left:4px solid var(--gold);border-radius:10px;background:rgba(199,155,74,.08)}
 .edition-warning strong{display:block;color:var(--gold);font-size:14px;margin-bottom:6px}
 .edition-warning p{margin:0 0 10px;color:var(--ink);line-height:1.45}
@@ -117,6 +124,18 @@ button.edition-delete:focus-visible{outline:2px solid var(--bad)}
     <p id="authText" class="muted">Prüfe vorhandene Autor-Anmeldung …</p>
 <button id="authRetry" class="hidden" type="button">ERNEUT LADEN</button>
 <button id="authSignIn" class="hidden" type="button">AUF DER AUTORENSEITE ANMELDEN</button>
+  </section>
+
+  <section class="card hidden" id="factoryMaintenance" role="status" aria-live="polite">
+    <h2>Factory vorübergehend eingeschränkt</h2>
+    <p id="maintenanceReason">Die Verbindung zum privaten Audio-Dienst ist unterbrochen.</p>
+    <p class="muted">Die Website ist erreichbar, aber private Hörbücher, Downloads und Produktionsjobs benötigen Supabase. Dieser Wartungsmodus startet, veröffentlicht oder löscht keine Hörbücher. Deine gespeicherte Anmeldung bleibt erhalten.</p>
+    <p class="muted">Das private Bucharchiv in Drive bleibt unabhängig erreichbar; die bestehenden Supabase-Audios können erst nach Entsperrung des Dienstes geladen werden.</p>
+    <div class="maint-links">
+      <a href="./">Zur Autorenseite</a>
+      <a href="https://drive.google.com/drive/folders/16PeaOkpvZuxDOTCYm23D0XSK43adlQw0" target="_blank" rel="noopener noreferrer">Privates Bucharchiv in Drive</a>
+      <a href="https://supabase.com/dashboard" target="_blank" rel="noopener noreferrer">Supabase-Status prüfen</a>
+    </div>
   </section>
 
   <section class="card hidden" id="newJob">
@@ -243,8 +262,8 @@ button.edition-delete:focus-visible{outline:2px solid var(--bad)}
 <script>
 try{
   const u=new URL(location.href);
-  if(u.searchParams.get('v')!=='20261012devoice2'){
-    history.replaceState(null,'',location.pathname+'?v=20261012devoice2');
+  if(u.searchParams.get('v')!=='20261012offline3'){
+    history.replaceState(null,'',location.pathname+'?v=20261012offline3');
   }
 }catch(_){}
 const API='https://ipoqyjrojljmbqslmxxf.supabase.co/functions/v1/audiobook-factory';
@@ -269,7 +288,10 @@ async function requestJsonWithTimeout_(url,options={},timeoutMs=25000){
  let timer;
  const request=(async()=>{
    const response=await fetch(url,{...options,signal:controller.signal});
-   const data=await response.json();
+   // Quota-rejection responses may contain an HTML error page.
+   // Preserve HTTP status even if that body is not JSON.
+   let data;
+   try{data=await response.json()}catch(_){data={ok:false,error:'HTTP '+response.status}}
    return {response,data};
  })();
  const timeout=new Promise((_,reject)=>{
@@ -301,7 +323,7 @@ const api=async body=>{
      const r=result.response,d=result.data;
      if(!r.ok||!d.ok){
        const reason=r.status===402
-         ?'Supabase hat die API mit HTTP 402 gesperrt (mögliches Kontingent-/Abrechnungsproblem). Das ist kein Fehler deiner Stimme. Bitte im Supabase-Dashboard Usage/Billing prüfen; keine erneuten Produktionen starten.'
+         ?'Supabase hat den Zugriff wegen überschrittener Kontingente gesperrt (HTTP 402). Kein Passwortfehler. Die private Hörbibliothek wird nach Entsperrung wieder verfügbar.'
          :(d.error||d.detail||('HTTP '+r.status));
        const err=new Error(reason);
        err.httpStatus=r.status;
@@ -313,6 +335,11 @@ const api=async body=>{
      }
      return d;
    }catch(e){
+     if(!e.httpStatus && /^(?:Load failed|Failed to fetch|NetworkError|Network request failed)$/i.test(String(e.message||''))){
+       const networkError=new Error('Der Supabase-Audio-Dienst ist momentan nicht erreichbar. Die bestehende Kontingentsperre kann die Ursache sein. Dein Admin-Passwort muss nicht erneut eingegeben werden.');
+       networkError.code='AUDIO_BACKEND_UNAVAILABLE';
+       e=networkError;
+     }
      lastError=e;
      const status=Number(e&&e.httpStatus||0);
      const transient=!status||[502,503,504].includes(status);
@@ -1383,6 +1410,7 @@ async function loadJobs(){
 }
 let factoryInitInFlight_=false,factoryReady_=false,factoryJobsTimer_=null;
 function showFactorySignIn_(expired=false){
+ $('#factoryMaintenance').classList.add('hidden');
  factoryReady_=false;
  if(factoryJobsTimer_){clearInterval(factoryJobsTimer_);factoryJobsTimer_=null}
  ['newJob','libraryCard','jobsCard','notStartedCard'].forEach(id=>$('#'+id).classList.add('hidden'));
@@ -1398,6 +1426,7 @@ async function init(){
  $('#authRetry').classList.add('hidden');
  $('#authSignIn').classList.add('hidden');
  $('#authText').textContent='Prüfe vorhandene Autor-Anmeldung …';
+ $('#factoryMaintenance').classList.add('hidden');
  $('#back').onclick=()=>location.href='./';
  try{
    token=String(localStorage.getItem('ajk_admin_token')||'');
@@ -1423,7 +1452,12 @@ async function init(){
      try{localStorage.removeItem('ajk_factory_session')}catch(_){}
      showFactorySignIn_(true);
    }else{
-     $('#authText').textContent='Factory konnte nicht vollständig geladen werden: '+e.message;
+     // Backend down / quota exhausted. Do not invalidate the session.
+     factoryReady_=false;
+     ['newJob','libraryCard','jobsCard','notStartedCard'].forEach(id=>$('#'+id).classList.add('hidden'));
+     $('#authText').textContent='Audio-Dienst vorübergehend nicht erreichbar. Deine Anmeldung bleibt gespeichert.';
+     $('#maintenanceReason').textContent=String(e.message||'Die Audio-Verbindung ist unterbrochen.');
+     $('#factoryMaintenance').classList.remove('hidden');
      $('#authRetry').classList.remove('hidden');
    }
  }finally{factoryInitInFlight_=false}
