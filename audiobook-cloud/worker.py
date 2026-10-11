@@ -727,9 +727,23 @@ def chunks_for(section: Section) -> list[Chunk]:
                     continue
         coalesced.append(item)
         i += 1
-    if coalesced:
-        coalesced[-1].pause_after = 0.0
-    return coalesced
+    # Do not feed Pocket TTS hundreds of disconnected 3-7 word prompts.
+    # Merge short adjacent utterances into 12-24-word natural phrases, without
+    # crossing scene breaks or changing a single source word.
+    packed: list[Chunk] = []
+    for item in coalesced:
+        if packed and packed[-1].pause_after < SCENE_PAUSE:
+            previous = packed[-1]
+            candidate = previous.text.rstrip() + " " + item.text.lstrip()
+            if (previous.word_count < 14 or item.word_count < 8) and (
+                len(words(candidate)) <= MAX_CHUNK_WORDS and len(candidate) <= MAX_CHUNK_CHARS
+            ):
+                packed[-1] = Chunk(candidate, item.pause_after)
+                continue
+        packed.append(item)
+    if packed:
+        packed[-1].pause_after = 0.0
+    return packed
 
 def ensure_mono_float(audio: np.ndarray) -> np.ndarray:
     x = np.asarray(audio, dtype=np.float32)
@@ -991,6 +1005,27 @@ def preflight_sample_text(section: Section, max_words: int = 16) -> str:
 
     text = section.spoken_text.replace("[[SCENE_BREAK]]", " ")
     return " ".join(text.split()[:max_words])
+
+
+def german_chunk_text_pass(source: str, recognized: str) -> tuple[bool, dict[str, Any]]:
+    """Independent per-chunk text check; whole-chapter averages hide nonsense.
+
+    The threshold is intentionally tighter than the old 0.32 WER floor.
+    Absence of recognizable speech must never pass even for tiny prompts.
+    """
+    ref_n = len(words(source))
+    hyp_n = len(words(recognized))
+    scores = transcript_scores(source, recognized)
+    recall_min = 0.63 if ref_n >= 8 else 0.50
+    wer_min = 0.50 if ref_n >= 8 else 0.30
+    reasons = []
+    if hyp_n == 0 or scores["word_recall"] < recall_min:
+        reasons.append("chunk_low_word_recall")
+    if scores["wer_similarity"] < wer_min:
+        reasons.append("chunk_high_word_error_rate")
+    if ref_n >= 8 and (hyp_n < ref_n * 0.55 or hyp_n > ref_n * 1.5):
+        reasons.append("chunk_transcript_length_mismatch")
+    return not reasons, {**scores, "transcribed_words": hyp_n, "reasons": reasons}
 
 
 def preflight_qc(model, state, sr: int, asr: AsrChecker, text: str, out_wav: Path, language_code: str) -> dict[str, Any]:
@@ -1263,6 +1298,27 @@ def produce_section(job: dict[str, Any], section: Section, model, state, asr: As
             m = signal_metrics(audio, sr, ch.word_count)
             ok, reasons = cheap_audio_pass(m, ch.word_count)
             last_detail = {**m, "chunk_index": ci, "attempt": attempt, "word_count": ch.word_count, "reasons": reasons}
+            # German Pocket TTS can emit plausible-duration gibberish.
+            # Signal-only QC missed this in the published FOLLOWER editions.
+            # Verify EACH speech chunk before it may enter the final MP3.
+            if ok and str(job.get("language_code") or "").upper() == "DE":
+                probe = outdir / f"chunk_qc_{section.index:03d}_{ci:04d}.wav"
+                try:
+                    sf.write(probe, audio, sr, subtype="PCM_16")
+                    heard = asr.transcribe(probe)
+                    intelligible, transcript_detail = german_chunk_text_pass(ch.text, heard)
+                    last_detail.update({
+                        "word_recall": transcript_detail["word_recall"],
+                        "wer_similarity": transcript_detail["wer_similarity"],
+                        "sequence_similarity": transcript_detail["sequence_similarity"],
+                        "transcribed_words": transcript_detail["transcribed_words"],
+                    })
+                    if not intelligible:
+                        ok = False
+                        reasons.extend(transcript_detail["reasons"])
+                        last_detail["reasons"] = reasons
+                finally:
+                    probe.unlink(missing_ok=True)
             if ok:
                 rendered.append(audio)
                 if ch.pause_after > 0:
