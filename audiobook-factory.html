@@ -1184,6 +1184,7 @@ function statusLabel(j,queuePos){
    const p=queuePos?(' · Position '+queuePos):'';
    return j.stage==='storage_path_rebuild'?('Sicherheits-Neuaufbau'+p):('Warteschlange'+p);
  }
+ if(j.status==='ready'&&j.stage==='ready_not_published')return 'Produziert · Hörfreigabe ausstehend';
  if(j.status==='production'&&complete&&j.qc_status==='passed')return 'Finalisierung';
  const map={uploading:'Upload',preflight:'Vorprüfung',qc_running:'Qualitätsprüfung',production:'Produktion',finalizing:'Finalisierung',ready:'Fertig',needs_attention:'Prüfung nötig',failed:'Fehler',cancelled:'Abgebrochen'};
  return map[j.status]||j.status;
@@ -1225,10 +1226,12 @@ function renderJob(j,queuePos){
    ?''
    :'<progress max="100" value="'+pct+'"></progress><div class="muted">'+j.progress_done+' / '+(j.progress_total||'?')+' Abschnitte · '+pct+'%</div>';
  const score=(!sourceProblem&&!importProblem&&j.qc_score!=null)?'<span class="badge">QC '+Math.round(Number(j.qc_score))+'%</span>':'';
- const err=importProblem?'<p class="bad">Der EPUB-Import wurde vor der Audioerstellung angehalten. Der Importer konnte die Buchstruktur nicht zuordnen. Das bedeutet nicht, dass dein Manuskript fehlerhaft ist.</p><p class="muted">'+esc(j.error_detail)+'</p>':sourceProblem?'<p class="bad">'+esc(sourceProblemText_(j))+'</p>':voiceQcProblem?'<p class="bad">Die Stimmprobe „'+esc(j.voice_name||j.voice_key||'')+'“ ist bei der Texttreue-Prüfung massiv gescheitert (QC '+Math.round(Number(j.qc_score))+' %). Bitte zuerst die Stimmreferenz verbessern oder einen anderen Erzähler wählen. Wiederholungen ohne Änderung beheben das in der Regel nicht.</p>':(j.error_detail?'<p class="bad">'+esc(j.error_detail)+'</p>':'');
+ const manualReview=j.status==='ready'&&j.stage==='ready_not_published'
+   ?'<p class="muted"><strong>100 % produziert – kein Hänger.</strong> Die automatische Veröffentlichung wurde aus Qualitätsgründen ausgeschaltet. Die Audiofassung wartet auf eine persönliche Hörprüfung und ist noch nicht in der Hörbibliothek freigegeben. QC PASS allein bestätigt nicht die Hörqualität.</p>':'';
+  const err=importProblem?'<p class="bad">Der EPUB-Import wurde vor der Audioerstellung angehalten. Der Importer konnte die Buchstruktur nicht zuordnen. Das bedeutet nicht, dass dein Manuskript fehlerhaft ist.</p><p class="muted">'+esc(j.error_detail)+'</p>':sourceProblem?'<p class="bad">'+esc(sourceProblemText_(j))+'</p>':voiceQcProblem?'<p class="bad">Die Stimmprobe „'+esc(j.voice_name||j.voice_key||'')+'“ ist bei der Texttreue-Prüfung massiv gescheitert (QC '+Math.round(Number(j.qc_score))+' %). Bitte zuerst die Stimmreferenz verbessern oder einen anderen Erzähler wählen. Wiederholungen ohne Änderung beheben das in der Regel nicht.</p>':(j.error_detail?'<p class="bad">'+esc(j.error_detail)+'</p>':'');
  return '<div class="job"><div class="job-title">'+esc(title)+'</div>'+
  '<div class="job-meta">'+esc(j.voice_name)+' · '+esc(j.language_code)+' · '+esc(statusLabel(j,queuePos))+'</div>'+q+score+
- progress+err+'<div class="row">'+actions+'</div><p class="muted" role="status" aria-live="polite" data-upload-feedback="'+esc(j.id)+'">'+esc(uploadFeedback_.get(j.id)?.message||'')+'</p></div>';
+ progress+manualReview+err+'<div class="row">'+actions+'</div><p class="muted" role="status" aria-live="polite" data-upload-feedback="'+esc(j.id)+'">'+esc(uploadFeedback_.get(j.id)?.message||'')+'</p></div>';
 }
 function prepareSourceReplacement_(jobId){
  const j=currentJobs.find(x=>x.id===jobId);if(!j)return;
@@ -1269,7 +1272,9 @@ async function loadJobs(){
    });
    const published=currentJobs.filter(j=>j.status==='ready'&&j.stage==='published').length;
     const issues=visible.filter(j=>['needs_attention','failed'].includes(j.status)).length;
-    $('#jobsSummary').textContent=visible.length+' offen'+(issues?' · '+issues+' prüfen':'');
+    const awaitingReview=visible.filter(j=>j.status==='ready'&&j.stage==='ready_not_published').length;
+    $('#jobsSummary').textContent=visible.length+' Aufträge'+(issues?' · '+issues+' prüfen':'')+
+      (awaitingReview?' · '+awaitingReview+' Hörfreigabe ausstehend':'');
    $('#jobs').innerHTML=(visible.length?visible.map(j=>renderJob(j,qpos.get(j.id))).join(''):'<p class="muted">Keine aktiven Cloud-Jobs.</p>')+
      (published?'<p class="muted" style="margin-top:18px">✓ '+published+' abgeschlossene/veröffentlichte Jobs sind hier ausgeblendet und in der Audio-Bibliothek verfügbar.</p>':'');
    document.querySelectorAll('[data-resume-upload]').forEach(b=>b.onclick=()=>resumeCatalogUpload_(b.dataset.resumeUpload));
