@@ -1,0 +1,29 @@
+name: Stop Orphaned German Audio Run
+
+on:
+  push:
+    branches: [main]
+    paths: [".github/workflows/one-time-stop-orphaned-audio.yml"]
+
+permissions:
+  contents: read
+  actions: write
+
+jobs:
+  cancel-run:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 3
+    steps:
+      - name: Cancel exact old audio production after job safety hold
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          url="https://api.github.com/repos/Glassface-khan/aj-khan-library/actions/runs/38151805159"
+          content="$(curl --fail --silent --show-error -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github+json" "$url")"
+          echo "$content" | jq -e '.name == "Audiobook Cloud Worker" and (.status=="in_progress" or .status=="queued")' >/dev/null
+          code="$(curl --silent --show-error -o /tmp/out -w '%{http_code}' -X POST \
+            -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github+json" "$url/cancel")"
+          test "$code" = "202" || { echo "Cancellation failed HTTP $code"; exit 1; }
+          echo "ORPHANED_GERMAN_WORKFLOW_CANCELLATION_REQUESTED"
