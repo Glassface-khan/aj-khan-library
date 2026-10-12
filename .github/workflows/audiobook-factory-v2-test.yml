@@ -23,3 +23,5 @@ jobs:
           node --check audiobook-factory-v2/test/worker.test.mjs
       - name: Run isolated offline mock tests (no credentials, books or network)
         run: node --test audiobook-factory-v2/test/*.test.mjs
+      - name: Run pure-Python sample QC tests (no real audio)
+        run: python3 -m unittest discover -s audiobook-factory-v2/test -p "test_*.py"
