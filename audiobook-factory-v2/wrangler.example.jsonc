@@ -1,0 +1,27 @@
+{
+  // TEMPLATE ONLY — not a deployable live configuration until you
+  // create a Cloudflare account, a private R2 bucket and a D1 database.
+  "name": "ajk-audiobook-v2-private-pilot",
+  "main": "src/worker.mjs",
+  "compatibility_date": "2026-10-12",
+  "workers_dev": true,
+  "vars": {
+    // Existing Google Apps Script author-site app; NO Supabase dependency.
+    // Set to the currently deployed official /exec URL, not a /dev URL.
+    "GAS_WEB_APP_URL": "REPLACE_WITH_AUTHORIZED_GOOGLE_APPS_SCRIPT_EXEC_URL"
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "ajk-audiobook-v2-test",
+      "database_id": "REPLACE_WITH_CLOUDFLARE_D1_DATABASE_UUID",
+      "migrations_dir": "migrations"
+    }
+  ],
+  "r2_buckets": [
+    {
+      "binding": "PRIVATE_AUDIO",
+      "bucket_name": "ajk-private-audiobooks-v2-test"
+    }
+  ]
+}
