@@ -330,6 +330,48 @@
     return !!(c.adminToken || c.code || c.factorySession);
   }
 
+
+  // EXPERIMENTAL R2 PILOT — OFF unless window.AJK_R2_PILOT.enabled === true.
+  // Normal family codes + the existing Supabase chapterUrl path stay untouched.
+  // To use the pilot, an independently verified Supabase Auth JWT is required.
+  async function authorizedChapterUrl_(chapterId) {
+    const pilot = window.AJK_R2_PILOT;
+    if (!pilot || pilot.enabled !== true) {
+      const legacy = await api({ op: 'chapterUrl', chapterId });
+      return legacy.url;
+    }
+
+    if (!pilot.supabaseUrl || !pilot.publishableKey ||
+        typeof pilot.getAccessToken !== 'function') {
+      throw new Error('R2 test is not configured. Normal listening remains available when the pilot is disabled.');
+    }
+    const token = await pilot.getAccessToken();
+    if (typeof token !== 'string' || !token) {
+      throw new Error('Please sign in with the separate Supabase Auth test account to use R2.');
+    }
+    const response = await fetch(
+      String(pilot.supabaseUrl).replace(/\/+$/, '') + '/functions/v1/r2-audio-url',
+      {
+        method: 'POST', cache: 'no-store',
+        headers: {
+          'Authorization': 'Bearer ' + token,
+          'apikey': pilot.publishableKey,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ chapter_id: chapterId })
+      }
+    );
+    // Avoid exposing signed URLs or backend details in browser error messages.
+    if (!response.ok) throw new Error('R2 chapter access denied or temporarily unavailable (HTTP ' + response.status + ').');
+    const data = await response.json();
+    if (typeof data.url !== 'string') throw new Error('R2 chapter URL missing');
+    const host = new URL(data.url).hostname;
+    if (!host.endsWith('.r2.cloudflarestorage.com')) {
+      throw new Error('Unexpected R2 streaming endpoint');
+    }
+    return data.url;
+  }
+
   async function api(payload, options = {}) {
     const c = credentials();
     const res = await fetch(AUDIO_API, {
@@ -1096,14 +1138,14 @@
     state.desiredSeek = Math.max(0, Number(seek) || 0);
     render();
     try {
-      const data = await api({ op: 'chapterUrl', chapterId: chapter.id });
+      const signedPlaybackUrl = await authorizedChapterUrl_(chapter.id);
       const audio = ensureAudio();
       const nextRate = rate != null
         ? Math.min(2, Math.max(.5, Number(rate) || 1))
         : state.playbackRate;
       state.playbackRate = nextRate;
       try { localStorage.setItem('ajk_audio_playback_rate', String(nextRate)); } catch (_) {}
-      audio.src = data.url;
+      audio.src = signedPlaybackUrl;
       audio.defaultPlaybackRate = nextRate;
       audio.playbackRate = nextRate;
       audio.load();
