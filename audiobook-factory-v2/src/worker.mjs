@@ -141,7 +141,7 @@ async function media(req,env,chapterId) {
   if (range && object.range) {
     const start=object.range.offset??0;
     const length=object.range.length??(object.size-start);
-    h.set("Content-Range",\`bytes \${start}-\${start+length-1}/\${object.size}\`);
+    h.set("Content-Range",`bytes ${start}-${start+length-1}/${object.size}`);
     h.set("Content-Length",String(length));
     status=206;
   } else {
