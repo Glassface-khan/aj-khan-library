@@ -99,7 +99,8 @@ function post(path,data,origin="https://glassface-khan.github.io"){
     body:JSON.stringify(data)
   });
 }
-const family={code:"family-ok"};
+const visitor={code:"family-ok"};
+const author={adminToken:"author-ok"};
 test("ticket HMAC validation and expiry",async()=>{
   const now=1_800_000_000;
   const tok=await signTicket({ch:DOC,book:BOOK,listener:LISTENER,exp:now+900},PASS,now);
@@ -117,31 +118,49 @@ test("health is private-resource agnostic",async()=>{
     assert.equal((await r.json()).configured,true);
   }finally{t.restore();}
 });
-test("family catalog respects existing Apps Script permissions",async()=>{
+test("only existing author admin can read the private catalog",async()=>{
   const t=setup();try{
-    const r=await worker.fetch(post("/v1/catalog",family),t.env);
+    const r=await worker.fetch(post("/v1/catalog",author),t.env);
     assert.equal(r.status,200);
     const d=await r.json();
     assert.equal(d.books.length,1);
     assert.equal(d.books[0].chapters[0].id,DOC);
     assert.equal(t.seen[0].method,"POST");
-    assert.equal(t.seen[0].url.includes("family-ok"),false);
+    assert.equal(t.seen[0].url.includes("author-ok"),false);
   }finally{t.restore();}
 });
-test("bad family code does not grant access",async()=>{
+test("family visitor code is denied even when valid on existing site",async()=>{
   const t=setup();try{
-    assert.equal((await worker.fetch(post("/v1/catalog",{code:"invalid"}),t.env)).status,401);
+    assert.equal((await worker.fetch(post("/v1/catalog",visitor),t.env)).status,401);
   }finally{t.restore();}
 });
+
+test("ordinary family login cannot request a private chapter ticket or jobs",async()=>{
+  const t=setup();try{
+    const ticket=await worker.fetch(post("/v1/chapter-ticket",
+      {...visitor,chapter_id:DOC}),t.env);
+    assert.equal(ticket.status,401);
+    // Family access codes must never appear in the new backend's account list.
+    const jobs=await worker.fetch(post("/v1/jobs/list",visitor),t.env);
+    assert.equal(jobs.status,401);
+    // Admin-token impersonation attempt using the known family code fails too.
+    const counterfeit=await worker.fetch(post("/v1/catalog",
+      {adminToken:"family-ok"}),t.env);
+    assert.equal(counterfeit.status,401);
+    // None of these produce an R2 signed audio URL.
+    assert.equal(t.PRIVATE_AUDIO.uploaded.length,0);
+  }finally{t.restore();}
+});
+
 test("direct cross-site browser calls are blocked",async()=>{
   const t=setup();try{
-    assert.equal((await worker.fetch(post("/v1/catalog",family,"https://wrong.example"),t.env)).status,403);
+    assert.equal((await worker.fetch(post("/v1/catalog",author,"https://wrong.example"),t.env)).status,403);
   }finally{t.restore();}
 });
 test("ticket can stream synthetic private bytes, including HTTP 206",async()=>{
   const t=setup();try{
     const issue=await worker.fetch(post("/v1/chapter-ticket",
-      {...family,chapter_id:DOC}),t.env);
+      {...author,chapter_id:DOC}),t.env);
     assert.equal(issue.status,200);
     const d=await issue.json();
     assert.ok(d.url.startsWith(HOST+"/v1/media/"));
@@ -157,16 +176,16 @@ test("ticket can stream synthetic private bytes, including HTTP 206",async()=>{
 test("tampered media ticket refused, unpublished chapter refused",async()=>{
   const t=setup();try{
     const d=await (await worker.fetch(post("/v1/chapter-ticket",
-      {...family,chapter_id:DOC}),t.env)).json();
+      {...author,chapter_id:DOC}),t.env)).json();
     assert.equal((await worker.fetch(new Request(d.url.replace(/.$/,"X")),t.env)).status,401);
     t.DB.book.is_published=0;
     assert.equal((await worker.fetch(new Request(d.url),t.env)).status,401);
   }finally{t.restore();}
 });
-test("admin creates draft job; family code cannot",async()=>{
+test("author-only job creation; family visitors are denied",async()=>{
   const t=setup();try{
     const body={title:"Test Novel",language_code:"EN",voice_key:"test_voice"};
-    assert.equal((await worker.fetch(post("/v1/jobs",{...family,...body}),t.env)).status,401);
+    assert.equal((await worker.fetch(post("/v1/jobs",{...visitor,...body}),t.env)).status,401);
     const good=await worker.fetch(post("/v1/jobs",{adminToken:"author-ok",...body}),t.env);
     assert.equal(good.status,201);
     const d=await good.json();
