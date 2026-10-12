@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="referrer" content="strict-origin-when-cross-origin">
+  <meta name="description" content="Privacy policy for AJK Audiobook Private Backup, the private Google Drive backup integration for the A. J. Khan Audiobook Factory.">
+  <title>Privacy Policy · AJK Audiobook Private Backup</title>
+  <style>
+    :root{color-scheme:dark;--bg:#101a20;--panel:#1b2930;--border:#3d4649;--ink:#f2eee5;--muted:#c7c7c2;--gold:#d8b97d}
+    *{box-sizing:border-box}
+    body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.7 system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
+    main{max-width:820px;margin:0 auto;padding:44px 22px 76px}
+    .eyebrow{letter-spacing:.16em;text-transform:uppercase;color:var(--gold);font-size:.75rem;font-weight:700}
+    h1,h2{font-family:Georgia,"Times New Roman",serif;font-weight:400;line-height:1.2}
+    h1{font-size:clamp(2rem,5vw,3.2rem);margin:.3em 0}
+    h2{font-size:1.4rem;margin:2rem 0 .65rem}
+    p,li{max-width:75ch}
+    a{color:var(--gold);text-underline-offset:3px;overflow-wrap:anywhere}
+    .intro,.note{background:var(--panel);border:1px solid var(--border);padding:18px 20px;border-radius:12px}
+    .meta{color:var(--muted);font-size:.92rem}
+    .links{display:flex;flex-wrap:wrap;gap:8px 20px;margin:0 0 30px}
+    .links a{font-weight:600}
+    hr{border:0;border-top:1px solid var(--border);margin:3rem 0}
+    :focus-visible{outline:2px solid var(--gold);outline-offset:3px}
+    @media(max-width:600px){main{padding:28px 16px 56px}}
+  </style>
+</head>
+<body>
+<main>
+  <div class="eyebrow">A. J. Khan · Private Audiobook Library</div>
+  <h1>Privacy Policy</h1>
+  <p class="meta">AJK Audiobook Private Backup · Updated: October 12, 2026</p>
+  <nav class="links" aria-label="Navigation and languages">
+    <a href="./audiobook-factory.html">← Audiobook Factory</a>
+    <a href="#deutsch" lang="de">Deutsch lesen</a>
+  </nav>
+  <div class="intro">
+    <strong>At a glance:</strong> This owner-operated integration backs up private audiobook files from the Audiobook Factory to a Google Drive account that has explicitly authorized access. It uses the limited <code>drive.file</code> permission; it does not request access to Gmail, Contacts, or unrestricted access to all files in Google Drive. Audiobooks are not made public by this integration.
+  </div>
+  <section aria-labelledby="operator">
+    <h2 id="operator">1. Operator and contact</h2>
+    <p>Operated under the author name <strong>A. J. Khan</strong> for a private audiobook library. Questions about this integration, its Google Drive access, or requests concerning your data can be sent to <a href="mailto:ali.khan.j@gmail.com">ali.khan.j@gmail.com</a>.</p>
+  </section>
+  <section aria-labelledby="scope">
+    <h2 id="scope">2. Google data and permissions</h2>
+    <p>With the account holder's authorization, this integration uses the Google Drive API permission <code>https://www.googleapis.com/auth/drive.file</code>. The permission is used to create and manage files or folders that the integration created or that the account holder explicitly made available to this application. It does not grant unrestricted access to the entire Drive.</p>
+    <p>The integration may process the identifiers, names, folder locations, sizes, formats, checksums, and other technical metadata of these files and folders, together with audiobook titles, narrator or language labels, and backup status. It uploads privately produced audiobook exports (currently M4B files) and reads file metadata to verify that the copy was completed correctly.</p>
+    <p>It does not request Google email messages, contacts, calendars, or unrelated Drive content. Existing Drive folders must be available to the application before they can be used as backup destinations.</p>
+  </section>
+  <section aria-labelledby="purpose">
+    <h2 id="purpose">3. Purposes of processing</h2>
+    <p>Data is used only to place audiobook backups in authorized private folders, organize individual editions, check file integrity, prevent duplicate copies, retry failed transfers, and show backup status to the account holder. Google user data obtained through this integration is not sold, used for advertising or profiling, or used to train AI models.</p>
+  </section>
+  <section aria-labelledby="services">
+    <h2 id="services">4. Services involved</h2>
+    <p><strong>Google Drive</strong> stores the authorized backup files. <strong>GitHub Actions</strong> runs the private backup process; the Google OAuth client credentials and refresh token are intended to be kept in encrypted GitHub Actions Secrets, not in website source code or publicly accessible files. <strong>Supabase</strong> hosts the source audiobook exports and operational backup records while the existing architecture is in use.</p>
+    <p>These service providers may process technical connection, security, or diagnostic information according to their own applicable terms and privacy notices. This page describes the Google Drive backup integration, not every feature of the separate author website, audiobook production system, or listening application.</p>
+  </section>
+  <section aria-labelledby="protection">
+    <h2 id="protection">5. Access and security</h2>
+    <p>Backup files are intended to remain in private Google Drive folders. The transfer process checks for overly broad folder permissions and does not deliberately enable public or anyone-with-the-link access. Transfers use HTTPS. Access is limited through Google OAuth authorization and the account's existing service credentials. No Google account password is requested or stored by this integration.</p>
+    <p>The account holder can separately grant access to an individual Drive file or folder; such deliberate sharing is controlled through Google Drive, not automatically by the backup worker.</p>
+  </section>
+  <section aria-labelledby="retention">
+    <h2 id="retention">6. Retention, deletion, and withdrawal</h2>
+    <p>Files backed up to Google Drive remain there until the account holder deletes them or changes the relevant Drive access. Revoking the application's authorization does <em>not</em> automatically delete previously uploaded files. Operational records may be retained in the existing audiobook system until removed as part of normal maintenance or migration.</p>
+    <p>Authorization can be revoked in <a href="https://myaccount.google.com/connections">Google Account → Third-party connections</a>. After revocation, future automated backups will stop working until authorization is renewed. To delete stored backup files, use Google Drive or contact the operator. The operator can also remove any retained automation credentials and related operational records upon request, subject to applicable obligations.</p>
+  </section>
+  <section aria-labelledby="changes">
+    <h2 id="changes">7. Changes</h2>
+    <p>This notice may be updated if the integration, permissions, storage services, or processing purposes change. The updated date shown above will be changed accordingly.</p>
+  </section>
+  <hr>
+  <section id="deutsch" lang="de" aria-labelledby="de-title">
+    <div class="eyebrow">Deutsche Fassung</div>
+    <h1 id="de-title">Datenschutzerklärung</h1>
+    <p class="meta">AJK Audiobook Private Backup · Stand: 12. Oktober 2026</p>
+    <p class="note">Die Anwendung dient ausschließlich der privaten Sicherung von Hörbuchdateien in einem ausdrücklich autorisierten Google-Drive-Konto. Sie verwendet die eingeschränkte Berechtigung <code>drive.file</code> und gibt Hörbücher nicht automatisch öffentlich frei.</p>
+    <h2>1. Betreiber und Kontakt</h2>
+    <p>Betreiber unter dem Autorennamen <strong>A. J. Khan</strong>, für eine privat verwaltete Hörbuchbibliothek. Anfragen zum Datenschutz, zu gespeicherten Informationen und zum Google-Drive-Zugriff bitte an <a href="mailto:ali.khan.j@gmail.com">ali.khan.j@gmail.com</a>.</p>
+    <h2>2. Welche Daten verarbeitet werden</h2>
+    <p>Nach ausdrücklicher Google-Autorisierung verarbeitet die Anwendung ausschließlich Dateien und Ordner, die sie selbst erstellt hat oder die für diese Anwendung freigegeben wurden. Hierzu gehören Hörbuchdateien (derzeit M4B), Datei- und Ordnerkennungen, Namen, Speicherorte, Größen, Dateitypen, Prüfsummen sowie Angaben zu Hörbuchtitel, Sprecher, Sprache und Sicherungsstatus. Ein pauschaler Zugriff auf alle Drive-Dateien, Gmail oder Kontakte wird nicht angefordert.</p>
+    <h2>3. Zweck und Empfänger</h2>
+    <p>Die Informationen dienen der privaten Sicherung, Organisation, Integritätsprüfung, Wiederaufnahme fehlgeschlagener Transfers und Vermeidung von Duplikaten. <strong>Google Drive</strong> speichert die Kopien; <strong>GitHub Actions</strong> führt die Sicherung aus; <strong>Supabase</strong> stellt in der bisherigen Architektur Ausgangsdateien und technische Auftragsdaten bereit. Diese Dienstleister können technische Nutzungsdaten nach ihren jeweiligen Datenschutzbedingungen verarbeiten. Google-Nutzerdaten werden nicht verkauft oder für Werbung, Profilbildung oder KI-Modelltraining genutzt.</p>
+    <h2>4. Schutz und Zugriff</h2>
+    <p>Die Hörbücher bleiben in privaten Drive-Ordnern. Der Backup-Worker prüft Berechtigungen und richtet keine öffentlichen Freigaben ein. Die Übertragung erfolgt über HTTPS. Die vorgesehenen OAuth-Zugangsdaten werden verschlüsselt in GitHub Actions Secrets abgelegt, nicht in öffentlich zugänglichem Webseiten-Code. Ein Google-Passwort wird nicht abgefragt. Eine gesonderte Freigabe einzelner Dateien durch den Kontoinhaber bleibt möglich.</p>
+    <h2>5. Speicherdauer, Löschung und Widerruf</h2>
+    <p>Backups bleiben gespeichert, bis der Kontoinhaber sie löscht. Der Widerruf des Zugriffs unter <a href="https://myaccount.google.com/connections">Google-Konto → Drittanbieter-Verbindungen</a> verhindert künftige automatische Sicherungen, löscht aber keine bereits gespeicherten Drive-Dateien. Technische Auftragsdaten können im bisherigen Hörbuchsystem bis zur regulären Löschung oder Migration bestehen bleiben. Für Auskunfts-, Lösch- oder Widerrufsanfragen steht die oben genannte Kontaktadresse zur Verfügung.</p>
+    <h2>6. Änderungen</h2>
+    <p>Bei wesentlichen Änderungen der Anwendung oder ihrer Datenverarbeitung wird diese Erklärung aktualisiert und mit einem neuen Datum versehen.</p>
+    <p><a href="#top" onclick="window.scrollTo({top:0,behavior:'smooth'});return false">↑ Back to top / Nach oben</a></p>
+  </section>
+</main>
+</body>
+</html>
