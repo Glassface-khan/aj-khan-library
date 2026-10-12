@@ -1,0 +1,25 @@
+name: AJK Private Google Drive OAuth Preflight
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/audiobook-drive-oauth-preflight.yml"
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: ajk-google-drive-oauth-preflight
+  cancel-in-progress: false
+jobs:
+  verify-google-drive-oauth:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - name: Read preflight script (no audiobook content)
+        uses: actions/checkout@v4
+      - name: Check private Google OAuth, folder access and small checksum verified test file
+        env:
+          GOOGLE_DRIVE_CLIENT_ID: ${{ secrets.GOOGLE_DRIVE_CLIENT_ID }}
+          GOOGLE_DRIVE_CLIENT_SECRET: ${{ secrets.GOOGLE_DRIVE_CLIENT_SECRET }}
+          GOOGLE_DRIVE_REFRESH_TOKEN: ${{ secrets.GOOGLE_DRIVE_REFRESH_TOKEN }}
+        run: python3 -B audiobook-cloud/google_drive_oauth_preflight.py
