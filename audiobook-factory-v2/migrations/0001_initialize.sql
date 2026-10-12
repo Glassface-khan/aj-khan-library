@@ -1,5 +1,6 @@
 -- AJK Audiobook Factory 2.0 — ISOLATED TEST DATABASE ONLY.
--- Stores NO family login codes, admin tokens, raw audiobook text, or private URLs.
+-- ADMIN-ONLY: no family accounts in V2, no admin credentials, raw book text or secret URLs.
+-- All admin verification is delegated to the existing Google Apps Script; no access-codes table.
 -- The existing Apps Script Access sheet remains the authority for book rights.
 PRAGMA foreign_keys = ON;
 
@@ -33,6 +34,7 @@ CREATE TABLE IF NOT EXISTS chapters (
 );
 CREATE INDEX IF NOT EXISTS chapters_book_order ON chapters(book_id,chapter_number);
 
+-- Reserved for author-only playback; backend read/write endpoints are NOT implemented yet.
 CREATE TABLE IF NOT EXISTS listening_progress (
   listener_id TEXT NOT NULL,
   chapter_id TEXT NOT NULL REFERENCES chapters(id) ON DELETE RESTRICT,
