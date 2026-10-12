@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="robots" content="noindex,nofollow">
 <meta name="referrer" content="no-referrer">
-<title>A. J. Khan — Audiobook Factory 2.0 · Private Pilot</title>
+<title>A. J. Khan — Audiobook Factory 2.0 · Author-only Pilot</title>
 <style>
 :root{color-scheme:dark;--navy:#142234;--paper:#f6f0e5;--gold:#c8a46d;--muted:#b9c4d1}
 *{box-sizing:border-box}
@@ -40,14 +40,14 @@ audio{display:block;width:100%;margin-top:15px}
 <header>
   <div class="kicker">A. J. Khan · Private Hörbibliothek</div>
   <h1>Audiobook Factory 2.0</h1>
-  <p class="muted">Unabhängiger Test · private Audios · kein Supabase</p>
+  <p class="muted">Nur für den Autor · private Audios · kein Supabase</p>
   <p><a href="../">← Zur bisherigen Autorenseite</a></p>
 </header>
 <section class="card">
   <div class="top">
     <div>
       <h2>Verbindung</h2>
-      <p class="small">Deine Anmeldung auf der Autorenseite wird genutzt. Kein zweites Familienkonto.</p>
+      <p class="small">Nur deine bestehende Admin-Anmeldung auf der Autorenseite wird verwendet.</p>
     </div>
     <button id="connect" type="button">Verbinden</button>
   </div>
@@ -56,8 +56,8 @@ audio{display:block;width:100%;margin-top:15px}
   </div>
 </section>
 <section class="card">
-  <h2>Private Hörbibliothek</h2>
-  <p class="small">Angezeigt werden nur deine freigegebenen Hörbücher.</p>
+  <h2>Meine Hörproben und Hörbücher</h2>
+  <p class="small">Nur für dich sichtbar. Keine Freigaben an Familien- oder Gastzugänge.</p>
   <div id="library" class="list"></div>
   <div id="playerCard" class="hidden">
     <label for="chapterPicker">Kapitel auswählen</label>
@@ -96,14 +96,10 @@ const API_ORIGIN="NOT_CONFIGURED";
 const $=(s)=>document.querySelector(s);
 const state={books:[],book:null,credentials:null};
 function credentials(){
-  const admin=localStorage.getItem("ajk_author_admin")==="1";
-  if(admin){
-    const adminToken=localStorage.getItem("ajk_admin_token")||"";
-    return adminToken?{adminToken}:null;
-  }
-  let access={};
-  try{access=JSON.parse(localStorage.getItem("ajk_visitor_access")||"{}")||{}}catch{}
-  return access.code?{code:String(access.code)}:null;
+  // This pilot NEVER accepts ordinary visitor/family access codes.
+  if(localStorage.getItem("ajk_author_admin")!=="1")return null;
+  const adminToken=localStorage.getItem("ajk_admin_token")||"";
+  return adminToken?{adminToken}:null;
 }
 function ready(){
   return API_ORIGIN.startsWith("https://") &&
@@ -138,7 +134,7 @@ function showBook(book){
 async function connect(){
   if(!ready()){status("#connectionStatus","Der private Cloudflare-Test ist noch nicht bereit.");return;}
   state.credentials=credentials();
-  if(!state.credentials){status("#connectionStatus","Bitte zunächst auf der bestehenden Autorenseite anmelden.");return;}
+  if(!state.credentials){status("#connectionStatus","Bitte zunächst als Autor/Admin auf der bestehenden Autorenseite anmelden.");return;}
   $("#connect").disabled=true;
   try{
     const data=await api("/v1/catalog",state.credentials);
@@ -151,7 +147,7 @@ async function connect(){
       button.onclick=()=>showBook(book);
       card.appendChild(button);grid.appendChild(card);
     }
-    if(!state.books.length)grid.appendChild(el("p","Noch keine privaten Test-Hörbücher vorhanden."));
+    if(!state.books.length)grid.appendChild(el("p","Noch keine privaten Autoren-Testhörbücher vorhanden."));
     status("#connectionStatus","Geschützte Verbindung hergestellt.");
   }catch{status("#connectionStatus","Noch keine sichere Verbindung. Keine Anmeldung verändert.")}
   finally{$("#connect").disabled=false;}
@@ -168,12 +164,12 @@ $("#listen").addEventListener("click",async()=>{
     player.src=data.url;player.load();
     await player.play().catch(()=>{});
     status("#playStatus","Kapitel bereit. Falls nötig ▶ am Player antippen.");
-  }catch{status("#playStatus","Kapitel nicht verfügbar. Rechte und Audio-Test überprüfen.");}
+  }catch{status("#playStatus","Kapitel nicht verfügbar. Bitte Admin-Anmeldung und Audio-Test prüfen.");}
 });
 // Intentional: sourceForm upload button remains disabled until isolated test passes.
 $("#sourceForm").addEventListener("submit",(ev)=>ev.preventDefault());
 if(!ready())$("#connect").disabled=true;
-if(!credentials())$("#authorCard").classList.add("hidden");
+if(!credentials()){ $("#authorCard").classList.add("hidden"); $("#library").replaceChildren(); $("#playerCard").classList.add("hidden"); }
 </script>
 </body>
 </html>
