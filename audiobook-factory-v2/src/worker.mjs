@@ -1,5 +1,5 @@
 // Audiobook Factory 2.0 — ISOLATED Cloudflare Worker prototype.
-// Reuses author-site Google Apps Script family access, NOT Supabase.
+// Admin-only: verifies the existing author-site admin session; never accepts family codes.
 // NEVER deploy to production before rate-limits, cost approval and end-to-end tests.
 import { isUuid, signTicket, verifyTicket } from "./security.mjs";
 
@@ -35,17 +35,18 @@ function limitedText(value,max=255) {
   const result=String(value ?? "").trim();
   return result && result.length<=max ? result : null;
 }
-async function auth(env,{code,adminToken},bookTitle="") {
+// Only the existing administrator may access this prototype.
+// Family/visitor access codes are deliberately NOT accepted.
+async function authAdmin(env,adminToken) {
   const givenToken=limitedText(adminToken,512);
-  const givenCode=limitedText(code,128);
-  if (!givenToken && !givenCode) return null;
-  if (!env.GAS_WEB_APP_URL || !env.GAS_WEB_APP_URL.startsWith("https://script.google.com/macros/s/")) return null;
-  const body=new URLSearchParams({action:"checkAudioAccess"});
-  if (givenToken) body.set("adminToken",givenToken);
-  else body.set("code",givenCode);
-  if (bookTitle) body.set("bookTitle",bookTitle);
-  // Never log the request/response or any user-provided code/token.
-  // Apps Script receives credentials in POST body, not a GET URL/query log.
+  if (!givenToken) return null;
+  if (!env.GAS_WEB_APP_URL ||
+      !env.GAS_WEB_APP_URL.startsWith("https://script.google.com/macros/s/")) return null;
+  const body=new URLSearchParams({
+    action:"checkAudioAccess",
+    adminToken:givenToken
+  });
+  // POST body is not copied into query strings. Never log the token.
   const controller=new AbortController();
   const timeout=setTimeout(()=>controller.abort(),8000);
   try {
@@ -54,21 +55,21 @@ async function auth(env,{code,adminToken},bookTitle="") {
       headers:{"Content-Type":"application/x-www-form-urlencoded"},
       body:body.toString(),
       redirect:"follow",
-      signal:controller.signal,
+      signal:controller.signal
     });
     if (!response.ok) return null;
     const d=await response.json();
-    if (d.ok !== true || typeof d.listenerId!=="string" ||
+    // Explicitly fail closed on an ordinary Access-sheet visitor session.
+    if (d.ok !== true || d.isAdmin !== true || d.fullAudioAccess !== true ||
+        typeof d.listenerId!=="string" ||
         !/^[0-9a-f-]{36}$/i.test(d.listenerId)) return null;
-    const isAdmin=d.isAdmin === true && d.fullAudioAccess === true;
-    return {
-      listenerId:d.listenerId,
-      isAdmin,
-      allowed:isAdmin || d.allowed === true,
-      audioAccess:(d.audioAccess && typeof d.audioAccess==="object" && !Array.isArray(d.audioAccess))?d.audioAccess:{}
-    };
+    return {listenerId:d.listenerId,isAdmin:true};
   } catch { return null; }
   finally {clearTimeout(timeout);}
+}
+async function requireAdmin(req,env,body) {
+  const token=(body && body.adminToken) || req.headers.get("X-Author-Token");
+  return authAdmin(env,token);
 }
 async function chapter(env,id) {
   return env.DB.prepare(
@@ -80,13 +81,13 @@ async function chapter(env,id) {
 async function catalog(req,env) {
   const body=await req.json().catch(()=>null);
   if (!body || typeof body!=="object") return json({ok:false,error:"invalid_request"},400);
-  const who=await auth(env,body);
+  const who=await requireAdmin(req,env,body);
   if (!who) return deny();
   const out=await env.DB.prepare(
     "SELECT id,title,cover_url,description,language_code,voice_name "+
     "FROM books WHERE is_published=1 AND status='ready' ORDER BY title LIMIT 300"
   ).all();
-  const visible=(out.results||[]).filter(b=>who.isAdmin || who.audioAccess[b.title]===true);
+  const visible=out.results||[]; // The entire pilot catalog is author-only.
   const books=[];
   for(const b of visible) {
     const rows=await env.DB.prepare(
@@ -99,17 +100,19 @@ async function catalog(req,env) {
 }
 async function ticket(req,env) {
   const body=await req.json().catch(()=>null);
-  if (!body || !isUuid(body.chapter_id)) return json({ok:false,error:"invalid_chapter"},400);
+  if (!body || typeof body!=="object") return deny();
+  const who=await requireAdmin(req,env,body);
+  if (!who) return deny();
+  if (!isUuid(body.chapter_id)) return json({ok:false,error:"invalid_chapter"},400);
   const row=await chapter(env,body.chapter_id);
-  if (!row || row.is_published!==1 || row.status!=="ready") return json({ok:false,error:"not_found"},404);
-  const who=await auth(env,body,row.book_title);
-  if (!who || !who.allowed) return deny();
-  const duration=900; // Short, bearer-style ticket; requires renewal on long sessions.
+  if (!row || row.is_published!==1 || row.status!=="ready")
+    return json({ok:false,error:"not_found"},404);
+  // Only a verified author session can mint the short-lived bearer URL.
+  const duration=900;
   const signed=await signTicket({
     ch:row.chapter_id, book:row.book_id, listener:who.listenerId,exp:NOW()+duration
   },env.TICKET_SECRET);
-  const url=new URL(req.url);
-  const media=new URL("/v1/media/"+row.chapter_id,url.origin);
+  const media=new URL("/v1/media/"+row.chapter_id,new URL(req.url).origin);
   media.searchParams.set("t",signed);
   return json({ok:true,url:media.href,expires_in:duration});
 }
@@ -148,11 +151,6 @@ async function media(req,env,chapterId) {
     h.set("Content-Length",String(object.size));
   }
   return new Response(req.method==="HEAD"?null:object.body,{status,headers:h});
-}
-async function requireAdmin(req,env,body) {
-  const token=(body&&body.adminToken) || req.headers.get("X-Author-Token");
-  const who=await auth(env,{adminToken:token});
-  return who?.isAdmin ? who : null;
 }
 async function createJob(req,env) {
   const body=await req.json().catch(()=>null);
