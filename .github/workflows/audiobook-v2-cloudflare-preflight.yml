@@ -1,15 +1,13 @@
 # AJK — SAFE, READ-ONLY Cloudflare preflight.
 # This workflow is intentionally not an installer or deployment tool.
 # It cannot create/change/delete Cloudflare resources or access audiobook files.
-# Run only after its workflow has been reviewed and enabled on the default branch.
+# Completed read-only PR verification on 2026-10-13. Further manual
+# runs require reviewed activation on the default branch.
 name: AJK V2 — Read-Only Cloudflare Connection Test
 
 on:
-  # One-off PR check: runs only if THIS verification workflow changes.
-  # A fork does not receive secrets; fail closed if no secret exists.
-  pull_request:
-    paths:
-      - ".github/workflows/audiobook-v2-cloudflare-preflight.yml"
+  # The one-time PR verification has completed successfully.
+  # Keep PR automation OFF so future PR commits do not reuse the read token.
   workflow_dispatch:
     inputs:
       account_id:
