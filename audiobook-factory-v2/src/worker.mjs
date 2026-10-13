@@ -1,6 +1,7 @@
 // Audiobook Factory 2.0 — ISOLATED Cloudflare Worker prototype.
 // Admin-only: verifies the existing author-site admin session; never accepts family codes.
-// NEVER deploy to production before rate-limits, cost approval and end-to-end tests.
+// Ship initially with PILOT_LOCKED=true; NEVER activate private routes before
+// rate-limits, cost approval and full end-to-end author-auth tests.
 import { isUuid, signTicket, verifyTicket } from "./security.mjs";
 
 const ALLOWED_ORIGIN = "https://glassface-khan.github.io";
@@ -27,6 +28,12 @@ function fail() { return json({ok:false,error:"temporarily_unavailable"},503); }
 function validOrigin(req) {
   const origin=req.headers.get("Origin");
   return !origin || origin===ALLOWED_ORIGIN;
+}
+// Fail closed for EVERY private route. Do not unlock until real admin/auth,
+// privacy, abuse-limits and full end-to-end tests receive explicit author approval.
+// A missing variable is LOCKED, not enabled.
+function pilotLocked(env) {
+  return env.PILOT_LOCKED !== "false";
 }
 function ready(env) {
   return Boolean(env.DB && env.PRIVATE_AUDIO && env.TICKET_SECRET && env.GAS_WEB_APP_URL);
@@ -212,7 +219,11 @@ export default {
     const path=new URL(req.url).pathname;
     if (!validOrigin(req)) return json({ok:false,error:"forbidden_origin"},403);
     if (req.method==="OPTIONS") return new Response(null,{status:204,headers:headers()});
-    if (path==="/health") return json({ok:true,configured:ready(env),prototype:true});
+    // This public, non-sensitive endpoint allows safe deployment smoke testing.
+    if (path==="/health") return json({ok:true,prototype:true,locked:pilotLocked(env)});
+    // All catalog, media, admin verification, jobs, and source-upload routes
+    // remain unreachable until a separate explicitly authorized unlock.
+    if (pilotLocked(env)) return json({ok:false,error:"pilot_locked"},503);
     if (!ready(env)) return fail();
     try {
       if (path==="/v1/catalog" && req.method==="POST") return await catalog(req,env);
