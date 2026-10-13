@@ -32,11 +32,12 @@ jobs:
           for attempt in range(6):
               try:
                   code,raw=call('/health')
+                  print('Health attempt',attempt+1,'HTTP',code,'public response prefix',repr(raw[:180]))
                   data=json.loads(raw)
                   if code==200 and data.get('ok') is True and data.get('locked') is True:
                       break
-              except Exception:
-                  pass
+              except Exception as exc:
+                  print('Health attempt',attempt+1,'error type',type(exc).__name__,str(exc)[:160])
               time.sleep(3)
           else:
               raise SystemExit('FAILED: /health missing or not locked')
