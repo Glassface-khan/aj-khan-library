@@ -8,6 +8,7 @@ from pathlib import Path
 import sys
 import tempfile
 import unittest
+from unittest.mock import patch
 import wave
 import zipfile
 
@@ -74,6 +75,24 @@ class LocalPocketTests(unittest.TestCase):
             destination=Path(temp)/"never-created"
             self.assertEqual(main(["--docx",str(docx),"--render","--output",str(destination)]),2)
             self.assertFalse(destination.exists())
+    def test_rights_reviewed_cc0_preset_renders_with_mock_in_private_dir(self):
+        import local_pocket_samples as mod
+        with tempfile.TemporaryDirectory() as temp:
+            docx=Path(temp)/"synthetic.docx"
+            fake_docx(docx)
+            target=Path(temp)/"private-cc0"
+            self.assertEqual(
+                mod.LICENSED_PRESETS["kyutai-cc0-default"],
+                "hf://kyutai/tts-voices/unmute-prod-website/default_voice.wav")
+            with patch.object(mod, "PocketTTSRenderer", return_value=FakeTTS()) as model:
+                result=main(["--docx",str(docx),"--language","EN",
+                             "--render","--voice-preset","kyutai-cc0-default",
+                             "--output",str(target)])
+            self.assertEqual(result,0)
+            model.assert_called_once_with("EN",mod.LICENSED_PRESETS["kyutai-cc0-default"])
+            self.assertEqual(len(list(target.glob("*.wav"))),3)
+            self.assertFalse((target/"manuscript.docx").exists())
+
     def test_no_output_inside_public_repo_and_no_invalid_docx(self):
         with tempfile.TemporaryDirectory() as temp:
             docx=Path(temp)/"invalid.docx"
