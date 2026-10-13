@@ -82,3 +82,46 @@ kein Lizenznachweis.
 Pocket TTS wird lokal ausgeführt und berechnet keine Gebühren pro Hörminute.
 Strom und lokaler Rechenaufwand fallen an; zusätzliche Cloud-Speicher-/Compute-
 Dienste werden nur nach ausdrücklicher Freigabe eingeschaltet.
+
+## Online-Produktion: portable R2-Anbindung (13.10.2026)
+
+Der Nutzer möchte die Factory vom iPhone aus steuern und keine lokale
+Rechenleistung bereitstellen. Deshalb ist `r2_private_transport.py` als
+**austauschbare R2-Schnittstelle** hinzugekommen. Sie lädt Manuskripte und
+Jessica/Gandalf-WAVs ausschließlich aus dem privaten R2-Bucket und schreibt
+neue Hörproben unter eindeutigen Auftragskennungen **ohne Überschreiben**
+zurück. Es gibt weder öffentliche URLs noch Löschfunktionen. Die isolierten
+Tests benutzen künstliche Daten und keinerlei Kontozugänge.
+
+**Keine echte R2-Übertragung oder Audioerzeugung wurde bisher ausgeführt.**
+Die Live-D1-Migration, ein sicherer Start-Endpunkt, R2-S3-Zugangsdaten,
+ein online laufender TTS-Rechner und End-to-end-Proben bleiben offen.
+
+### Wichtige Nutzungsrichtlinie und Kostenentscheidung
+
+Der alte TTS-Worker lief auf GitHub Actions mit Pocket TTS und Whisper.
+GitHub Free umfasst 2.000 Linux-Runner-Minuten/Monat für private Repositories
+und setzt ein Ausführungslimit von sechs Stunden pro Job. ABER GitHubs
+zusätzliche Nutzungsbedingungen verbieten es, Actions als allgemeinen
+Serverless-Anwendungsdienst zu verwenden oder GitHub-hosted Runner für
+Aufgaben ohne Bezug zur Entwicklung/Prüfung/Veröffentlichung der zugehörigen
+Software einzusetzen. Der geplante dauerhafte Ablauf
+Cloudflare -> repository_dispatch -> GitHub-Actions-Audiobook-Produktionsdienst
+wird daher **nicht** eingerichtet; GitHub Actions bleiben für Code-Tests
+und Software-CI verfügbar. Private Repositories beheben diesen
+Nutzungsrichtlinien-Konflikt nicht.
+
+Quelle: https://docs.github.com/en/site-policy/github-terms/github-terms-for-additional-products-and-features
+
+Aktuelle Alternative zum Testen einer privaten, kontinuierlichen Online-CPU:
+Oracle Cloud Always Free mit aktuell 2 OCPUs/12 GB RAM, vorbehaltlich
+Verfügbarkeit, Kontoregistrierung und Terms. Eine kommerzielle
+Mehrnutzung darf ohne separate Zustimmung nicht aktiviert werden.
+Der kostenlose Hugging Face CPU Basic Space verlangt für neu erstellte
+Gradio/Docker-Compute-Spaces mittlerweile einen Bezahlplan, auch wenn
+das reine CPU-Kontingent als kostenlos ausgewiesen wird.
+
+Quellen:
+https://docs.oracle.com/de-de/iaas/Content/FreeTier/freetier_topic-Always_Free_Resources.htm
+https://huggingface.co/docs/hub/spaces-overview
+
