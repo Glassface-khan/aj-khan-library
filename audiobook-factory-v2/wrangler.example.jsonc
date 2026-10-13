@@ -1,8 +1,9 @@
 {
-  // TEMPLATE ONLY — not a deployable live configuration until you
-  // create a Cloudflare account, a private R2 bucket and a D1 database.
+  // TEMPLATE ONLY — Cloudflare R2 and D1 were created in the dashboard, 
+  // but are NOT verified via API and no Worker has been deployed.
   "name": "ajk-audiobook-v2-private-pilot",
   "main": "src/worker.mjs",
+  "account_id": "b5a96acb430918e9b39890a63f863349",
   "compatibility_date": "2026-10-12",
   "workers_dev": true,
   "vars": {
