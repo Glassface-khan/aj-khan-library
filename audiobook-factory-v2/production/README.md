@@ -10,6 +10,7 @@ Die veröffentlichte Cloudflare-Factory bleibt mit PILOT_LOCKED=true gesperrt.
 - Das Tool production/local_pocket_samples.py extrahiert aus einer privaten DOCX-Datei ca. 160 Wörter pro Passage: Anfang, Mitte und Ende.
 - Ohne die Option --render werden weder Modell noch Stimme geladen. Es werden nur Wortzahlen ausgegeben. Echte Passage-Texte erscheinen nicht im Protokoll.
 - Mit --render entstehen drei WAV-Dateien und ein private_manifest.json. Der Ausgabeordner liegt zwingend AUSSERHALB des öffentlichen GitHub-Repositories.
+- Direkt nach dem Rendern entsteht auch preliminary_qc.json: WAV-Format, Dauer, Clipping, Stille und Datei-Hash werden vorgeprüft. Ergebnis bleibt immer HOLD, solange echte Offline-ASR-Texttreue und die ausdrückliche persönliche Hörfreigabe fehlen.
 - Modellgewichte und die öffentliche CC0-Stimmprobe lädt die Pocket-TTS-Bibliothek ggf. beim ersten Start online; private Manuskripte bleiben lokal.
 - Kein automatischer Cloudflare-Upload, keine Freigabe zur Gesamtproduktion, kein geheimer Token und kein kostenpflichtiger TTS-Webservice.
 - Pocket TTS unterstützt Englisch und Deutsch; Kokoro/Audiblez bleibt eine spätere Vergleichsoption.
@@ -43,7 +44,7 @@ Alternative lokale WAV-Referenz nur mit überprüften Rechten:
 ## Nicht fertig und bewusst gesperrt
 
 - Echtes lokales TTS-Modell noch nicht installiert oder als Live-Audio getestet.
-- Finale automatisierte Hörproben-QC und manuelle Autorenfreigabe noch nicht integriert.
+- Akustischer WAV-Vorcheck ist implementiert und synthetisch getestet. **Offline-ASR-Transkription/Texttreue**, endgültige Qualitätsentscheidung und eine interaktive persönliche Autorenfreigabe sind noch nicht integriert.
 - Vollständige M4B-Produktion, Wiederaufnahme und privater Cloudflare-Upload noch ausstehend.
 - D1-Tabellenmigration, Admin-End-to-end-Authentifizierung und Pilotfreigabe noch nicht abgeschlossen.
 - Die bisherigen Supabase-Audios bleiben unverändert; keine Löschung oder Migration.
