@@ -1,0 +1,58 @@
+# One-off public endpoint test. NO tokens/secrets. NO POST succeeds.
+name: AJK V2 - Verify Locked Test Worker
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/ajk-v2-locked-smoke.yml"
+permissions:
+  contents: read
+jobs:
+  public-smoke:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 4
+    steps:
+      - name: Verify the actual Worker is locked from the internet
+        env:
+          AJK_V2_PILOT: https://ajk-audiobook-v2-private-pilot.ali-khan-j.workers.dev
+        run: |
+          python3 - <<'PY'
+          import json,os,time,urllib.error,urllib.request
+          host=os.environ['AJK_V2_PILOT'].rstrip('/')
+          def call(path,method='GET',body=None):
+              req=urllib.request.Request(host+path,data=(
+                  json.dumps(body).encode() if body is not None else None),
+                  method=method,headers={'Content-Type':'application/json'})
+              try:
+                  with urllib.request.urlopen(req,timeout=12) as response:
+                      return response.status,response.read(2048)
+              except urllib.error.HTTPError as exc:
+                  return exc.code,exc.read(2048)
+          # Allow time for global propagation after the initial deployment.
+          for attempt in range(6):
+              try:
+                  code,raw=call('/health')
+                  data=json.loads(raw)
+                  if code==200 and data.get('ok') is True and data.get('locked') is True:
+                      break
+              except Exception:
+                  pass
+              time.sleep(3)
+          else:
+              raise SystemExit('FAILED: /health missing or not locked')
+          print('PASS /health: status 200, locked=true')
+          denied=[
+              ('/v1/catalog','POST',{'adminToken':'synthetic-not-a-secret'}),
+              ('/v1/jobs','POST',{'adminToken':'synthetic-not-a-secret','title':'Test','language_code':'EN','voice_key':'test'}),
+              ('/v1/jobs/list','POST',{'adminToken':'synthetic-not-a-secret'}),
+              ('/v1/media/03cd8d34-7e98-4e7b-a8d9-1683fdf13f50?t=invalid', 'GET', None)
+          ]
+          for path,method,body in denied:
+              code,raw=call(path,method,body)
+              try: response=json.loads(raw)
+              except Exception: raise SystemExit('FAILED: unexpected private response')
+              if code!=503 or response.get('error')!='pilot_locked':
+                  raise SystemExit('FAILED: private route not locked')
+              print('PASS private route locked:',method,path.split('?')[0])
+          print('SUCCESS: remotely verified Worker and all private data routes LOCKED')
+          PY
