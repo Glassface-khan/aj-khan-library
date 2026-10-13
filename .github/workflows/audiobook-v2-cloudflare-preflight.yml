@@ -5,11 +5,16 @@
 name: AJK V2 — Read-Only Cloudflare Connection Test
 
 on:
+  # One-off PR check: runs only if THIS verification workflow changes.
+  # A fork does not receive secrets; fail closed if no secret exists.
+  pull_request:
+    paths:
+      - ".github/workflows/audiobook-v2-cloudflare-preflight.yml"
   workflow_dispatch:
     inputs:
       account_id:
         description: "32-character Cloudflare Account ID (not a secret)"
-        required: true
+        required: false
         type: string
 
 permissions:
@@ -25,7 +30,7 @@ jobs:
     timeout-minutes: 5
     env:
       CLOUDFLARE_API_TOKEN: ${{ secrets.AJK_CLOUDFLARE_READONLY_TOKEN }}
-      CLOUDFLARE_ACCOUNT_ID: ${{ inputs.account_id }}
+      CLOUDFLARE_ACCOUNT_ID: b5a96acb430918e9b39890a63f863349
     steps:
       - name: Checkout the reviewed repository
         uses: actions/checkout@v4
