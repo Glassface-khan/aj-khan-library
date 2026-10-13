@@ -77,7 +77,10 @@ audio{display:block;width:100%;margin-top:15px}
     <label for="language">Sprache</label>
     <select id="language"><option value="EN">Englisch</option><option value="DE">Deutsch</option></select>
     <label for="voice">Stimme / TTS-Profil</label>
-    <select id="voice"><option value="evaluation">Noch nicht freigegeben – Testprofil</option></select>
+    <select id="voice">
+      <option value="jessica_en" selected>Jessica – Englisch (erste Teststimme)</option>
+      <option value="gandalf_en">Gandalf – Englisch</option>
+    </select>
     <label for="manuscript">DOCX-Manuskript</label>
     <input id="manuscript" required type="file" accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document">
     <p class="warning">Die Hörproben-Produktion ist noch in Entwicklung. Bitte hier keine echten Manuskripte hochladen,
@@ -95,6 +98,22 @@ audio{display:block;width:100%;margin-top:15px}
 const API_ORIGIN="NOT_CONFIGURED";
 const $=(s)=>document.querySelector(s);
 const state={books:[],book:null,credentials:null};
+const PRIVATE_VOICES={
+  EN:[{value:"jessica_en",label:"Jessica – Englisch (erste Teststimme)"},{value:"gandalf_en",label:"Gandalf – Englisch"}],
+  DE:[{value:"jessica_de",label:"Jessica – Deutsch (erste Teststimme)"},{value:"gandalf_de",label:"Gandalf – Deutsch"}]
+};
+function refreshPrivateVoiceChoices(){
+  const language=$("#language").value;
+  const picker=$("#voice");
+  picker.replaceChildren();
+  for(const voice of PRIVATE_VOICES[language]||[]){
+    const option=el("option",voice.label);
+    option.value=voice.value;picker.appendChild(option);
+  }
+}
+$("#language").addEventListener("change",refreshPrivateVoiceChoices);
+refreshPrivateVoiceChoices();
+
 function credentials(){
   // This pilot NEVER accepts ordinary visitor/family access codes.
   if(localStorage.getItem("ajk_author_admin")!=="1")return null;
