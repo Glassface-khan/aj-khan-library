@@ -2,7 +2,7 @@
 
 **Entscheidung vom 12. Oktober 2026:** Die zweite Audiobook Factory ist ein **privates Werkzeug ausschließlich für den Autor/Admin**. Es gibt KEINE Anmeldung für Familienmitglieder, KEINE Gastkonten, KEIN Familien-Zugriffsmanagement und KEINE allgemeine Hörbibliothek in der Factory 2.0. Die bestehende Autorenseite und Familienbibliothek bleiben unverändert.
 
-**Status:** GitHub Draft PR #49, nicht produktiv deployed. Cloudflare-Konto, R2-Bucket und D1-Datenbank wurden vom Autor am 13.10.2026 als erstellt gemeldet. **Noch nicht per API verifiziert oder mit dem Worker verbunden.** TTS/ASR bleibt offen. Bisher wurden nur isolierte synthetische Code-/Sicherheitstests durchgeführt; keine echten Aufnahmen. Nicht mergen, veröffentlichen oder produktive Daten löschen.
+**Status:** GitHub Draft PR #49, nicht produktiv deployed. Cloudflare-Konto, R2-Bucket und D1-Datenbank wurden vom Autor am 13.10.2026 als erstellt gemeldet. **Beide Testressourcen am 13.10.2026 über eine read-only GitHub Action per Cloudflare-API erfolgreich verifiziert, aber noch NICHT mit einem Worker verbunden.** TTS/ASR bleibt offen. Bisher wurden nur isolierte synthetische Code-/Sicherheitstests durchgeführt; keine echten Aufnahmen. Nicht mergen, veröffentlichen oder produktive Daten löschen.
 
 ## 1. Oberstes Ziel
 Der Autor kann sich mit seiner vorhandenen **Admin-Anmeldung** auf der bisherigen Autorenseite anmelden und die Factory 2.0 als getrennte Werkstatt benutzen:
@@ -28,10 +28,11 @@ Die Factory dient **nicht** der Freigabe an die Familie. Ein späterer Transfer 
 ## 2a. Einmalig bestätigte Cloudflare-Vorbereitung (13.10.2026)
 - Neues Cloudflare-Konto wurde vom Eigentümer eingerichtet.
 - Privater R2-Standard-Testbucket `ajk-private-audiobooks-v2-test` wurde über die Cloudflare-Oberfläche angelegt. Auf dem Eigentümer-Screenshot war **Public Access Disabled** und Bucket-Size 0 B sichtbar.
-- D1-Testdatenbank `ajk-audiobook-v2-test` wurde vom Eigentümer anschließend als erstellt bestätigt. Die D1-ID ist noch nicht über die API verifiziert.
+- D1-Testdatenbank `ajk-audiobook-v2-test` wurde vom Eigentümer erstellt und per Cloudflare-API verifiziert (UUID `8c0b0ee4-0a2a-462d-b13f-702c941380c7`).
+- Die Testressourcen wurden mit dem geschützten read-only GitHub-Secret `AJK_CLOUDFLARE_READONLY_TOKEN` am 13.10.2026 durch GitHub Actions Run `38369030655` erfolgreich geprüft: https://github.com/Glassface-khan/aj-khan-library/actions/runs/38369030655. Die Prüfung hat weder Ressourcen noch Daten verändert. Die R2-Privatheit wurde zuvor im Dashboard des Eigentümers als `Public Access Disabled` bestätigt, nicht separat durch das Prüfskript.
 - Die Infrastruktur wurde noch **nicht** mit der Factory verbunden, keine Tabellenmigrationen und kein Worker-Deployment ausgeführt; laufende Kosten und Quoten überwachen.
-- GitHub-Dateien `scripts/cloudflare_readonly_preflight.py` und `.github/workflows/audiobook-v2-cloudflare-preflight.yml` bereiten eine rein lesende Prüfung vor. Die manuelle Workflow-Ausführung wird erst nach Freischaltung im Default-Branch möglich; nichts ohne separate Prüfung mergen.
-- Für den API-Zugriff eine **eingeschränkte Cloudflare-API-Autorisierung** über GitHub Secrets benötigen; niemals API-Token im Chat oder Repository-Quelltext veröffentlichen.
+- GitHub-Dateien `scripts/cloudflare_readonly_preflight.py` und `.github/workflows/audiobook-v2-cloudflare-preflight.yml` haben die rein lesende PR-Verbindungsprüfung durchgeführt und bestanden. Nicht mit einem Deploy verwechseln. Die manuelle Workflow-Ausführung erfordert weiterhin Freischaltung im Default-Branch; nichts ohne separate Prüfung mergen.
+- Für die API-Verifikation wurde vom Eigentümer ein **7 Tage gültiger Read-only-Token** als GitHub Actions Secret hinterlegt; niemals API-Token im Chat, in Screenshots oder Repository-Quelltext veröffentlichen. Für zukünftige Schreib-/Deployment-Aktionen wäre später ein separater, begrenzter Token und Genehmigung erforderlich.
 
 ## 3. Geplante Architektur
 - **GitHub Pages**: bisherige Autorenseite unverändert; eine neue Admin-only Werkstatt-Oberfläche ist als Source-Entwurf vorhanden, jedoch nicht live.
@@ -57,7 +58,7 @@ Die Factory dient **nicht** der Freigabe an die Familie. Ein späterer Transfer 
 | `.github/workflows/audiobook-factory-v2-test.yml` | Isolierter CI-Test |
 
 ## 5. Noch offen / keine falschen Fertig-Aussagen
-- Kein echtes Cloudflare-Deployment, keine kostenpflichtigen Ressourcen eingerichtet; ein Konto kann persönliche Registrierung oder Zahlungsdaten benötigen.
+- Kein echtes Cloudflare-Worker-Deployment. R2- und D1-Testressourcen **sind** eingerichtet (Cloudflare Free-Kontingente; zusätzliche Nutzung kann kostenpflichtig werden). Überwache Quoten und Rechnung im Cloudflare-Dashboard.
 - Keine TTS-/ASR-Stimmen angebunden und keine echte Hörprobe produziert. Stimmenwünsche: Maggie als Referenz besonders bevorzugt, Tommy gut, Peter solide, ältere männliche Stimme/Deutsch wünschenswert. Verfügbarkeit/Lizenzen müssen geprüft werden.
 - Nicht implementiert: autorseitige Sample-Approve/Reject-API, vollständige Audio-Produktion, Kapitel-Markierung/Final-M4B, Status/Retry und ein tatsächlich laufender Google-Drive-Backup-Worker für V2.
 - Nicht implementiert: Wiedergabepositions-API, Langzeit-Ticket-Erneuerung und reale iPhone-/Windows-Testkampagne.
