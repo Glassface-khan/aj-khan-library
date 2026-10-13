@@ -37,6 +37,14 @@ Die Factory dient **nicht** der Freigabe an die Familie. Ein späterer Transfer 
 - GitHub-Dateien `scripts/cloudflare_readonly_preflight.py` und `.github/workflows/audiobook-v2-cloudflare-preflight.yml` haben die rein lesende PR-Verbindungsprüfung durchgeführt und bestanden. Nicht mit einem Deploy verwechseln. Die manuelle Workflow-Ausführung erfordert weiterhin Freischaltung im Default-Branch; nichts ohne separate Prüfung mergen.
 - Für die API-Verifikation wurde vom Eigentümer ein **7 Tage gültiger Read-only-Token** als GitHub Actions Secret hinterlegt; niemals API-Token im Chat, in Screenshots oder Repository-Quelltext veröffentlichen. Für zukünftige Schreib-/Deployment-Aktionen wäre später ein separater, begrenzter Token und Genehmigung erforderlich.
 
+## 2b. Erster LIVE-Worker-Deploy (13.10.2026)
+- Cloudflare-Worker `ajk-audiobook-v2-private-pilot` wurde vom Eigentümer als leeres Hello-World-Script erstellt und durch GitHub Actions Run [38373604927](https://github.com/Glassface-khan/aj-khan-library/actions/runs/38373604927) **erfolgreich mit dem gesperrten V2-Code aktualisiert**.
+- Das Deployment verwendete ausschließlich das vom Eigentümer sicher angelegte GitHub-Secret `AJK_CLOUDFLARE_V2_DEPLOY_TOKEN` (Individual Workers → Editor, nur dieser Worker, sieben Tage). Kein Tokenwert wurde in den Quelltext übernommen.
+- Cloudflare bestätigte im Log die D1- und R2-Bindings und `PILOT_LOCKED=true`. Wrangler konnte Ressourcen nicht selbst mit diesem eng begrenzten Deployment-Token erneut abfragen; sie waren vorher separat per read-only API verifiziert.
+- Die öffentlichen Routen werden nur testweise bereitgestellt. `GET /health` soll `{"ok":true,"prototype":true,"locked":true}` liefern; alle privaten Daten-/Upload-Endpunkte werden durch den Sperrschalter vor Ausführung blockiert.
+- **WICHTIG:** Ein unabhängiger HTTP-Smoke-Test aus GitHub Actions gegen die öffentliche `workers.dev`-Adresse wurde durch Cloudflare Edge mit **HTTP 403, Error 1010 (Browser-Signatur)** abgewiesen, also bevor die erwartete JSON-Antwort bestätigt werden konnte. Das bedeutet **nicht**, dass der Worker selbst einen Laufzeitfehler meldet. Ein echter Browser-Test des Eigentümers ist noch offen. Keine entsperrten Admin-Endpunkte testen oder echte Manuskripte hochladen.
+- Alte Autorenseite, Supabase, bestehende Hörbücher und Google Drive wurden nicht verändert. Die D1-Migration wurde nicht ausgeführt. TTS-Produktion bleibt ausgeschaltet.
+
 ## 3. Geplante Architektur
 - **GitHub Pages**: bisherige Autorenseite unverändert; eine neue Admin-only Werkstatt-Oberfläche ist als Source-Entwurf vorhanden, jedoch nicht live.
 - **Google Apps Script**: bestehende Admin-Identität und serverseitige Prüfung (unabhängig von Supabase).
