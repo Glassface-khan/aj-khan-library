@@ -77,7 +77,7 @@ function mockStorage() {
 }
 function setup() {
   const DB=mockDb(),PRIVATE_AUDIO=mockStorage();
-  const env={DB,PRIVATE_AUDIO,TICKET_SECRET:PASS,GAS_WEB_APP_URL:"https://script.google.com/macros/s/fake-id/exec"};
+  const env={DB,PRIVATE_AUDIO,TICKET_SECRET:PASS,GAS_WEB_APP_URL:"https://script.google.com/macros/s/fake-id/exec",PILOT_LOCKED:"false"};
   const realFetch=globalThis.fetch;
   const seen=[];
   globalThis.fetch=async (url,opts)=>{
@@ -112,10 +112,34 @@ test("no backend configured exposes no data",async()=>{
   const r=await worker.fetch(new Request(HOST+"/v1/catalog",{method:"POST"}),{});
   assert.equal(r.status,503);
 });
-test("health is private-resource agnostic",async()=>{
+test("health is public but never reveals binding configuration",async()=>{
   const t=setup();try{
     const r=await worker.fetch(new Request(HOST+"/health"),t.env);
-    assert.equal((await r.json()).configured,true);
+    assert.deepEqual(await r.json(),{ok:true,prototype:true,locked:false});
+  }finally{t.restore();}
+});
+test("pilot is locked by default even with valid author token and complete bindings",async()=>{
+  const t=setup();try{
+    delete t.env.PILOT_LOCKED;
+    const requests=[
+      post("/v1/catalog",author),
+      post("/v1/jobs",{...author,title:"Cannot Write",language_code:"EN",voice_key:"evaluation"}),
+      post("/v1/chapter-ticket",{...author,chapter_id:DOC}),
+      new Request(HOST+"/v1/jobs/"+DOC+"/source",{
+        method:"PUT",headers:{"X-Author-Token":"author-ok",
+          "Content-Type":"application/octet-stream"},body:new Uint8Array([0x50,0x4b,0x03,0x04])}),
+      new Request(HOST+"/v1/media/"+DOC+"?t=fake")
+    ];
+    for(const req of requests) {
+      const res=await worker.fetch(req,t.env);
+      assert.equal(res.status,503);
+      assert.equal((await res.json()).error,"pilot_locked");
+    }
+    assert.equal(t.seen.length,0,"must not call Apps Script");
+    assert.equal(t.DB.jobs.size,0,"must not write D1");
+    assert.equal(t.PRIVATE_AUDIO.uploaded.length,0,"must not write R2");
+    const health=await worker.fetch(new Request(HOST+"/health"),t.env);
+    assert.equal((await health.json()).locked,true);
   }finally{t.restore();}
 });
 test("only existing author admin can read the private catalog",async()=>{
