@@ -152,7 +152,14 @@ def main(argv=None):
             raise PrivateProductionError("output_directory_must_not_exist")
         renderer = PocketTTSRenderer(args.language, voice_source)
         manifest = render_three(plan, out, renderer)
+        # A successful WAV is never a production approval. Acoustic checks
+        # are preliminary only; there is no offline ASR connected yet.
+        from local_wav_preflight import report_for_directory
+        preflight = report_for_directory(out)
+        with (out / "preliminary_qc.json").open("x", encoding="utf-8") as result:
+            json.dump(preflight, result, indent=2)
         print("SUCCESS: three local private WAV files created; NOT approved; NOT uploaded.")
+        print("PRELIMINARY QC HOLD: ASR and personal listening approval are still required.")
         print("Result files:", ", ".join(manifest["samples"][p]["file"] for p in PARTS))
         return 0
     except (PrivateProductionError, SampleSelectionError, OSError) as e:
