@@ -1,6 +1,6 @@
 {
-  // TEMPLATE ONLY — Cloudflare R2 and D1 were created in the dashboard, 
-  // but are NOT verified via API and no Worker has been deployed.
+  // TEMPLATE ONLY — R2 and D1 names are now VERIFIED by a READ-ONLY GitHub check.
+  // NO Worker has been deployed and NO database migration was run.
   "name": "ajk-audiobook-v2-private-pilot",
   "main": "src/worker.mjs",
   "account_id": "b5a96acb430918e9b39890a63f863349",
@@ -15,7 +15,7 @@
     {
       "binding": "DB",
       "database_name": "ajk-audiobook-v2-test",
-      "database_id": "REPLACE_WITH_CLOUDFLARE_D1_DATABASE_UUID",
+      "database_id": "8c0b0ee4-0a2a-462d-b13f-702c941380c7",
       "migrations_dir": "migrations"
     }
   ],
