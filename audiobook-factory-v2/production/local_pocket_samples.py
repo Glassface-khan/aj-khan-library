@@ -20,11 +20,12 @@ HERE = Path(__file__).resolve().parent
 ROOT = HERE.parent
 sys.path.insert(0, str(ROOT / "qc"))
 from sample_selection import extract_docx_text, choose_three_samples, SampleSelectionError
+from voice_registry import VOICE_FILES, DEFAULT_VOICE, VoiceReferenceError, select_private_voice
 
 LANGUAGES = {"EN": "english", "DE": "german"}
 PARTS = ("beginning", "middle", "end")
-# Kyutai licenses this reference as CC0. Maggie's Expresso clip is CC-NC;
-# consequently Maggie is deliberately NOT a release-ready preset.
+# Preferred project voices: Jessica (default), Gandalf (alternative).
+# WAV references live only in a private local folder, never in this repo.
 LICENSED_PRESETS = {"kyutai-cc0-default": "hf://kyutai/tts-voices/unmute-prod-website/default_voice.wav"}
 MIN_PROMPT_BYTES = 256
 
@@ -121,7 +122,10 @@ def main(argv=None):
     ap.add_argument("--language", choices=sorted(LANGUAGES), default="EN")
     ap.add_argument("--render", action="store_true", help="Actually synthesize 3 samples on this computer")
     ap.add_argument("--output", help="New private folder OUTSIDE the public git repository")
-    ap.add_argument("--voice-wav", help="Locally stored voice reference with verified usage rights")
+    ap.add_argument("--voice-wav", help="Custom local WAV reference with verified rights")
+    ap.add_argument("--voice", choices=("jessica", "gandalf"), default=None,
+                    help="Use supplied Jessica or Gandalf reference; Jessica is default")
+    ap.add_argument("--voice-dir", help="Private folder containing the four reference WAVs")
     ap.add_argument("--voice-preset", choices=sorted(LICENSED_PRESETS),
                     help="Whitelisted rights-reviewed CC0 reference voice")
     ap.add_argument("--confirm-voice-rights", action="store_true",
@@ -134,9 +138,18 @@ def main(argv=None):
         if not args.render:
             print("DRY RUN ONLY: no TTS, no files uploaded, no private excerpts printed")
             return 0
-        if not args.output or bool(args.voice_wav) == bool(args.voice_preset):
-            raise PrivateProductionError("render_requires_output_and_exactly_one_voice_source")
-        if args.voice_preset:
+        if not args.output:
+            raise PrivateProductionError("render_requires_private_output")
+        if (args.voice_wav or args.voice_preset) and (args.voice or args.voice_dir):
+            raise PrivateProductionError("multiple_voice_sources")
+        if not args.voice_wav and not args.voice_preset:
+            if not args.voice_dir:
+                raise PrivateProductionError("private_voice_dir_required")
+            if not args.confirm_voice_rights:
+                raise PrivateProductionError("local_voice_requires_explicit_rights_confirmation")
+            selected_id = (args.voice or DEFAULT_VOICE) + "_" + args.language.lower()
+            voice_source = str(select_private_voice(selected_id, args.voice_dir, ROOT.parent))
+        elif args.voice_preset:
             voice_source = LICENSED_PRESETS[args.voice_preset]
         else:
             if not args.confirm_voice_rights:
@@ -162,9 +175,9 @@ def main(argv=None):
         print("PRELIMINARY QC HOLD: ASR and personal listening approval are still required.")
         print("Result files:", ", ".join(manifest["samples"][p]["file"] for p in PARTS))
         return 0
-    except (PrivateProductionError, SampleSelectionError, OSError) as e:
+    except (PrivateProductionError, VoiceReferenceError, SampleSelectionError, OSError) as e:
         # All errors are controlled codes; no manuscript passages or paths.
-        msg = str(e) if isinstance(e, (PrivateProductionError, SampleSelectionError)) else "local_file_error"
+        msg = str(e) if isinstance(e, (PrivateProductionError, VoiceReferenceError, SampleSelectionError)) else "local_file_error"
         print("STOP:", msg, file=sys.stderr)
         return 2
 
