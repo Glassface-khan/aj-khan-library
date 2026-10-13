@@ -35,7 +35,7 @@ def validate_job_id(value):
     return value.lower()
 
 def source_key(job_id):
-    return f"pilots/{validate_job_id(job_id)}/source/manuscript.docx"
+    return f"sources/{validate_job_id(job_id)}/manuscript.docx"
 
 def voice_key(voice_id):
     from voice_registry import VOICE_FILES
@@ -71,7 +71,7 @@ def client_from_environment():
 
 def fetch_limited(client, key, max_bytes):
     """Fail closed: no arbitrary object, known max size, no plaintext logging."""
-    if not (key.startswith("pilots/") or key.startswith("private-voices/")):
+    if not (key.startswith("sources/") or key.startswith("private-voices/")):
         raise PrivateTransportError("unapproved_r2_read")
     if not isinstance(max_bytes, int) or max_bytes <= 0:
         raise PrivateTransportError("invalid_limit")
