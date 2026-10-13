@@ -1,0 +1,56 @@
+# AJK Factory V2 — one-time initial LOCKED worker deployment.
+# Changes NO manuscript/audio data, D1 tables, existing author site, or Supabase.
+# PR #49 remains separate and unmerged. Deploys pinned, safety-tested source.
+name: AJK V2 - Initial Locked Worker Deploy
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/ajk-v2-initial-locked-deploy.yml"
+permissions:
+  contents: read
+concurrency:
+  group: ajk-v2-locked-pilot-once
+  cancel-in-progress: false
+jobs:
+  deploy-locked-only:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Checkout pinned test worker (not the live website)
+        uses: actions/checkout@v4
+        with:
+          ref: af417ab35cfb28c75c6e1824d78ccc42171357ae
+          persist-credentials: false
+      - name: Strict fail-closed configuration preflight
+        working-directory: audiobook-factory-v2
+        run: |
+          python3 - <<'PY'
+          import json,pathlib,re
+          c=pathlib.Path('wrangler.jsonc').read_text(encoding='utf-8')
+          c=re.sub(r'(?m)^\s*//[^\n]*$', '', c)
+          d=json.loads(c)
+          assert d['name']=='ajk-audiobook-v2-private-pilot'
+          assert d['account_id']=='b5a96acb430918e9b39890a63f863349'
+          assert d.get('workers_dev') is True
+          assert d.get('vars')=={'PILOT_LOCKED':'true'}
+          assert len(d.get('d1_databases',[]))==1
+          assert d['d1_databases'][0]['database_id']=='8c0b0ee4-0a2a-462d-b13f-702c941380c7'
+          assert len(d.get('r2_buckets',[]))==1
+          assert d['r2_buckets'][0]['bucket_name']=='ajk-private-audiobooks-v2-test'
+          code=pathlib.Path('src/worker.mjs').read_text(encoding='utf-8')
+          assert 'return env.PILOT_LOCKED !== "false";' in code
+          assert 'if (pilotLocked(env)) return json({ok:false,error:"pilot_locked"},503);' in code
+          print("PASS: private endpoints fail closed; no manuscript/audio operations")
+          PY
+          node --check src/worker.mjs
+          node --check src/security.mjs
+          node --test test/*.test.mjs
+          python3 -m unittest discover -s test -p 'test_*.py'
+      - name: Deploy private-route-locked Worker with R2/D1 bindings
+        uses: cloudflare/wrangler-action@v4
+        with:
+          apiToken: ${{ secrets.AJK_CLOUDFLARE_V2_DEPLOY_TOKEN }}
+          accountId: b5a96acb430918e9b39890a63f863349
+          workingDirectory: audiobook-factory-v2
+          command: deploy --config wrangler.jsonc
