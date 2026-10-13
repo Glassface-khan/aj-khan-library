@@ -85,13 +85,14 @@ class PocketTTSRenderer:
         return len(pcm) / float(self.model.sample_rate)
 
 
-def render_three(plan, dest, renderer):
+def render_three(plan, dest, renderer, *, voice_id="unassigned"):
     """Testable output boundary: renderer is injected in offline/mock tests."""
     dest = ensure_outside_repo(dest)
     if dest.exists():
         raise PrivateProductionError("output_directory_must_not_exist")
     dest.mkdir(parents=True, mode=0o700)
     manifest = {"status": "SAMPLES_ONLY_AWAITING_AUTHOR_QC",
+                "voice_id": voice_id,
                 "language": plan["language"],
                 "source_sha256": plan["source_sha256"],
                 "samples": {}}
@@ -150,6 +151,7 @@ def main(argv=None):
             selected_id = (args.voice or DEFAULT_VOICE) + "_" + args.language.lower()
             voice_source = str(select_private_voice(selected_id, args.voice_dir, ROOT.parent))
         elif args.voice_preset:
+            selected_id = args.voice_preset
             voice_source = LICENSED_PRESETS[args.voice_preset]
         else:
             if not args.confirm_voice_rights:
@@ -159,12 +161,13 @@ def main(argv=None):
                 raise PrivateProductionError("voice_reference_must_be_valid_local_wav")
             if ROOT.parent.resolve() in voice.parents:
                 raise PrivateProductionError("voice_reference_must_be_outside_public_repository")
+            selected_id = "owner_supplied_custom_reference"
             voice_source = str(voice)
         out = ensure_outside_repo(args.output)
         if out.exists():
             raise PrivateProductionError("output_directory_must_not_exist")
         renderer = PocketTTSRenderer(args.language, voice_source)
-        manifest = render_three(plan, out, renderer)
+        manifest = render_three(plan, out, renderer, voice_id=selected_id)
         # A successful WAV is never a production approval. Acoustic checks
         # are preliminary only; there is no offline ASR connected yet.
         from local_wav_preflight import report_for_directory
