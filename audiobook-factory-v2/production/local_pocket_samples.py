@@ -23,6 +23,9 @@ from sample_selection import extract_docx_text, choose_three_samples, SampleSele
 
 LANGUAGES = {"EN": "english", "DE": "german"}
 PARTS = ("beginning", "middle", "end")
+# Kyutai licenses this reference as CC0. Maggie's Expresso clip is CC-NC;
+# consequently Maggie is deliberately NOT a release-ready preset.
+LICENSED_PRESETS = {"kyutai-cc0-default": "hf://kyutai/tts-voices/unmute-prod-website/default_voice.wav"}
 MIN_PROMPT_BYTES = 256
 
 
@@ -47,6 +50,8 @@ def build_sample_plan(docx_path, language="EN"):
         raise PrivateProductionError("source_must_be_local_docx")
     if source == ROOT.parent.resolve() or ROOT.parent.resolve() in source.parents:
         raise PrivateProductionError("source_must_be_outside_public_repository")
+    if source.stat().st_size > 15_000_000:
+        raise PrivateProductionError("docx_size_invalid")
     raw = source.read_bytes()
     text = extract_docx_text(raw)
     samples = choose_three_samples(text, target_words=160)
@@ -117,6 +122,8 @@ def main(argv=None):
     ap.add_argument("--render", action="store_true", help="Actually synthesize 3 samples on this computer")
     ap.add_argument("--output", help="New private folder OUTSIDE the public git repository")
     ap.add_argument("--voice-wav", help="Locally stored voice reference with verified usage rights")
+    ap.add_argument("--voice-preset", choices=sorted(LICENSED_PRESETS),
+                    help="Whitelisted rights-reviewed CC0 reference voice")
     ap.add_argument("--confirm-voice-rights", action="store_true",
                     help="You are authorized to synthesize with this particular voice reference")
     args = ap.parse_args(argv)
@@ -127,17 +134,23 @@ def main(argv=None):
         if not args.render:
             print("DRY RUN ONLY: no TTS, no files uploaded, no private excerpts printed")
             return 0
-        if not args.output or not args.voice_wav or not args.confirm_voice_rights:
-            raise PrivateProductionError("render_requires_private_output_voice_and_rights_confirmation")
-        voice = Path(args.voice_wav).expanduser().resolve()
-        if not voice.is_file() or voice.suffix.lower() != ".wav" or voice.stat().st_size < MIN_PROMPT_BYTES:
-            raise PrivateProductionError("voice_reference_must_be_valid_local_wav")
-        if ROOT.parent.resolve() in voice.parents:
-            raise PrivateProductionError("voice_reference_must_be_outside_public_repository")
+        if not args.output or bool(args.voice_wav) == bool(args.voice_preset):
+            raise PrivateProductionError("render_requires_output_and_exactly_one_voice_source")
+        if args.voice_preset:
+            voice_source = LICENSED_PRESETS[args.voice_preset]
+        else:
+            if not args.confirm_voice_rights:
+                raise PrivateProductionError("local_voice_requires_explicit_rights_confirmation")
+            voice = Path(args.voice_wav).expanduser().resolve()
+            if not voice.is_file() or voice.suffix.lower() != ".wav" or voice.stat().st_size < MIN_PROMPT_BYTES:
+                raise PrivateProductionError("voice_reference_must_be_valid_local_wav")
+            if ROOT.parent.resolve() in voice.parents:
+                raise PrivateProductionError("voice_reference_must_be_outside_public_repository")
+            voice_source = str(voice)
         out = ensure_outside_repo(args.output)
         if out.exists():
             raise PrivateProductionError("output_directory_must_not_exist")
-        renderer = PocketTTSRenderer(args.language, voice)
+        renderer = PocketTTSRenderer(args.language, voice_source)
         manifest = render_three(plan, out, renderer)
         print("SUCCESS: three local private WAV files created; NOT approved; NOT uploaded.")
         print("Result files:", ", ".join(manifest["samples"][p]["file"] for p in PARTS))
