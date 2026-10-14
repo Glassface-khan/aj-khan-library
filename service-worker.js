@@ -56,8 +56,9 @@
 // payloads in IndexedDB for fast reopening; force clients to fetch the new JS.
 // v26 -> v27 (24.09.2026): books-live.json is the immediate catalog fallback;
 // BooksData remains canonical and replaces it whenever the live request succeeds.
-// v37 -> v38 (28.09.2026): force iOS to reload the exact-order cover grid.\n// v39 -> v40 (28.09.2026): deploy THE GUEST catalog entry, cover and EPUB; force clients to refresh the catalog fallback.\n// v40 -> v41 (28.09.2026): deploy THE NIGHT SIDE catalog entry, cover and EPUB; force clients to refresh the catalog fallback.\nconst SHELL_CACHE = 'ajk-shell-v70';
-const DATA_CACHE = 'ajk-data-v70';
+// v37 -> v38 (28.09.2026): force iOS to reload the exact-order cover grid.\n// v39 -> v40 (28.09.2026): deploy THE GUEST catalog entry, cover and EPUB; force clients to refresh the catalog fallback.\n// v40 -> v41 (28.09.2026): deploy THE NIGHT SIDE catalog entry, cover and EPUB; force clients to refresh the catalog fallback.
+// v70 -> v71 (14.10.2026): publish THE ROAD IT CAME BY reader-revision v2 and refresh the private reader/catalog.\nconst SHELL_CACHE = 'ajk-shell-v71';
+const DATA_CACHE = 'ajk-data-v71';
 const SHELL_FILES = ['./', './index.html', './books-live.json', './manifest.webmanifest', './icons/icon-192.png', './icons/icon-512.png'];
 
 // Aktionen, deren Antwort für Offline-Nutzung zwischengespeichert werden
@@ -152,7 +153,7 @@ async function injectAudioLibrary_(response) {
     if (now - lastCheck < 30000) return;
     lastCheck = now;
 
-    navigator.serviceWorker.register('./service-worker.js?v=69', {
+    navigator.serviceWorker.register('./service-worker.js?v=71', {
       scope: './',
       updateViaCache: 'none'
     }).then(function (reg) {
@@ -274,7 +275,7 @@ self.addEventListener('fetch', (event) => {
         } catch (_) {}
 
         try {
-          const fallbackUrl = new URL('./books-live.json?sw-catalog=20261006d', self.registration.scope);
+          const fallbackUrl = new URL('./books-live.json?sw-catalog=20261014-road-v2', self.registration.scope);
           const fallbackRes = await fetch(fallbackUrl, { cache: 'no-store' });
           if (fallbackRes && fallbackRes.ok) {
             const fallbackData = await fallbackRes.json();
