@@ -129,6 +129,34 @@
                 const doc = contents && contents.document;
                 if (!doc || !doc.body) return;
 
+                // Keep internal EPUB links inside epub.js. On iOS Safari an
+                // unhandled relative link from nav.xhtml can otherwise be
+                // resolved against the GitHub Pages site and show a 404 inside
+                // the reader instead of opening the requested chapter.
+                if (!doc.documentElement.getAttribute('data-ajk-epub-links')) {
+                  doc.documentElement.setAttribute('data-ajk-epub-links', '1');
+                  doc.addEventListener('click', (ev) => {
+                    try {
+                      let node = ev.target;
+                      if (node && node.nodeType === 3) node = node.parentElement;
+                      const link = node && node.closest ? node.closest('a[href]') : null;
+                      if (!link) return;
+
+                      const href = String(link.getAttribute('href') || '').trim();
+                      if (!href) return;
+                      if (/^(?:https?:|mailto:|tel:|data:|javascript:)/i.test(href)) return;
+                      if (href.charAt(0) === '#') return;
+
+                      ev.preventDefault();
+                      ev.stopPropagation();
+                      if (typeof ev.stopImmediatePropagation === 'function') ev.stopImmediatePropagation();
+
+                      const target = href.replace(/^\.\//, '');
+                      Promise.resolve(rendition.display(target)).catch(() => {});
+                    } catch (_) {}
+                  }, true);
+                }
+
                 const isCoverDoc =
                   ((doc.title || '').trim().toLowerCase() === 'cover') ||
                   !!doc.querySelector('.cover-page');
