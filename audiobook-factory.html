@@ -116,6 +116,7 @@ button.edition-delete:focus-visible{outline:2px solid var(--bad)}
     <a href="#newJob">+ Neues Hörbuch</a>
     <a href="#libraryCard">Audiobook-Bibliothek</a>
     <a href="#jobsCard">Cloud-Jobs</a>
+    <a href="#voiceReviewCard">Hörprüfung & Korrekturen</a>
     <a href="#notStartedCard">Noch nicht begonnen</a>
     <a href="./audiobook-privacy.html" aria-label="Datenschutzerklärung zur privaten Google-Drive-Sicherung">Datenschutz · Google Drive</a>
   </nav>
@@ -210,6 +211,28 @@ button.edition-delete:focus-visible{outline:2px solid var(--bad)}
     <div class="library-fold-actions"><button id="expandLibraryGroups" type="button">Alle Gruppen öffnen</button><button id="collapseLibraryGroups" type="button">Alle Gruppen schließen</button></div>
     <p id="listenStatus" class="muted" role="status" aria-live="polite"></p>
     <div id="audioOverview"><p class="muted">Lade …</p></div>
+  </section>
+
+  
+  <section class="card" id="voiceReviewCard">
+    <h2>Hörprüfung & Korrekturen</h2>
+    <p class="muted">Buch und Sprecherfassung auswählen, Kapitel anhören und die Stelle notieren. Die Notizen bleiben zunächst nur in diesem Browser gespeichert; sie werden nicht automatisch an ChatGPT oder den Produktionsserver geschickt.</p>
+    <form id="voiceReviewForm">
+      <div class="grid">
+        <div class="full"><label for="voiceReviewEdition">Buch und Sprecherfassung</label><select id="voiceReviewEdition"><option value="manual">Manuell eintragen</option></select></div>
+        <div id="voiceReviewManualTitle" class="full"><label for="voiceReviewTitle">Buchtitel</label><input type="text" id="voiceReviewTitle" maxlength="180" placeholder="Buchtitel"></div>
+        <div id="voiceReviewManualVoice" class="full"><label for="voiceReviewVoice">Sprecher</label><input type="text" id="voiceReviewVoice" maxlength="120" placeholder="Jessica EN oder Gandalf EN"></div>
+        <div><label for="voiceReviewChapter">Kapitelnummer</label><input type="number" id="voiceReviewChapter" min="1" max="999" value="1" required></div>
+        <div><label for="voiceReviewTime">Zeitmarke</label><input type="text" id="voiceReviewTime" placeholder="02:14"></div>
+        <div class="full"><label for="voiceReviewIssue">Was stimmt nicht?</label>
+          <select id="voiceReviewIssue"><option value="Emotion / Betonung">Emotion / Betonung</option><option value="Lange Pause">Lange Pause</option><option value="Fehlender Text">Fehlender Text</option><option value="Aussprache">Aussprache</option><option value="Unklare Stimme">Unklare Stimme</option><option value="Tempo">Tempo</option><option value="Anderes">Anderes</option></select>
+        </div>
+        <div class="full"><label for="voiceReviewNote">Deine Rückmeldung oder gewünschte Änderung</label><textarea id="voiceReviewNote" rows="4" maxlength="7000" required placeholder="Ab 02:14 fehlt ein Satz. Hier mehr Wärme und weniger Pause …" style="width:100%;background:#171510;color:var(--ink);border:1px solid var(--rule);border-radius:10px;padding:12px;font:inherit"></textarea></div>
+      </div>
+      <div class="row" style="margin-top:12px"><button type="submit" class="primary">Notiz speichern</button><button type="button" id="voiceReviewCopy">Korrekturen für ChatGPT kopieren</button><button type="button" id="voiceReviewExport">Notizen als JSON sichern</button></div>
+    </form>
+    <p id="voiceReviewStatus" class="muted" role="status" aria-live="polite"></p>
+    <div id="voiceReviewEntries"></div>
   </section>
 
   <section class="card hidden" id="jobsCard">
@@ -1526,4 +1549,5 @@ document.addEventListener('visibilitychange',()=>{if(!document.hidden)setTimeout
 
 init();
 </script>
+<script src="./audiobook-quality-review.js" defer></script>
 </body></html>
