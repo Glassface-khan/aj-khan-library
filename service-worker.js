@@ -59,7 +59,8 @@
 // v26 -> v27 (24.09.2026): books-live.json is the immediate catalog fallback;
 // BooksData remains canonical and replaces it whenever the live request succeeds.
 // v37 -> v38 (28.09.2026): force iOS to reload the exact-order cover grid.\n// v39 -> v40 (28.09.2026): deploy THE GUEST catalog entry, cover and EPUB; force clients to refresh the catalog fallback.\n// v40 -> v41 (28.09.2026): deploy THE NIGHT SIDE catalog entry, cover and EPUB; force clients to refresh the catalog fallback.
-// v70 -> v71 (14.10.2026): publish THE ROAD IT CAME BY reader-revision v2 and refresh the private reader/catalog.\nconst SHELL_CACHE = 'ajk-shell-v73';
+// v70 -> v71 (14.10.2026): publish THE ROAD IT CAME BY reader-revision v2 and refresh the private reader/catalog.
+const SHELL_CACHE = 'ajk-shell-v73';
 const DATA_CACHE = 'ajk-data-v73';
 const SHELL_FILES = ['./', './index.html', './books-live.json', './manifest.webmanifest', './icons/icon-192.png', './icons/icon-512.png'];
 
