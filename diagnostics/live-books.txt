@@ -1,10 +1,10 @@
 index_size=9642522
 script_urls=["https://script.google.com/macros/s/AKfycbwcbRDaWkM1wf3MV_dj4RPw9jQl2Fgc4YfGcmFrGU1S243yvh8WGW7mbyXLbSeVJKI/exec"]
 backend=https://script.google.com/macros/s/AKfycbwcbRDaWkM1wf3MV_dj4RPw9jQl2Fgc4YfGcmFrGU1S243yvh8WGW7mbyXLbSeVJKI/exec
-book_count=58
-BOOK|The Road it came by|status=Fertig|finished=True
-ASSET|The Road it came by|cover|status=None|content-type=image/jpeg|ok=True
-ASSET|The Road it came by|epub|ERROR|URLError('unknown url type: private-epub')
+book_count=59
+BOOK|The Road It Came By|status=Fertig|finished=True
+ASSET|The Road It Came By|cover|status=None|content-type=image/jpeg|ok=True
+ASSET|The Road It Came By|epub|ERROR|URLError('unknown url type: private-epub')
 BOOK|The Mountain That Doesn't Answer|status=Fertig|finished=True
 ASSET|The Mountain That Doesn't Answer|cover|status=200|content-type=image/jpeg|ok=True
 ASSET|The Mountain That Doesn't Answer|epub|ERROR|URLError('unknown url type: private-epub')
@@ -176,7 +176,7 @@ ASSET|To the One Who Comes After Us|epub|ERROR|URLError('unknown url type: priva
 BOOK|The Trembling Olive|status=Fertig|finished=True
 backend_error=https://script.google.com/macros/s/AKfycbwcbRDaWkM1wf3MV_dj4RPw9jQl2Fgc4YfGcmFrGU1S243yvh8WGW7mbyXLbSeVJKI/exec|ValueError("unknown url type: 'assets/covers/the-trembling-olive.png'")
 asset_failure_count=79
-FAIL|The Road it came by: epub request failed: URLError('unknown url type: private-epub')
+FAIL|The Road It Came By: epub request failed: URLError('unknown url type: private-epub')
 FAIL|The Mountain That Doesn't Answer: epub request failed: URLError('unknown url type: private-epub')
 FAIL|The Low Wall: epub request failed: URLError('unknown url type: private-epub')
 FAIL|The Physician of Ashes: epub request failed: URLError('unknown url type: private-epub')
