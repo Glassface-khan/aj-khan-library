@@ -1,0 +1,28 @@
+{
+  // AUTHOR-ONLY PILOT - FAIL CLOSED. GitHub PR #49 - NOT YET DEPLOYED.
+  // Deployment may expose /health on *.workers.dev, but ALL private routes
+  // are blocked with HTTP 503 until the author authorizes a separate unlock.
+  // Do not set PILOT_LOCKED to "false" as part of initial deployment.
+  "name": "ajk-audiobook-v2-private-pilot",
+  "main": "src/worker.mjs",
+  "account_id": "b5a96acb430918e9b39890a63f863349",
+  "compatibility_date": "2026-10-12",
+  "workers_dev": true,
+  "vars": {
+    "PILOT_LOCKED": "true"
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "ajk-audiobook-v2-test",
+      "database_id": "8c0b0ee4-0a2a-462d-b13f-702c941380c7",
+      "migrations_dir": "migrations"
+    }
+  ],
+  "r2_buckets": [
+    {
+      "binding": "PRIVATE_AUDIO",
+      "bucket_name": "ajk-private-audiobooks-v2-test"
+    }
+  ]
+}

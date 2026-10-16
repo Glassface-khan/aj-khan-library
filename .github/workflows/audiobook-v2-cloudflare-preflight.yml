@@ -1,0 +1,36 @@
+# AJK — SAFE, READ-ONLY Cloudflare preflight.
+# This workflow is intentionally not an installer or deployment tool.
+# It cannot create/change/delete Cloudflare resources or access audiobook files.
+# Completed read-only PR verification on 2026-10-13. Further manual
+# runs require reviewed activation on the default branch.
+name: AJK V2 — Read-Only Cloudflare Connection Test
+
+on:
+  # The one-time PR verification has completed successfully.
+  # Keep PR automation OFF so future PR commits do not reuse the read token.
+  workflow_dispatch:
+    inputs:
+      account_id:
+        description: "32-character Cloudflare Account ID (not a secret)"
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ajk-v2-cloudflare-readonly-preflight
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.AJK_CLOUDFLARE_READONLY_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: b5a96acb430918e9b39890a63f863349
+    steps:
+      - name: Checkout the reviewed repository
+        uses: actions/checkout@v4
+      - name: Validate existing bucket and database (read-only)
+        run: python3 audiobook-factory-v2/scripts/cloudflare_readonly_preflight.py

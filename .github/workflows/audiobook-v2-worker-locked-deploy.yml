@@ -1,0 +1,49 @@
+# ONE-TIME MANUAL DEPLOY ONLY. NO PUSH OR PR TRIGGER.
+# New Cloudflare Worker MUST ALREADY EXIST before using a worker-scoped Editor token.
+# The deployment exposes only /health; ALL admin/data routes remain locked.
+name: AJK V2 - Deploy Locked Test Worker
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ajk-v2-locked-worker-deploy
+  cancel-in-progress: false
+
+jobs:
+  locked-deploy:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    if: github.ref == 'refs/heads/main'
+    steps:
+      - name: Checkout reviewed source
+        uses: actions/checkout@v4
+      - name: Enforce no-secret, fail-closed deployment
+        working-directory: audiobook-factory-v2
+        run: |
+          python3 - <<'PY'
+          import json,re,pathlib
+          s=pathlib.Path('wrangler.jsonc').read_text(encoding='utf-8')
+          s=re.sub(r'^\s*//.*$', '', s, flags=re.M)
+          d=json.loads(s)
+          assert d['name']=='ajk-audiobook-v2-private-pilot'
+          assert d.get('workers_dev') is True
+          assert d['vars'] == {'PILOT_LOCKED': 'true'}
+          assert d['account_id']=='b5a96acb430918e9b39890a63f863349'
+          assert len(d.get('r2_buckets', []))==1
+          assert len(d.get('d1_databases', []))==1
+          assert all('secret' not in k.lower() for k in d['vars'])
+          print('OK: only locked health endpoint may be exposed')
+          PY
+          node --check src/worker.mjs
+          node --check src/security.mjs
+      - name: Deploy locked, admin-data-inaccessible worker
+        uses: cloudflare/wrangler-action@v4
+        with:
+          apiToken: ${{ secrets.AJK_CLOUDFLARE_V2_DEPLOY_TOKEN }}
+          accountId: b5a96acb430918e9b39890a63f863349
+          workingDirectory: audiobook-factory-v2
+          command: deploy --config wrangler.jsonc
