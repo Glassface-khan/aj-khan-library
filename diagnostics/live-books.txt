@@ -36,7 +36,7 @@ BOOK|The Erasure Broker|status=Fertig|finished=True
 ASSET|The Erasure Broker|cover|status=200|content-type=image/jpeg|ok=True
 ASSET|The Erasure Broker|epub|ERROR|URLError('unknown url type: private-epub')
 BOOK|The Treasury of Unanswered Prayers|status=Fertig|finished=True
-ASSET|The Treasury of Unanswered Prayers|cover|status=200|content-type=image/jpeg|ok=True
+ASSET|The Treasury of Unanswered Prayers|cover|ERROR|<HTTPError 400: 'Bad Request'>
 ASSET|The Treasury of Unanswered Prayers|epub|ERROR|URLError('unknown url type: private-epub')
 BOOK|Begin With Water|status=Fertig|finished=True
 ASSET|Begin With Water|cover|status=200|content-type=image/jpeg|ok=True
@@ -175,7 +175,7 @@ ASSET|To the One Who Comes After Us|cover|status=None|content-type=image/jpeg|ok
 ASSET|To the One Who Comes After Us|epub|ERROR|URLError('unknown url type: private-epub')
 BOOK|The Trembling Olive|status=Fertig|finished=True
 backend_error=https://script.google.com/macros/s/AKfycbwcbRDaWkM1wf3MV_dj4RPw9jQl2Fgc4YfGcmFrGU1S243yvh8WGW7mbyXLbSeVJKI/exec|ValueError("unknown url type: 'assets/covers/the-trembling-olive.png'")
-asset_failure_count=79
+asset_failure_count=80
 FAIL|The Road It Came By: epub request failed: URLError('unknown url type: private-epub')
 FAIL|The Mountain That Doesn't Answer: epub request failed: URLError('unknown url type: private-epub')
 FAIL|The Low Wall: epub request failed: URLError('unknown url type: private-epub')
@@ -187,6 +187,7 @@ FAIL|The Pen Was Still Warm: epub request failed: URLError('unknown url type: pr
 FAIL|The Book of Seven Thieves: epub request failed: URLError('unknown url type: private-epub')
 FAIL|The Blue Hour: epub request failed: URLError('unknown url type: private-epub')
 FAIL|The Erasure Broker: epub request failed: URLError('unknown url type: private-epub')
+FAIL|The Treasury of Unanswered Prayers: cover request failed: <HTTPError 400: 'Bad Request'>
 FAIL|The Treasury of Unanswered Prayers: epub request failed: URLError('unknown url type: private-epub')
 FAIL|Begin With Water: epub request failed: URLError('unknown url type: private-epub')
 FAIL|The Niche of Light: epub request failed: URLError('unknown url type: private-epub')
