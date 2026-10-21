@@ -19,7 +19,7 @@ jobs:
       - name: Diagnose frontend, live backend, covers and EPUBs
         run: |
           python - <<'PY'
-          import json,re,urllib.request,pathlib,sys
+          import json,re,urllib.request,pathlib,sys,urllib.parse,base64
           p=pathlib.Path('index.html')
           s=p.read_text(encoding='utf-8',errors='replace')
           urls=sorted(set(re.findall(r'https://script\.google\.com/macros/s/[A-Za-z0-9_-]+/exec',s)))
@@ -29,27 +29,58 @@ jobs:
           out.append('script_urls='+json.dumps(urls))
 
           def probe(url, expected, title):
-              if not url:
-                  failures.append(f'{title}: missing {expected} URL')
-                  return 'MISSING'
-              req=urllib.request.Request(url, headers={'User-Agent':'Mozilla/5.0 AJK-Live-Asset-Probe/1.0'})
-              try:
-                  with urllib.request.urlopen(req, timeout=20) as r:
-                      status=getattr(r,'status',200)
-                      ctype=(r.headers.get('Content-Type') or '').lower()
-                      sample=r.read(64)
-                  ok=(status in (None,200))
-                  if expected=='cover':
-                      ok=ok and ctype.startswith('image/')
-                  elif expected=='epub':
-                      ok=ok and (('epub' in ctype) or ('zip' in ctype) or ('octet-stream' in ctype) or sample[:2]==b'PK')
-                  if not ok:
-                      failures.append(f'{title}: bad {expected} response status={status} content-type={ctype}')
-                  return f'status={status}|content-type={ctype}|ok={ok}'
-              except Exception as e:
-                  failures.append(f'{title}: {expected} request failed: {e!r}')
-                  return 'ERROR|'+repr(e)
+              # The public book catalogue intentionally contains only
+              # protected EPUB markers; the separate privacy-security
+              # workflow tests that anonymous requests are denied.
+              if expected == 'epub':
+                  if not url:
+                      return 'NOT_AVAILABLE|private_epub_not_linked'
+                  if url.startswith('private-epub://'):
+                      return 'AUTH_REQUIRED|anonymous_denial_checked_in_privacy_workflow'
+                  failures.append(f'{title}: unsafe EPUB reference in public catalogue')
+                  return 'UNSAFE_REFERENCE'
 
+              if not url:
+                  failures.append(f'{title}: missing public cover image')
+                  return 'MISSING'
+
+              if url.startswith('data:image/'):
+                  try:
+                      header, image_data = url.split(',', 1)
+                      if ';base64' not in header:
+                          raise ValueError('not a base64 data image')
+                      blob = base64.b64decode(image_data, validate=True)
+                      if not (blob.startswith(b'\xff\xd8') or blob.startswith(b'\x89PNG\r\n\x1a\n') or
+                              (blob.startswith(b'RIFF') and blob[8:12] == b'WEBP') or blob.startswith(b'GIF8')):
+                          raise ValueError('unknown image signature')
+                      return 'embedded_public_image|ok=True'
+                  except Exception as e:
+                      failures.append(f'{title}: invalid embedded cover: {e!r}')
+                      return 'BAD_DATA_IMAGE'
+
+              if not url.startswith('assets/covers/') or '..' in pathlib.PurePosixPath(url).parts:
+                  failures.append(f'{title}: cover is not a same-origin asset')
+                  return 'UNSAFE_COVER_PATH'
+
+              if not pathlib.Path(url).is_file():
+                  failures.append(f'{title}: missing cover asset in repository: {url}')
+                  return 'MISSING_ASSET'
+
+              public_url = urllib.parse.urljoin(
+                  'https://glassface-khan.github.io/aj-khan-library/', url)
+              req = urllib.request.Request(public_url, headers={'User-Agent':'AJK-Live-Asset-Probe/2.0'})
+              try:
+                  with urllib.request.urlopen(req, timeout=25) as response:
+                      status = getattr(response, 'status', 200)
+                      ctype = (response.headers.get('Content-Type') or '').lower()
+                      sample = response.read(64)
+                  ok = status == 200 and ctype.startswith('image/') and len(sample) > 0
+                  if not ok:
+                      failures.append(f'{title}: cover response invalid, status={status}, type={ctype}')
+                  return f'status={status}|type={ctype}|ok={ok}'
+              except Exception as e:
+                  failures.append(f'{title}: cover request failed: {e!r}')
+                  return 'ERROR|'+repr(e)
           for u in urls:
               try:
                   with urllib.request.urlopen(u+'?action=getBooks', timeout=20) as r:
