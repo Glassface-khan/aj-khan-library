@@ -3,10 +3,188 @@ script_urls=["https://script.google.com/macros/s/AKfycbwcbRDaWkM1wf3MV_dj4RPw9jQ
 backend=https://script.google.com/macros/s/AKfycbwcbRDaWkM1wf3MV_dj4RPw9jQl2Fgc4YfGcmFrGU1S243yvh8WGW7mbyXLbSeVJKI/exec
 book_count=61
 BOOK|The Road It Came By|status=Fertig|finished=True
-ASSET|The Road It Came By|cover|status=None|content-type=image/jpeg|ok=True
-ASSET|The Road It Came By|epub|ERROR|URLError('unknown url type: private-epub')
+ASSET|The Road It Came By|cover|embedded_public_image|ok=True
+ASSET|The Road It Came By|epub|AUTH_REQUIRED|anonymous_denial_checked_in_privacy_workflow
 BOOK|The Mountain That Doesn't Answer|status=Fertig|finished=True
-backend_error=https://script.google.com/macros/s/AKfycbwcbRDaWkM1wf3MV_dj4RPw9jQl2Fgc4YfGcmFrGU1S243yvh8WGW7mbyXLbSeVJKI/exec|ValueError("unknown url type: 'assets/covers/the-mountain-that-doesnt-answer.jpg'")
+ASSET|The Mountain That Doesn't Answer|cover|status=200|type=image/jpeg|ok=True
+ASSET|The Mountain That Doesn't Answer|epub|AUTH_REQUIRED|anonymous_denial_checked_in_privacy_workflow
+BOOK|The Low Wall|status=Fertig|finished=True
+ASSET|The Low Wall|cover|status=200|type=image/jpeg|ok=True
+ASSET|The Low Wall|epub|AUTH_REQUIRED|anonymous_denial_checked_in_privacy_workflow
+BOOK|The Physician of Ashes|status=Fertig|finished=True
+ASSET|The Physician of Ashes|cover|status=200|type=image/png|ok=True
+ASSET|The Physician of Ashes|epub|AUTH_REQUIRED|anonymous_denial_checked_in_privacy_workflow
+BOOK|The Weight of the Air|status=Fertig|finished=True
+ASSET|The Weight of the Air|cover|status=200|type=image/jpeg|ok=True
+ASSET|The Weight of the Air|epub|AUTH_REQUIRED|anonymous_denial_checked_in_privacy_workflow
+BOOK|The Man the World Forgot|status=Fertig|finished=True
+ASSET|The Man the World Forgot|cover|embedded_public_image|ok=True
+ASSET|The Man the World Forgot|epub|AUTH_REQUIRED|anonymous_denial_checked_in_privacy_workflow
+BOOK|The Second Ledger|status=Fertig|finished=True
+ASSET|The Second Ledger|cover|status=200|type=image/jpeg|ok=True
+ASSET|The Second Ledger|epub|AUTH_REQUIRED|anonymous_denial_checked_in_privacy_workflow
+BOOK|The Pen Was Still Warm|status=Fertig|finished=True
+ASSET|The Pen Was Still Warm|cover|status=200|type=image/jpeg|ok=True
+ASSET|The Pen Was Still Warm|epub|AUTH_REQUIRED|anonymous_denial_checked_in_privacy_workflow
+BOOK|The Book of Seven Thieves|status=Fertig|finished=True
+ASSET|The Book of Seven Thieves|cover|status=200|type=image/jpeg|ok=True
+ASSET|The Book of Seven Thieves|epub|AUTH_REQUIRED|anonymous_denial_checked_in_privacy_workflow
+BOOK|The Blue Hour|status=Fertig|finished=True
+ASSET|The Blue Hour|cover|status=200|type=image/jpeg|ok=True
+ASSET|The Blue Hour|epub|AUTH_REQUIRED|anonymous_denial_checked_in_privacy_workflow
+BOOK|The Erasure Broker|status=Fertig|finished=True
+ASSET|The Erasure Broker|cover|status=200|type=image/jpeg|ok=True
+ASSET|The Erasure Broker|epub|AUTH_REQUIRED|anonymous_denial_checked_in_privacy_workflow
+BOOK|The Treasury of Unanswered Prayers|status=Fertig|finished=True
+ASSET|The Treasury of Unanswered Prayers|cover|status=200|type=image/jpeg|ok=True
+ASSET|The Treasury of Unanswered Prayers|epub|AUTH_REQUIRED|anonymous_denial_checked_in_privacy_workflow
+BOOK|Begin With Water|status=Fertig|finished=True
+ASSET|Begin With Water|cover|status=200|type=image/jpeg|ok=True
+ASSET|Begin With Water|epub|AUTH_REQUIRED|anonymous_denial_checked_in_privacy_workflow
+BOOK|The Niche of Light|status=Fertig|finished=True
+ASSET|The Niche of Light|cover|status=200|type=image/jpeg|ok=True
+ASSET|The Niche of Light|epub|AUTH_REQUIRED|anonymous_denial_checked_in_privacy_workflow
+BOOK|Die Form des Lichts|status=Fertig|finished=True
+ASSET|Die Form des Lichts|cover|status=200|type=image/jpeg|ok=True
+ASSET|Die Form des Lichts|epub|AUTH_REQUIRED|anonymous_denial_checked_in_privacy_workflow
+BOOK|What the Clockmaker Kept|status=Fertig|finished=True
+ASSET|What the Clockmaker Kept|cover|status=200|type=image/jpeg|ok=True
+ASSET|What the Clockmaker Kept|epub|AUTH_REQUIRED|anonymous_denial_checked_in_privacy_workflow
+BOOK|What the Ash Remembers|status=Fertig|finished=True
+ASSET|What the Ash Remembers|cover|status=200|type=image/jpeg|ok=True
+ASSET|What the Ash Remembers|epub|AUTH_REQUIRED|anonymous_denial_checked_in_privacy_workflow
+BOOK|The Lamp Keeper|status=Fertig|finished=True
+ASSET|The Lamp Keeper|cover|status=200|type=image/jpeg|ok=True
+ASSET|The Lamp Keeper|epub|AUTH_REQUIRED|anonymous_denial_checked_in_privacy_workflow
+BOOK|The Drop|status=Fertig|finished=True
+ASSET|The Drop|cover|status=200|type=image/jpeg|ok=True
+ASSET|The Drop|epub|AUTH_REQUIRED|anonymous_denial_checked_in_privacy_workflow
+BOOK|Written in Water|status=Fertig|finished=True
+ASSET|Written in Water|cover|status=200|type=image/jpeg|ok=True
+ASSET|Written in Water|epub|AUTH_REQUIRED|anonymous_denial_checked_in_privacy_workflow
+BOOK|The Missing Cover|status=Fertig|finished=True
+ASSET|The Missing Cover|cover|status=200|type=image/jpeg|ok=True
+ASSET|The Missing Cover|epub|AUTH_REQUIRED|anonymous_denial_checked_in_privacy_workflow
+BOOK|CARAVANSERAI|status=Fertig|finished=True
+ASSET|CARAVANSERAI|cover|status=200|type=image/jpeg|ok=True
+ASSET|CARAVANSERAI|epub|AUTH_REQUIRED|anonymous_denial_checked_in_privacy_workflow
+BOOK|BARZAKH|status=Fertig|finished=True
+ASSET|BARZAKH|cover|status=200|type=image/jpeg|ok=True
+ASSET|BARZAKH|epub|AUTH_REQUIRED|anonymous_denial_checked_in_privacy_workflow
+BOOK|The Proof|status=Fertig|finished=True
+ASSET|The Proof|cover|status=200|type=image/jpeg|ok=True
+ASSET|The Proof|epub|AUTH_REQUIRED|anonymous_denial_checked_in_privacy_workflow
+BOOK|ARCHE|status=Fertig|finished=True
+ASSET|ARCHE|cover|status=200|type=image/jpeg|ok=True
+ASSET|ARCHE|epub|AUTH_REQUIRED|anonymous_denial_checked_in_privacy_workflow
+BOOK|The Glass Ladder|status=Fertig|finished=True
+ASSET|The Glass Ladder|cover|status=200|type=image/jpeg|ok=True
+ASSET|The Glass Ladder|epub|AUTH_REQUIRED|anonymous_denial_checked_in_privacy_workflow
+BOOK|The Covenant of Light — The Forgetting|status=Fertig|finished=True
+ASSET|The Covenant of Light — The Forgetting|cover|status=200|type=image/jpeg|ok=True
+ASSET|The Covenant of Light — The Forgetting|epub|AUTH_REQUIRED|anonymous_denial_checked_in_privacy_workflow
+BOOK|The Covenant of Light — The Search|status=Fertig|finished=True
+ASSET|The Covenant of Light — The Search|cover|status=200|type=image/jpeg|ok=True
+ASSET|The Covenant of Light — The Search|epub|AUTH_REQUIRED|anonymous_denial_checked_in_privacy_workflow
+BOOK|The Covenant of Light — The Return|status=Fertig|finished=True
+ASSET|The Covenant of Light — The Return|cover|status=200|type=image/jpeg|ok=True
+ASSET|The Covenant of Light — The Return|epub|AUTH_REQUIRED|anonymous_denial_checked_in_privacy_workflow
+BOOK|THE BURIED BOOK|status=Fertig|finished=True
+ASSET|THE BURIED BOOK|cover|status=200|type=image/jpeg|ok=True
+ASSET|THE BURIED BOOK|epub|AUTH_REQUIRED|anonymous_denial_checked_in_privacy_workflow
+BOOK|The Optimization|status=Fertig|finished=True
+ASSET|The Optimization|cover|status=200|type=image/jpeg|ok=True
+ASSET|The Optimization|epub|AUTH_REQUIRED|anonymous_denial_checked_in_privacy_workflow
+BOOK|The False Dawn|status=Fertig|finished=True
+ASSET|The False Dawn|cover|status=200|type=image/jpeg|ok=True
+ASSET|The False Dawn|epub|AUTH_REQUIRED|anonymous_denial_checked_in_privacy_workflow
+BOOK|The Breaking|status=Fertig|finished=True
+ASSET|The Breaking|cover|status=200|type=image/jpeg|ok=True
+ASSET|The Breaking|epub|AUTH_REQUIRED|anonymous_denial_checked_in_privacy_workflow
+BOOK|The Door in the West|status=Fertig|finished=True
+ASSET|The Door in the West|cover|status=200|type=image/jpeg|ok=True
+ASSET|The Door in the West|epub|AUTH_REQUIRED|anonymous_denial_checked_in_privacy_workflow
+BOOK|THE SENTENCE|status=Fertig|finished=True
+ASSET|THE SENTENCE|cover|status=200|type=image/jpeg|ok=True
+ASSET|THE SENTENCE|epub|AUTH_REQUIRED|anonymous_denial_checked_in_privacy_workflow
+BOOK|DIE RÜCKFÜHRUNG|status=Fertig|finished=True
+ASSET|DIE RÜCKFÜHRUNG|cover|status=200|type=image/jpeg|ok=True
+ASSET|DIE RÜCKFÜHRUNG|epub|AUTH_REQUIRED|anonymous_denial_checked_in_privacy_workflow
+BOOK|DIE ORDNUNG|status=Fertig|finished=True
+ASSET|DIE ORDNUNG|cover|status=200|type=image/jpeg|ok=True
+ASSET|DIE ORDNUNG|epub|AUTH_REQUIRED|anonymous_denial_checked_in_privacy_workflow
+BOOK|DAS VERLASSEN|status=Fertig|finished=True
+ASSET|DAS VERLASSEN|cover|status=200|type=image/jpeg|ok=True
+ASSET|DAS VERLASSEN|epub|AUTH_REQUIRED|anonymous_denial_checked_in_privacy_workflow
+BOOK|DIE WERKSTATT DER VERLORENEN DINGE|status=Fertig|finished=True
+ASSET|DIE WERKSTATT DER VERLORENEN DINGE|cover|status=200|type=image/png|ok=True
+ASSET|DIE WERKSTATT DER VERLORENEN DINGE|epub|AUTH_REQUIRED|anonymous_denial_checked_in_privacy_workflow
+BOOK|DIE FRAU, DIE DAS MEER AUSWENDIG KANNTE|status=Fertig|finished=True
+ASSET|DIE FRAU, DIE DAS MEER AUSWENDIG KANNTE|cover|status=200|type=image/jpeg|ok=True
+ASSET|DIE FRAU, DIE DAS MEER AUSWENDIG KANNTE|epub|AUTH_REQUIRED|anonymous_denial_checked_in_privacy_workflow
+BOOK|THE FOURTH SENTENCE|status=Fertig|finished=True
+ASSET|THE FOURTH SENTENCE|cover|status=200|type=image/jpeg|ok=True
+ASSET|THE FOURTH SENTENCE|epub|AUTH_REQUIRED|anonymous_denial_checked_in_privacy_workflow
+BOOK|THE HAND THAT SEES|status=Fertig|finished=True
+ASSET|THE HAND THAT SEES|cover|status=200|type=image/jpeg|ok=True
+ASSET|THE HAND THAT SEES|epub|AUTH_REQUIRED|anonymous_denial_checked_in_privacy_workflow
+BOOK|THE THREAD|status=Fertig|finished=True
+ASSET|THE THREAD|cover|status=200|type=image/jpeg|ok=True
+ASSET|THE THREAD|epub|AUTH_REQUIRED|anonymous_denial_checked_in_privacy_workflow
+BOOK|Whoever Saves a Life|status=Fertig|finished=True
+ASSET|Whoever Saves a Life|cover|status=200|type=image/jpeg|ok=True
+ASSET|Whoever Saves a Life|epub|AUTH_REQUIRED|anonymous_denial_checked_in_privacy_workflow
+BOOK|Was weiterschlägt|status=Fertig|finished=True
+ASSET|Was weiterschlägt|cover|status=200|type=image/jpeg|ok=True
+ASSET|Was weiterschlägt|epub|AUTH_REQUIRED|anonymous_denial_checked_in_privacy_workflow
+BOOK|The Testimony of Sand|status=Fertig|finished=True
+ASSET|The Testimony of Sand|cover|status=200|type=image/jpeg|ok=True
+ASSET|The Testimony of Sand|epub|AUTH_REQUIRED|anonymous_denial_checked_in_privacy_workflow
+BOOK|The Guest|status=Fertig|finished=True
+ASSET|The Guest|cover|status=200|type=image/jpeg|ok=True
+ASSET|The Guest|epub|AUTH_REQUIRED|anonymous_denial_checked_in_privacy_workflow
+BOOK|THE NIGHT SIDE|status=Fertig|finished=True
+ASSET|THE NIGHT SIDE|cover|status=200|type=image/jpeg|ok=True
+ASSET|THE NIGHT SIDE|epub|AUTH_REQUIRED|anonymous_denial_checked_in_privacy_workflow
+BOOK|A Single Broken Letter|status=Fertig|finished=True
+ASSET|A Single Broken Letter|cover|status=200|type=image/jpeg|ok=True
+ASSET|A Single Broken Letter|epub|AUTH_REQUIRED|anonymous_denial_checked_in_privacy_workflow
+BOOK|AT 05:42|status=Fertig|finished=True
+ASSET|AT 05:42|cover|status=200|type=image/jpeg|ok=True
+ASSET|AT 05:42|epub|AUTH_REQUIRED|anonymous_denial_checked_in_privacy_workflow
+BOOK|THE HOUSE OF BORROWED MEMORIES|status=Fertig|finished=True
+ASSET|THE HOUSE OF BORROWED MEMORIES|cover|status=200|type=image/jpeg|ok=True
+ASSET|THE HOUSE OF BORROWED MEMORIES|epub|AUTH_REQUIRED|anonymous_denial_checked_in_privacy_workflow
+BOOK|FOLLOWER: FORTY-SIX SECONDS|status=Fertig|finished=True
+ASSET|FOLLOWER: FORTY-SIX SECONDS|cover|status=200|type=image/jpeg|ok=True
+ASSET|FOLLOWER: FORTY-SIX SECONDS|epub|AUTH_REQUIRED|anonymous_denial_checked_in_privacy_workflow
+BOOK|THE LEDGER OF THE DEAD|status=Fertig|finished=True
+ASSET|THE LEDGER OF THE DEAD|cover|UNSAFE_COVER_PATH
+ASSET|THE LEDGER OF THE DEAD|epub|AUTH_REQUIRED|anonymous_denial_checked_in_privacy_workflow
+BOOK|DIFFUSE GUILT|status=Fertig|finished=True
+ASSET|DIFFUSE GUILT|cover|embedded_public_image|ok=True
+ASSET|DIFFUSE GUILT|epub|AUTH_REQUIRED|anonymous_denial_checked_in_privacy_workflow
+BOOK|THE ADMIRAL|status=Fertig|finished=True
+ASSET|THE ADMIRAL|cover|UNSAFE_COVER_PATH
+ASSET|THE ADMIRAL|epub|NOT_AVAILABLE|private_epub_not_linked
+BOOK|The Counting|status=Fertig|finished=True
+ASSET|The Counting|cover|embedded_public_image|ok=True
+ASSET|The Counting|epub|NOT_AVAILABLE|private_epub_not_linked
+BOOK|To the One Who Comes After Us|status=Fertig|finished=True
+ASSET|To the One Who Comes After Us|cover|embedded_public_image|ok=True
+ASSET|To the One Who Comes After Us|epub|AUTH_REQUIRED|anonymous_denial_checked_in_privacy_workflow
+BOOK|The Trembling Olive|status=Fertig|finished=True
+ASSET|The Trembling Olive|cover|status=200|type=image/png|ok=True
+ASSET|The Trembling Olive|epub|AUTH_REQUIRED|anonymous_denial_checked_in_privacy_workflow
+BOOK|THE VOICE DOWNSTAIRS|status=Fertig|finished=True
+ASSET|THE VOICE DOWNSTAIRS|cover|status=200|type=image/jpeg|ok=True
+ASSET|THE VOICE DOWNSTAIRS|epub|AUTH_REQUIRED|anonymous_denial_checked_in_privacy_workflow
+BOOK|FALSE SCENT|status=Fertig|finished=True
+ASSET|FALSE SCENT|cover|status=200|type=image/png|ok=True
+ASSET|FALSE SCENT|epub|AUTH_REQUIRED|anonymous_denial_checked_in_privacy_workflow
+BOOK|The Scholar and the Conqueror|status=Fertig|finished=True
+ASSET|The Scholar and the Conqueror|cover|status=200|type=image/jpeg|ok=True
+ASSET|The Scholar and the Conqueror|epub|AUTH_REQUIRED|anonymous_denial_checked_in_privacy_workflow
 asset_failure_count=2
-FAIL|The Road It Came By: epub request failed: URLError('unknown url type: private-epub')
-FAIL|backend_error=https://script.google.com/macros/s/AKfycbwcbRDaWkM1wf3MV_dj4RPw9jQl2Fgc4YfGcmFrGU1S243yvh8WGW7mbyXLbSeVJKI/exec|ValueError("unknown url type: 'assets/covers/the-mountain-that-doesnt-answer.jpg'")
+FAIL|THE LEDGER OF THE DEAD: cover is not a same-origin asset
+FAIL|THE ADMIRAL: cover is not a same-origin asset
