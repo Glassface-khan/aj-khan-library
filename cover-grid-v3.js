@@ -54,6 +54,11 @@
   // For titles not yet migrated, convert the old lh3 /d/<id> form to Drive's
   // thumbnail endpoint, which is more reliable on mobile Safari.
   var STATIC_COVER_BY_TITLE_ = {
+    "diffuse guilt": "assets/covers/diffuse-guilt.jpg",
+    "the road it came by": "assets/covers/the-road-it-came-by.jpg",
+    "the counting": "assets/covers/the-counting.jpg",
+    "the man the world forgot": "assets/covers/the-man-the-world-forgot.png",
+    "to the one who comes after us": "assets/covers/to-the-one-who-comes-after-us.jpg",
     "the mountain that doesn't answer": "assets/covers/the-mountain-that-doesnt-answer.jpg",
     "the weight of the air": "assets/covers/the-weight-of-the-air.jpg",
     "the second ledger": "assets/covers/the-second-ledger.jpg",
