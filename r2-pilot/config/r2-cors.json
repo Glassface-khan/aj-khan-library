@@ -1,0 +1,21 @@
+[
+  {
+    "AllowedOrigins": [
+      "https://glassface-khan.github.io"
+    ],
+    "AllowedMethods": [
+      "GET",
+      "HEAD"
+    ],
+    "AllowedHeaders": [
+      "Range"
+    ],
+    "ExposeHeaders": [
+      "Accept-Ranges",
+      "Content-Range",
+      "Content-Length",
+      "ETag"
+    ],
+    "MaxAgeSeconds": 3600
+  }
+]
