@@ -76,6 +76,9 @@ def verify(token,id,folder_id,b,md5):
     if m.get('name')!=NAME or m.get('trashed') or str(m.get('size'))!=str(SIZE) or m.get('md5Checksum')!=md5 or folder_id not in m.get('parents',[]):raise RuntimeError('readback_metadata')
     with http(API+'/files/'+id+'?alt=media',headers={'Authorization':'Bearer '+token},timeout=90) as r:got=r.read(SIZE+1)
     if len(got)!=SIZE or hashlib.sha256(got).digest()!=hashlib.sha256(b).digest():raise RuntimeError('sha256_readback')
+    p=j(API+'/files/'+id+'/permissions?fields=nextPageToken,permissions(type,role)',token)
+    ps=p.get('permissions',[])
+    if p.get('nextPageToken') or len(ps)!=1 or ps[0].get('type')!='user' or ps[0].get('role')!='owner':raise RuntimeError('file_not_owner_only')
     private(token,folder_id)
 def main():
     b=source(); md5=hashlib.md5(b).hexdigest(); sha=hashlib.sha256(b).hexdigest()
