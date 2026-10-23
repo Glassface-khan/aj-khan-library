@@ -1,0 +1,23 @@
+name: AJK Private Auto Export Queue
+on:
+  push:
+    branches: [main]
+    paths: [".github/workflows/ajk-private-auto-export-queue.yml"]
+permissions:
+  contents: read
+  id-token: write
+  actions: write
+concurrency:
+  group: ajk-private-auto-export-queue
+  cancel-in-progress: false
+jobs:
+  enqueue-one:
+    if: github.repository == 'Glassface-khan/aj-khan-library' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@v4
+      - name: Queue one existing QC-approved audiobook for private M4B export
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: python3 -B ops/ajk_private_auto_export_queue.py
