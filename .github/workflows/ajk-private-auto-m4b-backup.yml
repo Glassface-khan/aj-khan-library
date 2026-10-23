@@ -3,6 +3,8 @@ on:
   push:
     branches: [main]
     paths: [".github/workflows/ajk-private-auto-m4b-backup.yml"]
+  schedule:
+    - cron: "17 1,9,17 * * *"
 permissions:
   contents: read
   id-token: write
@@ -13,7 +15,7 @@ jobs:
   backup-one:
     if: github.repository == 'Glassface-khan/aj-khan-library' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-24.04
-    timeout-minutes: 15
+    timeout-minutes: 12
     steps:
       - uses: actions/checkout@v4
       - name: Back up one ready audiobook privately and verify readback
