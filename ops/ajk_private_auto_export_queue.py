@@ -17,6 +17,7 @@ def main():
         state=json.load(r)
     if state.get("ok") is not True:raise RuntimeError("private_queue_rejected")
     code=state.get("state")
+    print("EXPORT_QUEUE_STATE "+str(code)+" active="+str(state.get("active","n/a"))+" chapters="+str(state.get("chapters","n/a")),flush=True)
     if code!="queued":
         if code not in ("idle","busy","daily_limit","failure_stop","already_queued","pilot_export_not_ready","pilot_backup_not_verified"):
             raise RuntimeError("unknown_queue_state")
