@@ -1,0 +1,25 @@
+name: Audiobook migration - safety preflight
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: audiobook-migration
+  cancel-in-progress: false
+jobs:
+  preflight:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Verify required private configuration (no data transfer)
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          GOOGLE_DRIVE_CREDENTIALS: ${{ secrets.GOOGLE_DRIVE_CREDENTIALS }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$SUPABASE_URL" || { echo "::error::SUPABASE_URL missing"; exit 1; }
+          test -n "$SUPABASE_SERVICE_ROLE_KEY" || { echo "::error::SUPABASE_SERVICE_ROLE_KEY missing"; exit 1; }
+          test -n "$GOOGLE_DRIVE_CREDENTIALS" || { echo "::error::GOOGLE_DRIVE_CREDENTIALS missing"; exit 1; }
+          echo "Configuration present. No downloads, uploads, or deletions performed."
