@@ -25,6 +25,20 @@ Deno.serve(async(req)=>{
    const url=Deno.env.get("SUPABASE_URL"),secret=Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
    if(!url||!secret)throw new Error("backend_unavailable");
    const db=createClient(url,secret,{auth:{persistSession:false,autoRefreshToken:false}});
+   // Zero-risk scale-up gate: never start second book until pilot export AND its private Drive readback are verified.
+   if(!pilot){
+     const done=await db.from("audiobook_download_jobs").select("id,source_fingerprint,status")
+       .eq("audio_book_id",PILOT).eq("status","ready").maybeSingle();
+     if(done.error)throw new Error("pilot_export_check");
+     if(!done.data)return out({ok:true,state:"pilot_export_not_ready"});
+     const copy=await db.from("audiobook_drive_backups")
+       .select("status,progress_done,progress_total")
+       .eq("audio_book_id",PILOT).eq("source_fingerprint",done.data.source_fingerprint)
+       .eq("status","ready").maybeSingle();
+     if(copy.error)throw new Error("pilot_backup_check");
+     if(!copy.data||copy.data.progress_done<1||copy.data.progress_done!==copy.data.progress_total)
+       return out({ok:true,state:"pilot_backup_not_verified"});
+   }
    const now=new Date();
    const active=await db.from("audiobook_download_jobs").select("id,status").in("status",["queued","building"]).limit(3);
    if(active.error)throw new Error("busy_query_failed");

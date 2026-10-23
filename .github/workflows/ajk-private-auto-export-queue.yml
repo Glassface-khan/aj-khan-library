@@ -3,6 +3,8 @@ on:
   push:
     branches: [main]
     paths: [".github/workflows/ajk-private-auto-export-queue.yml"]
+  schedule:
+    - cron: "0,15,30,45 * * * *"
 permissions:
   contents: read
   id-token: write

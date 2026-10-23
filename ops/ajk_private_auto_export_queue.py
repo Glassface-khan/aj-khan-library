@@ -18,7 +18,7 @@ def main():
     if state.get("ok") is not True:raise RuntimeError("private_queue_rejected")
     code=state.get("state")
     if code!="queued":
-        if code not in ("idle","busy","daily_limit","failure_stop","already_queued"):
+        if code not in ("idle","busy","daily_limit","failure_stop","already_queued","pilot_export_not_ready","pilot_backup_not_verified"):
             raise RuntimeError("unknown_queue_state")
         print("EXPORT_QUEUE "+code,flush=True)
         return
