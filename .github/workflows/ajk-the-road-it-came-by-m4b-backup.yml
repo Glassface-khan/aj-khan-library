@@ -1,0 +1,24 @@
+name: AJK Private The Road it came by M4B Backup
+on:
+  push:
+    branches: [main]
+    paths: [".github/workflows/ajk-the-road-it-came-by-m4b-backup.yml"]
+permissions:
+  contents: read
+  id-token: write
+concurrency:
+  group: ajk-the-road-it-came-by-private-m4b-backup-20261023
+  cancel-in-progress: false
+jobs:
+  copy-one-edition:
+    if: github.repository == 'Glassface-khan/aj-khan-library' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 14
+    steps:
+      - uses: actions/checkout@v4
+      - name: Copy seven approved M4B files privately with SHA256 verification
+        env:
+          GOOGLE_DRIVE_CLIENT_ID: ${{ secrets.GOOGLE_DRIVE_CLIENT_ID }}
+          GOOGLE_DRIVE_CLIENT_SECRET: ${{ secrets.GOOGLE_DRIVE_CLIENT_SECRET }}
+          GOOGLE_DRIVE_REFRESH_TOKEN: ${{ secrets.GOOGLE_DRIVE_REFRESH_TOKEN }}
+        run: python3 -B ops/ajk_the_road_it_came_by_backup.py
