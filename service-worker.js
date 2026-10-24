@@ -1,3 +1,4 @@
+// v78 -> v79 (24.10.2026): add MAY I SIT? with approved same-origin cover; refresh protected catalog cache.
 // v77 -> v78 (23.10.2026): register THE SECOND HAND and refresh protected-book catalog and approved cover.
 // v76 -> v77 (21.10.2026): refresh five approved HD covers and bust stale cover-grid catalog caches.
 // v75 -> v76 (21.10.2026): add The Scholar and the Conqueror with same-origin cover and refresh PWA catalog.
@@ -65,8 +66,8 @@
 // BooksData remains canonical and replaces it whenever the live request succeeds.
 // v37 -> v38 (28.09.2026): force iOS to reload the exact-order cover grid.\n// v39 -> v40 (28.09.2026): deploy THE GUEST catalog entry, cover and EPUB; force clients to refresh the catalog fallback.\n// v40 -> v41 (28.09.2026): deploy THE NIGHT SIDE catalog entry, cover and EPUB; force clients to refresh the catalog fallback.
 // v70 -> v71 (14.10.2026): publish THE ROAD IT CAME BY reader-revision v2 and refresh the private reader/catalog.
-const SHELL_CACHE = 'ajk-shell-v78';
-const DATA_CACHE = 'ajk-data-v78';
+const SHELL_CACHE = 'ajk-shell-v79';
+const DATA_CACHE = 'ajk-data-v79';
 const SHELL_FILES = ['./', './index.html', './books-live.json', './manifest.webmanifest', './icons/icon-192.png', './icons/icon-512.png'];
 
 // Aktionen, deren Antwort für Offline-Nutzung zwischengespeichert werden
@@ -283,7 +284,7 @@ self.addEventListener('fetch', (event) => {
         } catch (_) {}
 
         try {
-          const fallbackUrl = new URL('./books-live.json?sw-catalog=20261023-the-second-hand-v78', self.registration.scope);
+          const fallbackUrl = new URL('./books-live.json?sw-catalog=20261024-may-i-sit-v79', self.registration.scope);
           const fallbackRes = await fetch(fallbackUrl, { cache: 'no-store' });
           if (fallbackRes && fallbackRes.ok) {
             const fallbackData = await fallbackRes.json();
