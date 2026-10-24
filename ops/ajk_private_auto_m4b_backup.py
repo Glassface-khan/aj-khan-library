@@ -118,7 +118,16 @@ def verified(token,folder_id,file_id,name,size,sha,md5):
     return {"name":name,"id":file_id,"bytes":size,"md5":md5,"sha256":sha}
 
 def execute():
-    claim=edge("claim")
+    import uuid
+    target=os.environ.get("TARGET_EXPORT_JOB_ID","").strip()
+    extra={}
+    if target:
+        try:
+            target=str(uuid.UUID(target))
+        except ValueError:
+            raise RuntimeError("invalid_target_export_job_id")
+        extra["targetJobId"]=target
+    claim=edge("claim",extra)
     job_id=claim.get("jobId")
     if job_id is None:
         print("AUTO_BACKUP_IDLE no_eligible_ready_book",flush=True)
