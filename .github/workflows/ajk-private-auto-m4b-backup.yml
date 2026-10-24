@@ -5,6 +5,12 @@ on:
     paths: [".github/workflows/ajk-private-auto-m4b-backup.yml"]
   schedule:
     - cron: "7,17,27,37,47,57 * * * *"
+  workflow_dispatch:
+    inputs:
+      target_export_job_id:
+        description: "Exact ready audiobook export job UUID"
+        required: true
+        type: string
 permissions:
   contents: read
   id-token: write
@@ -20,6 +26,7 @@ jobs:
       - uses: actions/checkout@v4
       - name: Back up one ready audiobook privately and verify readback
         env:
+          TARGET_EXPORT_JOB_ID: ${{ inputs.target_export_job_id }}
           GOOGLE_DRIVE_CLIENT_ID: ${{ secrets.GOOGLE_DRIVE_CLIENT_ID }}
           GOOGLE_DRIVE_CLIENT_SECRET: ${{ secrets.GOOGLE_DRIVE_CLIENT_SECRET }}
           GOOGLE_DRIVE_REFRESH_TOKEN: ${{ secrets.GOOGLE_DRIVE_REFRESH_TOKEN }}
