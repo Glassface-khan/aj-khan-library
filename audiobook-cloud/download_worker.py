@@ -49,10 +49,40 @@ def pack_zip(chapters, folder):
 def escape_meta(value):
     return str(value).replace("\\","\\\\").replace("=","\\=").replace(";","\\;").replace("#","\\#").replace("\n"," ")
 
+def split_long_m4b_chapters(chapters, folder, max_seconds=2700):
+    """Split long source chapters into bounded MP3 segments, leaving originals intact.
+
+    Segment lengths are probed rather than inferred; the final M4B is still
+    checked against the byte limit and chapter/duration invariants.
+    """
+    expanded = []
+    for ch in chapters:
+        if ch["seconds"] <= max_seconds:
+            expanded.append(ch)
+            continue
+        total = ch["seconds"]
+        start = 0.0
+        part = 1
+        while start < total - 0.05:
+            length = min(float(max_seconds), total - start)
+            target = folder / f'm4b-source-{ch["chapter_index"]:04d}-{part:03d}.mp3'
+            run("ffmpeg", "-v", "error", "-y", "-ss", str(start),
+                "-i", str(ch["local"]), "-t", str(length), "-vn",
+                "-c:a", "libmp3lame", "-b:a", "96k", str(target))
+            actual = duration(target)
+            if actual <= 0 or abs(actual - length) > 2:
+                raise ValueError("M4B segment duration mismatch")
+            expanded.append({**ch, "local": target, "seconds": actual,
+                             "title": f'{ch["title"]} · Abschnitt {part}'})
+            start += length
+            part += 1
+    return expanded
+
 def pack_m4b(chapters, book, folder):
     # Start conservatively; AAC can exceed its nominal target bitrate.
     # Verify actual bytes and split oversized groups at chapter boundaries.
     max_seconds = 4500
+    chapters = split_long_m4b_chapters(chapters, folder)
     groups,current,seconds=[],[],0
     for ch in chapters:
         if current and seconds+ch["seconds"]>max_seconds:
@@ -141,7 +171,7 @@ def main():
             api("downloadWorkerFinish",jobId=job["id"],success=True,files=files)
     except Exception as exc:
         # Never print raw exceptions: they can contain private signed URLs or metadata.
-        allowed={"M4B exceeds limit","M4B duration or chapters mismatch","ZIP exceeds limit","ZIP verification failed","Private upload rejected","A chapter exceeds the per-file download limit","Private download API rejected request"}
+        allowed={"M4B exceeds limit","M4B duration or chapters mismatch","M4B segment duration mismatch","ZIP exceeds limit","ZIP verification failed","Private upload rejected","A chapter exceeds the per-file download limit","Private download API rejected request"}
         reason=str(exc) if str(exc) in allowed else type(exc).__name__
         code=getattr(exc,"code",None)
         print("Download preparation error: stage="+stage+"; reason="+reason+("; HTTP "+str(code) if isinstance(code,int) else ""),flush=True)
