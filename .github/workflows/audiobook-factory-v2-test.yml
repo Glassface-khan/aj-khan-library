@@ -1,0 +1,27 @@
+name: Audiobook Factory V2 — Offline Safety Tests
+on:
+  pull_request:
+    paths:
+      - "audiobook-factory-v2/**"
+      - ".github/workflows/audiobook-factory-v2-test.yml"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 6
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Validate JavaScript syntax
+        run: |
+          node --check audiobook-factory-v2/src/security.mjs
+          node --check audiobook-factory-v2/src/worker.mjs
+          node --check audiobook-factory-v2/test/worker.test.mjs
+      - name: Run isolated offline mock tests (no credentials, books or network)
+        run: node --test audiobook-factory-v2/test/*.test.mjs
+      - name: Run pure-Python sample QC tests (no real audio)
+        run: python3 -m unittest discover -s audiobook-factory-v2/test -p "test_*.py"

@@ -1,0 +1,28 @@
+{
+  // TEMPLATE ONLY — R2 and D1 names are now VERIFIED by a READ-ONLY GitHub check.
+  // NO Worker has been deployed and NO database migration was run.
+  "name": "ajk-audiobook-v2-private-pilot",
+  "main": "src/worker.mjs",
+  "account_id": "b5a96acb430918e9b39890a63f863349",
+  "compatibility_date": "2026-10-12",
+  "workers_dev": true,
+  "vars": {
+    // Existing Google Apps Script author-site app; NO Supabase dependency.
+    // Set to the currently deployed official /exec URL, not a /dev URL.
+    "GAS_WEB_APP_URL": "REPLACE_WITH_AUTHORIZED_GOOGLE_APPS_SCRIPT_EXEC_URL"
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "ajk-audiobook-v2-test",
+      "database_id": "8c0b0ee4-0a2a-462d-b13f-702c941380c7",
+      "migrations_dir": "migrations"
+    }
+  ],
+  "r2_buckets": [
+    {
+      "binding": "PRIVATE_AUDIO",
+      "bucket_name": "ajk-private-audiobooks-v2-test"
+    }
+  ]
+}
