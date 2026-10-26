@@ -4,7 +4,7 @@ on:
     branches: [main]
     paths: [".github/workflows/ajk-private-auto-m4b-backup.yml"]
   schedule:
-    - cron: "7,17,27,37,47,57 * * * *"
+    - cron: "17 * * * *"
   workflow_dispatch:
     inputs:
       target_export_job_id:
