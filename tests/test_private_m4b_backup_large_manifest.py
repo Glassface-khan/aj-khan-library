@@ -7,6 +7,10 @@ from unittest.mock import patch
 from test_private_m4b_backup_original import w, FakeWorld, JOB
 
 class LargeManifestTests(unittest.TestCase):
+    def test_worker_real_capacity_constants(self):
+        self.assertEqual(w.MAX_PARTS,30)
+        self.assertEqual(w.MAX_TOTAL,1_000_000_000)
+
     def make_manifest(self, n, declared_bytes=40_000_000):
         return [{"name":f"m4b-{i:03d}.m4b","bytes":declared_bytes} for i in range(1,n+1)]
 
