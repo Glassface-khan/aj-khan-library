@@ -11,8 +11,8 @@ UP="https://www.googleapis.com/upload/drive/v3/files"
 SCOPE="https://www.googleapis.com/auth/drive.file"
 ROOT_KEY="ajkPrivateAudiobookBackupRoot"
 BOOK_KEY="ajkAutoBackupExport"
-MAX_TOTAL=350000000
-MAX_PARTS=10
+MAX_TOTAL=1000000000
+MAX_PARTS=30
 
 class BackupStageError(Exception):
     def __init__(self, stage, part):
