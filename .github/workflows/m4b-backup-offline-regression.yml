@@ -1,0 +1,29 @@
+name: Offline M4B backup regression
+on:
+  push:
+    branches:
+      - fix/sanitized-m4b-backup-logging-20261026
+    paths:
+      - 'ops/ajk_private_auto_m4b_backup.py'
+      - 'tests/test_private_m4b_backup_original.py'
+      - '.github/workflows/m4b-backup-offline-regression.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  offline-regression:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      TARGET_EXPORT_JOB_ID: ''
+    steps:
+      - name: Checkout exact feature branch
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Run offline tests against original worker
+        run: |
+          python3 -m py_compile ops/ajk_private_auto_m4b_backup.py tests/test_private_m4b_backup_original.py
+          python3 -m unittest discover -s tests -p 'test_private_m4b_backup_original.py' -v
