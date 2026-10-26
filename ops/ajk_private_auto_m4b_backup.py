@@ -14,6 +14,18 @@ BOOK_KEY="ajkAutoBackupExport"
 MAX_TOTAL=350000000
 MAX_PARTS=10
 
+class BackupStageError(Exception):
+    def __init__(self, stage, part):
+        super().__init__(stage)
+        self.stage=stage
+        self.part=part
+
+def at_stage(stage, part, fn, *args):
+    try:
+        return fn(*args)
+    except Exception:
+        raise BackupStageError(stage, part) from None
+
 def request(url,data=None,method=None,headers=None,timeout=110):
     return urllib.request.urlopen(urllib.request.Request(url,data=data,method=method,headers=headers or {}),timeout=timeout)
 
@@ -127,7 +139,7 @@ def execute():
         except ValueError:
             raise RuntimeError("invalid_target_export_job_id")
         extra["targetJobId"]=target
-    claim=edge("claim",extra)
+    claim=at_stage("BACKUP_CLAIM", "none", edge, "claim", extra)
     job_id=claim.get("jobId")
     if job_id is None:
         print("AUTO_BACKUP_IDLE no_eligible_ready_book",flush=True)
@@ -142,37 +154,49 @@ def execute():
     book=claim["book"]
     name=" — ".join(str(book.get(k) or "") for k in ("title","narrator","language"))
     if any(c in name for c in ("/","\\","\n","\r")) or len(name)>220:raise RuntimeError("unsafe_book_label")
-    token=drive_token()
-    root=folder(token,ROOT_KEY,"v1","AJK PRIVATE — Hörbuch-M4B-Backups",create=False)
-    dest=folder(token,BOOK_KEY,job_id,name,parent=root)
+    token=at_stage("DRIVE_AUTH", "none", drive_token)
+    try:
+        root=folder(token,ROOT_KEY,"v1","AJK PRIVATE — Hörbuch-M4B-Backups",create=False)
+    except Exception:
+        raise BackupStageError("DRIVE_FOLDER", "none") from None
+    try:
+        dest=folder(token,BOOK_KEY,job_id,name,parent=root)
+    except Exception:
+        raise BackupStageError("DRIVE_FOLDER", "none") from None
     results=[]
     with TemporaryDirectory() as temp:
         for source in files:
             filename=source["name"];path=Path(temp)/filename;size=source["bytes"]
-            sha,md5=source_download(source,job_id,path)
-            old=find_tag(token,BOOK_KEY+"File",filename,dest)
+            sha,md5=at_stage("SOURCE_DOWNLOAD",filename,source_download,source,job_id,path)
+            old=at_stage("DRIVE_LOOKUP",filename,find_tag,token,BOOK_KEY+"File",filename,dest)
             if old:
                 if old.get("name")!=filename or int(old.get("size",-1))!=size or old.get("md5Checksum")!=md5:
                     raise RuntimeError("file_conflict_refuse_overwrite")
                 file_id=old["id"]
             else:
-                result=upload(token,dest,filename,path,size)
+                result=at_stage("DRIVE_UPLOAD",filename,upload,token,dest,filename,path,size)
                 if int(result.get("size",-1))!=size or result.get("md5Checksum")!=md5:
                     raise RuntimeError("drive_upload_failed_integrity")
                 file_id=result["id"]
-            results.append(verified(token,dest,file_id,filename,size,sha,md5))
+            results.append(at_stage("DRIVE_READBACK",filename,verified,token,dest,file_id,filename,size,sha,md5))
             path.unlink()
             print("AUTO_PART_PASS "+filename+" bytes="+str(size)+" sha256="+sha,flush=True)
-    is_private(token,root,True);is_private(token,dest,True)
+    at_stage("DRIVE_PRIVACY", "none", is_private, token, root, True)
+    at_stage("DRIVE_PRIVACY", "none", is_private, token, dest, True)
     if len(results)!=len(files):raise RuntimeError("parts_missing")
     # Final DB state only after all parts and Drive permissions are verified.
-    result=edge("finish",{"jobId":job_id,"folderId":dest,"files":results})
+    result=at_stage("DRIVE_FINISH", "none", edge, "finish", {"jobId":job_id,"folderId":dest,"files":results})
     if result.get("finished") is not True or result.get("partCount")!=len(files):
         raise RuntimeError("server_receipt_missing")
     print("AUTO_BOOK_PASS parts="+str(len(files))+" bytes="+str(sum(x["bytes"] for x in results))+" folder_id="+dest,flush=True)
 
 if __name__=="__main__":
     try:execute()
+    except BackupStageError as e:
+        print("AUTO_BACKUP_ERROR stage="+e.stage+" part="+e.part,flush=True)
+        print("AUTO_BACKUP_FAILED_NO_SOURCE_DELETE_NO_PUBLIC_SHARE",flush=True)
+        raise SystemExit(1)
     except Exception:
+        print("AUTO_BACKUP_ERROR stage=BACKUP_INTERNAL part=none",flush=True)
         print("AUTO_BACKUP_FAILED_NO_SOURCE_DELETE_NO_PUBLIC_SHARE",flush=True)
         raise SystemExit(1)
