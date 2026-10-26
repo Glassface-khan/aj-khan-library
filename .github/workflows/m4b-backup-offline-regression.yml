@@ -5,7 +5,7 @@ on:
       - fix/sanitized-m4b-backup-logging-20261026
     paths:
       - 'ops/ajk_private_auto_m4b_backup.py'
-      - 'tests/test_private_m4b_backup_original.py'
+      - 'tests/test_private_m4b_backup_*.py'
       - '.github/workflows/m4b-backup-offline-regression.yml'
   workflow_dispatch:
 
@@ -25,5 +25,5 @@ jobs:
           persist-credentials: false
       - name: Run offline tests against original worker
         run: |
-          python3 -m py_compile ops/ajk_private_auto_m4b_backup.py tests/test_private_m4b_backup_original.py
-          python3 -m unittest discover -s tests -p 'test_private_m4b_backup_original.py' -v
+          python3 -m py_compile ops/ajk_private_auto_m4b_backup.py tests/test_private_m4b_backup_original.py tests/test_private_m4b_backup_large_manifest.py
+          python3 -m unittest discover -s tests -p 'test_private_m4b_backup_*.py' -v
