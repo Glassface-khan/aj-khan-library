@@ -1,0 +1,21 @@
+name: Audiobook author review UI regression
+on:
+  pull_request:
+    paths:
+      - "audiobook-factory.html"
+      - "audiobook-quality-review.js"
+      - "audiobook-cloud/test_quality_review_ui.cjs"
+      - ".github/workflows/audiobook-quality-review-check.yml"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Verify old Factory screens and author review module
+        run: node audiobook-cloud/test_quality_review_ui.cjs
