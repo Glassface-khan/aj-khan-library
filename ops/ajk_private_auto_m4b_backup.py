@@ -166,7 +166,9 @@ def execute():
     is_private(token,root,True);is_private(token,dest,True)
     if len(results)!=len(files):raise RuntimeError("parts_missing")
     # Final DB state only after all parts and Drive permissions are verified.
-    result=edge("finish",{"jobId":job_id,"folderId":dest,"files":results})
+    finish_payload={"jobId":job_id,"folderId":dest,"files":results}
+    if target:finish_payload["targetJobId"]=target
+    result=edge("finish",finish_payload)
     if result.get("finished") is not True or result.get("partCount")!=len(files):
         raise RuntimeError("server_receipt_missing")
     print("AUTO_BOOK_PASS parts="+str(len(files))+" bytes="+str(sum(x["bytes"] for x in results))+" folder_id="+dest,flush=True)
