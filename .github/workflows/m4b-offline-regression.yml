@@ -1,0 +1,41 @@
+name: M4B offline regression (feature branch only)
+on:
+  push:
+    branches:
+      - fix/manual-m4b-finish-target-20261026
+    paths:
+      - '.github/workflows/m4b-offline-regression.yml'
+      - 'tests/test_auto_m4b_backup_recovery.py'
+      - 'tests/test_manual_m4b_finish_payload.py'
+      - 'ops/ajk_private_auto_m4b_backup.py'
+permissions:
+  contents: read
+jobs:
+  offline-unittest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      ACTIONS_ID_TOKEN_REQUEST_URL: ""
+      ACTIONS_ID_TOKEN_REQUEST_TOKEN: ""
+      GOOGLE_DRIVE_CLIENT_ID: ""
+      GOOGLE_DRIVE_CLIENT_SECRET: ""
+      GOOGLE_DRIVE_REFRESH_TOKEN: ""
+      TARGET_EXPORT_JOB_ID: ""
+    steps:
+      - name: Checkout exact feature-branch commit without credentials
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Run eight tests with Python socket access blocked
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import socket
+          import unittest
+          from unittest.mock import patch
+          with patch.object(socket, 'socket', side_effect=AssertionError('network_forbidden')):
+              suite = unittest.defaultTestLoader.discover('tests', pattern='test_*m4b*py')
+              result = unittest.TextTestRunner(verbosity=2).run(suite)
+              if result.testsRun != 8 or not result.wasSuccessful():
+                  raise SystemExit(1)
+          PY
