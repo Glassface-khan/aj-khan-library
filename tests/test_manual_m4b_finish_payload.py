@@ -17,7 +17,7 @@ def extract_finish_payload_logic():
     # Payload construction is inside execute; verify AST shape without executing network code.
     assert len(assignments) == 1, "finish_payload must be assigned once"
     payload = assignments[0]
-    conditional = next(n for n in execute.body if isinstance(n, ast.If) and isinstance(n.test, ast.Name) and n.test.id == "target")
+    conditional = next(n for n in execute.body if isinstance(n, ast.If) and isinstance(n.test, ast.Name) and n.test.id == "target" and any(isinstance(x, ast.Assign) and any(isinstance(t, ast.Subscript) and isinstance(t.value, ast.Name) and t.value.id == "finish_payload" for t in x.targets) for x in n.body))
     assert len(conditional.body) == 1
     assign = conditional.body[0]
     assert isinstance(assign, ast.Assign) and isinstance(assign.targets[0], ast.Subscript)
