@@ -19,5 +19,9 @@ jobs:
         run: |
           python -m py_compile audiobook-cloud/download_worker.py tests/test_download_worker_oversized.py
           python -m unittest discover -s tests -p 'test_download_worker_oversized.py' -v
+      - name: Install ffmpeg for synthetic audio fixture
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq ffmpeg
       - name: Synthetic oversized MP3 to ZIP and M4B integration
         run: python tests/integration_synthetic_oversized_export.py
