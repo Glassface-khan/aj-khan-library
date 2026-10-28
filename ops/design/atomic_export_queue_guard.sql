@@ -1,0 +1,15 @@
+-- Atomic single-winner export guard. Review before applying to production.
+-- Uses a transaction-scoped advisory lock: callers must acquire this lock
+-- inside the SAME database transaction as their eligibility check and insert.
+-- Merely calling this function via a separate REST request does NOT protect
+-- subsequent REST queries, because the transaction ends at function return.
+-- Therefore this file is a design gate, not a deployable fix by itself.
+--
+-- Existing UNIQUE(audio_book_id, source_fingerprint) must also be retained
+-- to prevent duplicate jobs for the same source.
+--
+-- Proposed implementation: move selection, eligibility, limits and insertion
+-- into one SQL function/transaction; take pg_try_advisory_xact_lock before
+-- checking queued/building jobs, then insert once, returning only the winner.
+-- Do not bypass pilot and backup-readback gates in existing Edge Function.
+SELECT 'design_only_no_production_changes' AS status;
