@@ -3,6 +3,7 @@ on:
   workflow_dispatch:
 permissions:
   contents: read
+  id-token: write
 concurrency:
   group: ajk-isolated-scheduler-lock-test
   cancel-in-progress: false
@@ -40,6 +41,24 @@ jobs:
               print("LOCK_TEST_RESULTS", sorted(outcome))
               assert accepted == 1, "Expected exactly one lock winner"
               print("LOCK_TEST_PASS")
+          PY
+      - name: Verify existing GitHub OIDC authentication with isolated Supabase endpoint
+        env:
+          AJK_EDGE: https://ipoqyjrojljmbqslmxxf.supabase.co/functions/v1/ajk-scheduler-isolated-test
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import json, os, urllib.request
+          audience="ajk-isolated-scheduler-lock-test-v1"
+          token_url=os.environ["ACTIONS_ID_TOKEN_REQUEST_URL"]+"&audience="+audience
+          request=urllib.request.Request(token_url,headers={"Authorization":"bearer "+os.environ["ACTIONS_ID_TOKEN_REQUEST_TOKEN"]})
+          with urllib.request.urlopen(request,timeout=20) as response:
+              token=json.load(response)["value"]
+          request=urllib.request.Request(os.environ["AJK_EDGE"],data=b"{}",headers={"Authorization":"Bearer "+token,"Content-Type":"application/json"},method="POST")
+          with urllib.request.urlopen(request,timeout=30) as response:
+              result=json.load(response)
+          assert result.get("ok") is True and result.get("stage")=="oidc_verified" and result.get("production_untouched") is True
+          print("SUPABASE_OIDC_TEST_PASS")
           PY
       - name: Dummy workflow marker
         run: echo "NO_PRODUCTION_ACTIONS"
