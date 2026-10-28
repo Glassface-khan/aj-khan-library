@@ -24,6 +24,44 @@ def duration(path):
 def safe(value):
     return re.sub(r"[^\w .-]+", "", str(value)).strip()[:90] or "Kapitel"
 
+def split_oversized_chapters(chapters, folder, max_seconds=1800):
+    """Make export-only, stream-copied MP3 segments; never change source chapters.
+
+    Keep each source chapter's original when it fits the limit and is short.
+    The resulting segments are suitable for both ZIP and M4B assembly.
+    """
+    expanded = []
+    for ch in chapters:
+        source = ch["local"]
+        source_bytes = source.stat().st_size
+        total = ch["seconds"]
+        if source_bytes <= LIMIT - 10000 and total <= max_seconds:
+            expanded.append(ch)
+            continue
+        # Conservative byte-based estimate for high-bitrate MP3 sources.
+        target_seconds = min(float(max_seconds), total * (LIMIT - 1000000) / max(source_bytes, 1) * 0.8)
+        if target_seconds < 1:
+            raise ValueError("MP3 segment too large")
+        start, part = 0.0, 1
+        while start < total - 0.05:
+            length = min(target_seconds, total - start)
+            target = folder / f'mp3-source-{ch["chapter_index"]:04d}-{part:03d}.mp3'
+            run("ffmpeg", "-v", "error", "-y", "-ss", str(start),
+                "-i", str(source), "-t", str(length), "-map", "0:a:0",
+                "-c:a", "copy", str(target))
+            actual = duration(target)
+            if actual <= 0 or abs(actual - length) > 2:
+                raise ValueError("MP3 segment duration mismatch")
+            if target.stat().st_size > LIMIT - 10000:
+                raise ValueError("MP3 segment too large")
+            expanded.append({**ch, "local": target, "seconds": actual,
+                             "title": f'{ch["title"]} · Abschnitt {part}'})
+            start += length
+            part += 1
+        if abs(sum(x["seconds"] for x in expanded if x["chapter_index"] == ch["chapter_index"]) - total) > max(2.0, 0.1 * part):
+            raise ValueError("MP3 segment duration mismatch")
+    return expanded
+
 def pack_zip(chapters, folder):
     parts, current, size = [], [], 0
     for ch in chapters:
@@ -123,10 +161,11 @@ def main():
                 ch["local"]=path;ch["seconds"]=duration(path)
                 api("downloadWorkerProgress",jobId=job["id"],done=i+1,total=len(chapters)+2)
             stage="zip"
-            outputs=pack_zip(chapters,folder)
+            export_chapters=split_oversized_chapters(chapters,folder)
+            outputs=pack_zip(export_chapters,folder)
             api("downloadWorkerProgress",jobId=job["id"],done=len(chapters)+1,total=len(chapters)+2)
             stage="m4b"
-            outputs+=pack_m4b(chapters,claim["book"],folder)
+            outputs+=pack_m4b(export_chapters,claim["book"],folder)
             for path in outputs:
                 stage="upload_sign"
                 signed=api("downloadWorkerUpload",jobId=job["id"],name=path.name)
@@ -141,7 +180,7 @@ def main():
             api("downloadWorkerFinish",jobId=job["id"],success=True,files=files)
     except Exception as exc:
         # Never print raw exceptions: they can contain private signed URLs or metadata.
-        allowed={"M4B exceeds limit","M4B duration or chapters mismatch","ZIP exceeds limit","ZIP verification failed","Private upload rejected","A chapter exceeds the per-file download limit","Private download API rejected request"}
+        allowed={"M4B exceeds limit","M4B duration or chapters mismatch","ZIP exceeds limit","ZIP verification failed","Private upload rejected","A chapter exceeds the per-file download limit","Private download API rejected request","MP3 segment duration mismatch","MP3 segment too large"}
         reason=str(exc) if str(exc) in allowed else type(exc).__name__
         code=getattr(exc,"code",None)
         print("Download preparation error: stage="+stage+"; reason="+reason+("; HTTP "+str(code) if isinstance(code,int) else ""),flush=True)
