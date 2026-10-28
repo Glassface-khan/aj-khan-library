@@ -68,6 +68,7 @@ def upload(token, entry, path):
 
 def execute():
     token = transport.drive_token()
+    print('OAUTH_PASS', flush=True)
     transport.is_private(token, FOLDER, True)
     before = inventory(token)
     missing = plan(before)
@@ -99,5 +100,5 @@ if __name__ == '__main__':
     try: execute()
     except Exception as exc:
         # Never log exception messages containing signed URLs or tokens.
-        print('COPY_FAILED_STOPPED_NO_DELETE_NO_OVERWRITE type=' + type(exc).__name__, flush=True)
+        print('COPY_FAILED_STOPPED_NO_DELETE_NO_OVERWRITE type=' + type(exc).__name__ + ' status=' + str(getattr(exc, 'code', 'none')), flush=True)
         sys.exit(1)
