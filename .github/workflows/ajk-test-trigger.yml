@@ -1,0 +1,18 @@
+name: AJK Isolated Scheduler Trigger Test
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: ajk-isolated-trigger-test
+  cancel-in-progress: false
+jobs:
+  dummy:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 2
+    steps:
+      - name: Safe test only
+        run: |
+          echo 'AJK_TRIGGER_TEST_START'
+          sleep 30
+          echo 'AJK_TRIGGER_TEST_PASS'
