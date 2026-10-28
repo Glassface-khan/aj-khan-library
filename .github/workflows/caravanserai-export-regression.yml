@@ -1,0 +1,22 @@
+name: CARAVANSERAI Export Regression
+on:
+  pull_request:
+    paths:
+      - 'audiobook-cloud/download_worker.py'
+      - 'tests/test_download_worker_oversized.py'
+      - '.github/workflows/caravanserai-export-regression.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Syntax and offline regression
+        run: |
+          python -m py_compile audiobook-cloud/download_worker.py tests/test_download_worker_oversized.py
+          python -m unittest discover -s tests -p 'test_download_worker_oversized.py' -v
+      - name: ffmpeg availability
+        run: ffmpeg -version | head -n 1
