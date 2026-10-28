@@ -1,0 +1,27 @@
+name: CARAVANSERAI Export Regression
+on:
+  pull_request:
+    paths:
+      - 'audiobook-cloud/download_worker.py'
+      - 'tests/test_download_worker_oversized.py'
+      - 'tests/integration_synthetic_oversized_export.py'
+      - '.github/workflows/caravanserai-export-regression.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - name: Syntax and offline regression
+        run: |
+          python -m py_compile audiobook-cloud/download_worker.py tests/test_download_worker_oversized.py
+          python -m unittest discover -s tests -p 'test_download_worker_oversized.py' -v
+      - name: Install ffmpeg for synthetic audio fixture
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq ffmpeg
+      - name: Synthetic oversized MP3 to ZIP and M4B integration
+        run: python tests/integration_synthetic_oversized_export.py
