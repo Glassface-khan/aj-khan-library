@@ -1,0 +1,45 @@
+name: AJK Isolated Scheduler Lock Test
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: ajk-isolated-scheduler-lock-test
+  cancel-in-progress: false
+jobs:
+  verify-lock:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 3
+    steps:
+      - name: Verify concurrent contenders with independent processes
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import multiprocessing as mp
+          import time
+          def contender(name, lock, gate, results):
+              gate.wait()
+              acquired = lock.acquire(block=False)
+              results.put((name, acquired))
+              if acquired:
+                  time.sleep(2)
+                  lock.release()
+          if __name__ == "__main__":
+              ctx = mp.get_context("fork")
+              lock = ctx.Lock()
+              gate = ctx.Event()
+              results = ctx.Queue()
+              workers = [ctx.Process(target=contender, args=(str(i),lock,gate,results)) for i in range(2)]
+              for p in workers: p.start()
+              gate.set()
+              outcome = [results.get(timeout=10) for _ in workers]
+              for p in workers:
+                  p.join(timeout=10)
+                  assert p.exitcode == 0
+              accepted = sum(1 for _,ok in outcome if ok)
+              print("LOCK_TEST_RESULTS", sorted(outcome))
+              assert accepted == 1, "Expected exactly one lock winner"
+              print("LOCK_TEST_PASS")
+          PY
+      - name: Dummy workflow marker
+        run: echo "NO_PRODUCTION_ACTIONS"
