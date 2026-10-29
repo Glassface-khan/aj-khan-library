@@ -39,6 +39,12 @@ jobs:
           python-version: "3.12"
           cache: pip
           cache-dependency-path: audiobook-cloud/requirements.txt
+      - name: Static-check private German prose probe before handling credentials
+        if: matrix.voice == 'jessica_de'
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m py_compile audiobook-cloud/jessica_real_prose_qc.py
       - name: Obtain private signed reference through narrow OIDC access
         shell: bash
         env:
