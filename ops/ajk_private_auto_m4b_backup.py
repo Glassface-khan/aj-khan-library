@@ -117,6 +117,13 @@ def verified(token,folder_id,file_id,name,size,sha,md5):
     if count!=size or h.hexdigest()!=sha:raise RuntimeError("drive_sha256_mismatch")
     return {"name":name,"id":file_id,"bytes":size,"md5":md5,"sha256":sha}
 
+def safe_book_folder_name(book):
+    """Normalize layout-only whitespace; never alter the book/source records."""
+    name=" — ".join(" ".join(str(book.get(k) or "").split()) for k in ("title","narrator","language"))
+    if any(c in name for c in ("/","\\","\n","\r")) or len(name)>220:
+        raise RuntimeError("unsafe_book_label")
+    return name
+
 def execute():
     import uuid
     target=os.environ.get("TARGET_EXPORT_JOB_ID","").strip()
@@ -140,8 +147,7 @@ def execute():
     for i,file in enumerate(files,1):
         if file.get("name")!=f"m4b-{i:03d}.m4b":raise RuntimeError("unordered_manifest")
     book=claim["book"]
-    name=" — ".join(str(book.get(k) or "") for k in ("title","narrator","language"))
-    if any(c in name for c in ("/","\\","\n","\r")) or len(name)>220:raise RuntimeError("unsafe_book_label")
+    name=safe_book_folder_name(book)
     token=drive_token()
     root=folder(token,ROOT_KEY,"v1","AJK PRIVATE — Hörbuch-M4B-Backups",create=False)
     dest=folder(token,BOOK_KEY,job_id,name,parent=root)
