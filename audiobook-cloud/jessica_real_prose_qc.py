@@ -2,11 +2,13 @@
 """Read-only Jessica DE prose QC. Download private DOCX ephemerally; never print prose."""
 from __future__ import annotations
 
+import gc
 import io
 import json
 import os
 import shutil
 import tempfile
+import urllib.error
 import urllib.parse
 import urllib.request
 from pathlib import Path
@@ -35,7 +37,7 @@ def private_book_bytes() -> bytes:
         raise ValueError("Expected restricted Drive file scope")
     headers = {"Authorization": "Bearer " + token_data["access_token"]}
     q = "name = '" + FILE_NAME + "' and trashed = false"
-    params = urllib.parse.urlencode({"q": q, "fields": "nextPageToken,files(id,name,size,mimeType)", "page_size": 100})
+    params = urllib.parse.urlencode({"q": q, "fields": "nextPageToken,files(id,name,size,mimeType)", "pageSize": 100})
     req = urllib.request.Request(DRIVE_API + "/files?" + params, headers=headers)
     with urllib.request.urlopen(req, timeout=40) as response:
         found = json.load(response)
@@ -129,6 +131,8 @@ def main() -> int:
                         wav.unlink(missing_ok=True)
                 all_results.append({"candidate": label, "passed": passed, "total": count, "failures": failures})
                 print("JESSICA_REAL_PROSE_QC " + json.dumps(all_results[-1], sort_keys=True), flush=True)
+                del model, state
+                gc.collect()
             print("JESSICA_REAL_PROSE_SUMMARY " + json.dumps({
                 "source": "private_Drive_publication_master", "chapter": 1,
                 "samples": len(original_chunks), "production_released": False,
@@ -136,6 +140,9 @@ def main() -> int:
                 "all_pass": all(x["passed"] == x["total"] for x in all_results),
             }, sort_keys=True), flush=True)
             return 0 if all(x["passed"] == x["total"] for x in all_results) else 2
+    except urllib.error.HTTPError as exc:
+        print("JESSICA_REAL_PROSE_BLOCKED drive_http=" + str(exc.code), flush=True)
+        return 3
     except Exception as exc:
         # No exception text: never disclose OAuth, source text, or signed voice URL.
         print("JESSICA_REAL_PROSE_BLOCKED type=" + type(exc).__name__, flush=True)
