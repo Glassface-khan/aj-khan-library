@@ -1,0 +1,51 @@
+name: Publish approved The Weight of Rain cover
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/publish-weight-of-rain-cover.yml']
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  publish:
+    if: github.repository == 'Glassface-khan/aj-khan-library' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Copy exact approved JPEG from private Google Drive with hash verification
+        env:
+          GOOGLE_DRIVE_CLIENT_ID: ${{ secrets.GOOGLE_DRIVE_CLIENT_ID }}
+          GOOGLE_DRIVE_CLIENT_SECRET: ${{ secrets.GOOGLE_DRIVE_CLIENT_SECRET }}
+          GOOGLE_DRIVE_REFRESH_TOKEN: ${{ secrets.GOOGLE_DRIVE_REFRESH_TOKEN }}
+        run: |
+          python3 - <<'PY'
+          import hashlib, json, os, pathlib, urllib.parse, urllib.request
+          name = 'THE_WEIGHT_OF_RAIN_FIRST_DROP_AUTHOR_APPROVED_2026-10-29.jpg'
+          sha = 'd20ab287774b9ccb960aad25d9493623852f4ee75cffc7ab7d22450cde9210ec'
+          keys = ('GOOGLE_DRIVE_CLIENT_ID','GOOGLE_DRIVE_CLIENT_SECRET','GOOGLE_DRIVE_REFRESH_TOKEN')
+          if not all(os.getenv(k) for k in keys): raise SystemExit('Drive OAuth secrets missing')
+          data = urllib.parse.urlencode(dict(client_id=os.getenv(keys[0]),client_secret=os.getenv(keys[1]),refresh_token=os.getenv(keys[2]),grant_type='refresh_token')).encode()
+          with urllib.request.urlopen(urllib.request.Request('https://oauth2.googleapis.com/token',data=data),timeout=30) as r: token=json.load(r)['access_token']
+          query = urllib.parse.urlencode({'q': "name = '"+name+"' and trashed = false", 'fields':'nextPageToken,files(id,name,mimeType,size)', 'pageSize':100, 'supportsAllDrives':'true','includeItemsFromAllDrives':'true'})
+          req=urllib.request.Request('https://www.googleapis.com/drive/v3/files?'+query,headers={'Authorization':'Bearer '+token})
+          with urllib.request.urlopen(req,timeout=30) as r: listing=json.load(r)
+          matches=[f for f in listing.get('files',[]) if f.get('name')==name and f.get('mimeType')=='image/jpeg']
+          if len(matches)!=1 or listing.get('nextPageToken'): raise SystemExit('Cover file lookup missing or ambiguous')
+          req=urllib.request.Request('https://www.googleapis.com/drive/v3/files/'+matches[0]['id']+'?alt=media',headers={'Authorization':'Bearer '+token})
+          with urllib.request.urlopen(req,timeout=60) as r: cover=r.read()
+          if hashlib.sha256(cover).hexdigest()!=sha or not cover.startswith(bytes.fromhex('ffd8')): raise SystemExit('Cover mismatch; stopped')
+          dest=pathlib.Path('assets/covers/the-weight-of-rain.jpg');dest.parent.mkdir(parents=True,exist_ok=True);dest.write_bytes(cover)
+          print('Verified approved public cover SHA256 and stored',len(cover),'bytes')
+          PY
+      - name: Commit only approved public image
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add assets/covers/the-weight-of-rain.jpg
+          if git diff --cached --quiet; then echo 'Approved cover already deployed'; exit 0; fi
+          git commit -m 'Publish verified The Weight of Rain First Drop cover'
+          git pull --rebase origin main
+          git push
