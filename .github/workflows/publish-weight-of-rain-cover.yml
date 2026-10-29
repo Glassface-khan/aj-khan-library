@@ -29,12 +29,9 @@ jobs:
           if not all(os.getenv(k) for k in keys): raise SystemExit('Drive OAuth secrets missing')
           data = urllib.parse.urlencode(dict(client_id=os.getenv(keys[0]),client_secret=os.getenv(keys[1]),refresh_token=os.getenv(keys[2]),grant_type='refresh_token')).encode()
           with urllib.request.urlopen(urllib.request.Request('https://oauth2.googleapis.com/token',data=data),timeout=30) as r: token=json.load(r)['access_token']
-          query = urllib.parse.urlencode({'q': "name = '"+name+"' and trashed = false", 'fields':'nextPageToken,files(id,name,mimeType,size)', 'pageSize':100, 'supportsAllDrives':'true','includeItemsFromAllDrives':'true'})
-          req=urllib.request.Request('https://www.googleapis.com/drive/v3/files?'+query,headers={'Authorization':'Bearer '+token})
-          with urllib.request.urlopen(req,timeout=30) as r: listing=json.load(r)
-          matches=[f for f in listing.get('files',[]) if f.get('name')==name and f.get('mimeType')=='image/jpeg']
-          if len(matches)!=1 or listing.get('nextPageToken'): raise SystemExit('Cover file lookup missing or ambiguous')
-          req=urllib.request.Request('https://www.googleapis.com/drive/v3/files/'+matches[0]['id']+'?alt=media',headers={'Authorization':'Bearer '+token})
+          # This is a deliberately publication-facing cover; exact file ID avoids OAuth drive.file search scope limits.
+          approved_public_cover_source_id='1Fmby_PRA9gvfPalSRjXz28gg9naPWj1b'
+          req=urllib.request.Request('https://www.googleapis.com/drive/v3/files/'+approved_public_cover_source_id+'?alt=media',headers={'Authorization':'Bearer '+token})
           with urllib.request.urlopen(req,timeout=60) as r: cover=r.read()
           if hashlib.sha256(cover).hexdigest()!=sha or not cover.startswith(bytes.fromhex('ffd8')): raise SystemExit('Cover mismatch; stopped')
           dest=pathlib.Path('assets/covers/the-weight-of-rain.jpg');dest.parent.mkdir(parents=True,exist_ok=True);dest.write_bytes(cover)
