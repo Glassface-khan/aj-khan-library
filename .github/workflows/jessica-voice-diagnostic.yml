@@ -6,6 +6,7 @@ on:
     paths:
       - ".github/workflows/jessica-voice-diagnostic.yml"
       - "audiobook-cloud/jessica_voice_diagnostic.py"
+      - "audiobook-cloud/jessica_real_prose_qc.py"
   workflow_dispatch:
 
 permissions:
@@ -38,6 +39,12 @@ jobs:
           python-version: "3.12"
           cache: pip
           cache-dependency-path: audiobook-cloud/requirements.txt
+      - name: Static-check private German prose probe before handling credentials
+        if: matrix.voice == 'jessica_de'
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m py_compile audiobook-cloud/jessica_real_prose_qc.py
       - name: Obtain private signed reference through narrow OIDC access
         shell: bash
         env:
@@ -68,6 +75,16 @@ jobs:
         run: |
           set -euo pipefail
           python audiobook-cloud/jessica_voice_diagnostic.py --voice-key "$VOICE" --response-file /tmp/private-jessica-voice.json --workdir /tmp/private-jessica-qc
+      - name: Compare actual private German chapter opener and extended prose
+        if: matrix.voice == 'jessica_de'
+        shell: bash
+        env:
+          GOOGLE_DRIVE_CLIENT_ID: ${{ secrets.GOOGLE_DRIVE_CLIENT_ID }}
+          GOOGLE_DRIVE_CLIENT_SECRET: ${{ secrets.GOOGLE_DRIVE_CLIENT_SECRET }}
+          GOOGLE_DRIVE_REFRESH_TOKEN: ${{ secrets.GOOGLE_DRIVE_REFRESH_TOKEN }}
+        run: |
+          set -euo pipefail
+          python audiobook-cloud/jessica_real_prose_qc.py
       - name: Remove ephemeral voice material and credentials
         if: always()
         run: |
