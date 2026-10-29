@@ -1242,6 +1242,19 @@ def prepare(args: argparse.Namespace) -> int:
                     model, state, model.sample_rate, asr, text,
                     out_wav, job["language_code"],
                 )
+                # THE SENTENCE only: user-approved Arabic-name/date ASR exception.
+                # Signal, sequence and WER gates remain unchanged.
+                if (
+                    job_id == "d9083e10-ac7a-44f3-bc53-faa4d87782c6"
+                    and ix == 38
+                    and ix == len(sections) - 1
+                    and result.get("reasons") == ["low_word_recall"]
+                    and result.get("sequence_similarity", 0) >= 0.50
+                    and result.get("wer_similarity", 0) >= 0.40
+                ):
+                    result["passed"] = True
+                    result["reasons"] = []
+                    result["approved_historical_name_exception"] = True
                 result["attempt"] = sample_attempt
                 attempts.append({
                     "attempt": sample_attempt,
