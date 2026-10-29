@@ -15,6 +15,8 @@ PROBES = {
         "The little house stood beyond the old bridge, where the river turned sharply beneath the willow trees.",
         "When the letter finally arrived, she read it twice before placing it on the kitchen table.",
         "The children watched the first rain of autumn fall against the windows and waited quietly for their mother.",
+        # Regression probe for the THE SENTENCE historical proper-name/date failure; read-only, not source replacement.
+        "Husayn ibn Mansur al-Hallaj was executed in Baghdad on the twenty-fourth of Dhu al-Qadah, corresponding to March nine hundred twenty-two.",
     ],
 }
 
