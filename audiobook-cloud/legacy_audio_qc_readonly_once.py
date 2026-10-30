@@ -238,7 +238,64 @@ def self_test():
     assert words >= 10 and score >= 75, (score, words)
     print("LEGACY_QC_SYNTHETIC_TESTS=PASS")
 
+def targeted_review():
+    """Three exact anomaly chapters, multiple positions. READ ONLY; not a QC pass."""
+    snapshot = require_credentials()
+    ed = EDITIONS[0]
+    with tempfile.TemporaryDirectory(prefix="ajk_guest_targeted_review_") as root:
+        folder = Path(root)
+        src = folder / "master.docx"
+        read_locked_master(snapshot, ed["document"], src)
+        _, raw, _ = parse_source(src)
+        sections = guest_narrative_sections(src, raw)
+        chapters = list_private_chapters(snapshot, ed)
+        model = WhisperModel("base.en", device="cpu",
+                             compute_type="int8", cpu_threads=2, num_workers=1)
+        review = {
+            10: (.16, .31, .46, .64, .83),
+            38: (.16, .31, .46, .64, .83),
+            48: (.16, .31, .46, .60, .70, .76, .88)
+        }
+        for idx, fractions in review.items():
+            chapter = chapters[idx]
+            mp3, wav = folder / "inspect.mp3", folder / "inspect.wav"
+            try:
+                duration = retrieve_private_mp3(snapshot, chapter, mp3)
+                scores = []
+                for fraction in fractions:
+                    at = sample_mp3(mp3, wav, duration, fraction)
+                    segments, _ = model.transcribe(str(wav), language="en",
+                        beam_size=3, temperature=0., vad_filter=False,
+                        condition_on_previous_text=False)
+                    words_heard = " ".join(seg.text.strip() for seg in segments)
+                    score, n = best_alignment(words_heard, sections[idx].spoken_text)
+                    scores.append(score)
+                    print("GUEST_TARGETED_SAMPLE " + json.dumps({
+                        "chapter_index": idx, "sample_second": at,
+                        "recognized_words": n, "alignment_score": score,
+                        "no_transcript_in_logs": True
+                    }, sort_keys=True), flush=True)
+                print("GUEST_TARGETED_CHAPTER " + json.dumps({
+                    "chapter_index": idx, "samples_checked": len(scores),
+                    "min_score": min(scores), "median_score": statistics.median(scores),
+                    "max_score": max(scores),
+                    "classification": "DIAGNOSIS_ONLY_NOT_QC_PASS"
+                }, sort_keys=True), flush=True)
+            finally:
+                mp3.unlink(missing_ok=True)
+                wav.unlink(missing_ok=True)
+    print("GUEST_TARGETED_FINAL " + json.dumps({
+        "books_checked": 1, "chapters_reviewed": [10, 38, 48],
+        "audio_modified": False, "source_modified": False,
+        "database_modified": False, "migration_started": False,
+        "qc_approval_granted": False
+    }, sort_keys=True), flush=True)
+    return 0
+
+
 def main():
+    if len(sys.argv) == 2 and sys.argv[1] == "--targeted-review":
+        return targeted_review()
     if len(sys.argv) == 2 and sys.argv[1] == "--self-test":
         self_test()
         return 0

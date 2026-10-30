@@ -65,10 +65,10 @@ jobs:
         run: rm -f /tmp/private-audit-oidc
 
   legacy_audio_readonly_once:
-    name: THE GUEST private MP3 vs locked manuscript audit (no writes)
+    name: THE GUEST targeted anomalous audio sample diagnosis (no writes)
     if: github.ref == 'refs/heads/audit/legacy-readonly-two-books-20261030'
     runs-on: ubuntu-24.04
-    timeout-minutes: 90
+    timeout-minutes: 45
     permissions:
       contents: read
       id-token: write
@@ -127,7 +127,7 @@ jobs:
           printf '%s' "$RESPONSE" > /tmp/ajk_guest_private_snapshot.json
           chmod 600 /tmp/ajk_guest_private_snapshot.json
           echo "GUEST_LOCKED_PRIVATE_SOURCE_READBACK=PASS"
-      - name: Audit all THE GUEST MP3 chapters against locked manuscript (read only)
+      - name: Targeted supplementary audio diagnosis for Chapters 10 38 and Coda (read only)
         shell: bash
         env:
           GUEST_QC_SNAPSHOT_PATH: /tmp/ajk_guest_private_snapshot.json
@@ -136,7 +136,7 @@ jobs:
           [[ "$GITHUB_REPOSITORY" == "Glassface-khan/aj-khan-library" ]]
           [[ "$GITHUB_REF" == "refs/heads/audit/legacy-readonly-two-books-20261030" ]]
           umask 077
-          python audiobook-cloud/legacy_audio_qc_readonly_once.py
+          python audiobook-cloud/legacy_audio_qc_readonly_once.py --targeted-review
 
       - name: Erase temporary signed source and chapter URLs
         if: always()
