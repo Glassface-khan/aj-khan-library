@@ -87,7 +87,7 @@ jobs:
         shell: bash
         run: |
           set -Eeuo pipefail
-          command -v ffmpeg >/dev/null
+          command -v ffmpeg >/dev/null || (sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg)
           python -m pip install 'numpy>=2,<3' 'requests>=2.32,<3' 'soundfile>=0.13,<1' \
             'python-docx==1.2.0' 'rapidfuzz>=3.10,<4' 'faster-whisper==1.2.1' 'av>=14,<19'
       - name: OIDC-verified private original import and signed read-only chapter snapshot
