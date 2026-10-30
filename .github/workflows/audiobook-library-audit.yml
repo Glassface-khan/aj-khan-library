@@ -116,15 +116,28 @@ jobs:
             --arg path 'qc-locked-sources/9b8e8520-4aa2-4337-aa61-5c3a10ce2a6f/THE_GUEST_PUBLICATION_MASTER_v1_0_FINAL.docx' \
             '.ok == true and .sha256 == $hash and .path == $path and .bytes == 243128 and
              (.classification == "UPLOADED_AND_VERIFIED" or .classification == "ALREADY_VERIFIED")' >/dev/null
+          printf '%s' "$RESPONSE" | jq -e \
+            --arg prefix 'https://ipoqyjrojljmbqslmxxf.supabase.co/storage/v1/object/sign/' \
+            '.book.id == "9b8e8520-4aa2-4337-aa61-5c3a10ce2a6f" and
+             .book.title == "The Guest" and .book.voice_key == "narration_us_f" and
+             .book.status == "ready" and .book.is_active == true and
+             (.source_url | startswith($prefix + "audiobook-factory/")) and
+             (.chapters | length == 49) and
+             ([.chapters[].url | startswith($prefix + "audiobooks/")] | all)' >/dev/null
+          printf '%s' "$RESPONSE" > /tmp/ajk_guest_private_snapshot.json
+          chmod 600 /tmp/ajk_guest_private_snapshot.json
           echo "GUEST_LOCKED_PRIVATE_SOURCE_READBACK=PASS"
       - name: Verify exact locked manuscript from private storage (no audio, no writes)
         shell: bash
         env:
-          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          GUEST_QC_SNAPSHOT_PATH: /tmp/ajk_guest_private_snapshot.json
         run: |
           set -Eeuo pipefail
           [[ "$GITHUB_REPOSITORY" == "Glassface-khan/aj-khan-library" ]]
           [[ "$GITHUB_REF" == "refs/heads/audit/legacy-readonly-two-books-20261030" ]]
           umask 077
           python audiobook-cloud/legacy_audio_qc_readonly_once.py --source-probe
+
+      - name: Erase temporary signed source and chapter URLs
+        if: always()
+        run: rm -f /tmp/ajk_guest_private_snapshot.json

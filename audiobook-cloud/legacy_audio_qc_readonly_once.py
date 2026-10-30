@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """One-off, READ-ONLY legacy audiobook ASR-vs-locked-manuscript audit.
 
-Only the two exact preflighted editions are eligible. No Supabase/Drive writes,
+Only the single exact THE GUEST edition is eligible. No Supabase/Drive writes,
 no new voice generation, no file publication, and no credentials/transcripts in logs.
 The result is a *sample from each chapter*, NOT an exhaustive full-text QC pass.
 """
@@ -35,22 +35,39 @@ def fail(reason):
     raise RuntimeError(reason)
 
 def require_credentials():
-    if not os.getenv("SUPABASE_SERVICE_ROLE_KEY"):
-        fail("MISSING_CONFIG_SUPABASE_SERVICE_ROLE_KEY")
-    base = os.getenv("SUPABASE_URL", BASE).rstrip("/")
-    if base != BASE:
-        fail("SUPABASE_PROJECT_MISMATCH")
-    return base
+    """Load per-run signed read-only URLs; never handle service-role credentials."""
+    location = Path(os.environ.get("GUEST_QC_SNAPSHOT_PATH",
+                                   "/tmp/ajk_guest_private_snapshot.json"))
+    if not location.is_file():
+        fail("GUEST_SIGNED_SNAPSHOT_MISSING")
+    try:
+        snapshot = json.loads(location.read_text())
+    except Exception:
+        fail("GUEST_SIGNED_SNAPSHOT_INVALID")
+    expected = BASE + "/storage/v1/object/sign/"
+    source = str(snapshot.get("source_url") or "")
+    if not (snapshot.get("ok") is True
+            and snapshot.get("sha256") == LOCKED_SHA256
+            and snapshot.get("bytes") == LOCKED_BYTES
+            and snapshot.get("path") == LOCKED_PATH
+            and source.startswith(expected + "audiobook-factory/")
+            and len(snapshot.get("chapters") or []) == 49
+            and all(str(ch.get("url") or "").startswith(expected + "audiobooks/")
+                    for ch in snapshot["chapters"])):
+        fail("GUEST_SIGNED_SNAPSHOT_MISMATCH")
+    return snapshot
 
-def supa_get(base, endpoint, params=None, stream=False):
-    key = os.environ["SUPABASE_SERVICE_ROLE_KEY"]
-    headers = {"apikey": key, "Authorization": "Bearer " + key}
-    r = requests.get(base + endpoint, params=params, headers=headers,
-                     timeout=(15, 180), stream=stream, allow_redirects=False)
-    if r.status_code != 200:
-        r.close()
-        fail("SUPABASE_READ_REJECTED_" + str(r.status_code))
-    return r
+
+def supa_get(url, stream=False):
+    if not url.startswith(BASE + "/storage/v1/object/sign/"):
+        fail("GUEST_UNEXPECTED_DOWNLOAD_HOST")
+    response = requests.get(url, stream=stream, timeout=(15, 180),
+                            allow_redirects=False)
+    if response.status_code != 200:
+        response.close()
+        fail("SIGNED_PRIVATE_READ_REJECTED_" + str(response.status_code))
+    return response
+
 
 LOCKED_BUCKET = "audiobook-factory"
 LOCKED_PATH = ("qc-locked-sources/9b8e8520-4aa2-4337-aa61-5c3a10ce2a6f/"
@@ -62,8 +79,7 @@ LOCKED_BYTES = 243128
 def read_locked_master(base, title, path):
     if title != "THE_GUEST_PUBLICATION_MASTER_v1_0_FINAL.docx":
         fail("UNEXPECTED_MANUSCRIPT_TITLE")
-    r = supa_get(base, "/storage/v1/object/" + LOCKED_BUCKET + "/" +
-                 quote(LOCKED_PATH, safe="/"))
+    r = supa_get(base["source_url"])
     data = r.content
     r.close()
     if (len(data) != LOCKED_BYTES or data[:2] != b"PK"
@@ -74,18 +90,12 @@ def read_locked_master(base, title, path):
 
 
 def list_private_chapters(base, ed):
-    book = supa_get(base, "/rest/v1/audio_books",
-                    {"id": "eq." + ed["book_id"],
-                     "select": "id,title,voice_key,language_code,is_active,status"}).json()
-    if len(book) != 1 or book[0]["title"] != ed["title"] or (
-        book[0]["voice_key"] != ed["voice"]
-        or book[0]["status"] != "ready" or not book[0]["is_active"]
-        or book[0]["language_code"] != "EN"):
+    book = base["book"]
+    if (book["id"] != ed["book_id"] or book["title"] != ed["title"]
+            or book["voice_key"] != ed["voice"] or book["status"] != "ready"
+            or not book["is_active"] or book["language_code"] != "EN"):
         fail("AUDIO_EDITION_NOT_EXACTLY_READY")
-    c = supa_get(base, "/rest/v1/audio_chapters",
-                 {"audio_book_id": "eq." + ed["book_id"], "select":
-                  "chapter_index,title,storage_path,byte_size,duration_seconds",
-                  "order": "chapter_index.asc", "limit": "1000"}).json()
+    c = base["chapters"]
     if len(c) != ed["chapters"] or [int(x["chapter_index"]) for x in c] != list(range(ed["chapters"])):
         fail("AUDIO_CHAPTER_INDEX_OR_COUNT_MISMATCH")
     if len({x["storage_path"] for x in c}) != len(c):
@@ -100,9 +110,7 @@ def list_private_chapters(base, ed):
     return c
 
 def retrieve_private_mp3(base, chapter, dest):
-    path = chapter["storage_path"]
-    r = supa_get(base, "/storage/v1/object/audiobooks/" + quote(path, safe="/"),
-                 stream=True)
+    r = supa_get(chapter["url"], stream=True)
     length = 0
     with dest.open("wb") as out:
         for block in r.iter_content(262144):
