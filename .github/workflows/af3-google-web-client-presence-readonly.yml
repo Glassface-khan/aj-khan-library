@@ -1,0 +1,37 @@
+name: AF3 Google Web login - secrets presence only (one-shot read-only)
+on:
+  push:
+    branches:
+      - feature/af3-drive-token-readonly-20261030
+    paths:
+      - .github/workflows/af3-google-web-client-presence-readonly.yml
+permissions:
+  contents: read
+jobs:
+  read-only-google-client-inventory:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 2
+    steps:
+      - name: Check existing optional Google Web identity config names without exposing values
+        env:
+          AF3_GOOGLE_WEB_CLIENT_ID: ${{ secrets.AF3_GOOGLE_WEB_CLIENT_ID }}
+          GOOGLE_WEB_CLIENT_ID: ${{ secrets.GOOGLE_WEB_CLIENT_ID }}
+          GOOGLE_OAUTH_WEB_CLIENT_ID: ${{ secrets.GOOGLE_OAUTH_WEB_CLIENT_ID }}
+          AF3_GOOGLE_OWNER_SUB: ${{ secrets.AF3_GOOGLE_OWNER_SUB }}
+          AF3_PRIVATE_ORIGIN: ${{ vars.AF3_PRIVATE_ORIGIN }}
+        run: |
+          set -Eeuo pipefail
+          [[ "$GITHUB_REPOSITORY" == "Glassface-khan/aj-khan-library" ]] || exit 2
+          [[ "$GITHUB_REF" == "refs/heads/feature/af3-drive-token-readonly-20261030" ]] || exit 2
+          python3 - <<'PY'
+          import os
+          names=("AF3_GOOGLE_WEB_CLIENT_ID","GOOGLE_WEB_CLIENT_ID",
+                 "GOOGLE_OAUTH_WEB_CLIENT_ID","AF3_GOOGLE_OWNER_SUB",
+                 "AF3_PRIVATE_ORIGIN")
+          for name in names:
+              print(name+"_CONFIGURED="+str(bool(os.getenv(name))).lower())
+          print("AF3_GOOGLE_WEB_CLIENT_TYPE=NOT_VERIFIABLE_FROM_DRIVE_FILE_SCOPE")
+          print("AF3_GOOGLE_WEB_ORIGIN_AUTHORIZED=NOT_VERIFIABLE_WITHOUT_CLOUD_IAM")
+          print("AF3_OAUTH_CLIENT_ID_OR_SUB_EXPORTED=false")
+          print("AF3_WORKFLOW=READ_ONLY_NO_NETWORK_NO_CHANGES")
+          PY
