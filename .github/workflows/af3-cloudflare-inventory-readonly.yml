@@ -5,6 +5,7 @@ on:
       - feature/af3-drive-token-readonly-20261030
     paths:
       - .github/workflows/af3-cloudflare-inventory-readonly.yml
+      - audiobook-cloud/af3_cloudflare_inventory_readonly.py
 permissions:
   contents: read
 concurrency:
