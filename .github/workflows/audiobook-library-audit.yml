@@ -64,74 +64,35 @@ jobs:
         if: always()
         run: rm -f /tmp/private-audit-oidc
 
-  guest_private_target_once:
-    name: THE GUEST private app-owned Drive destination creation and ACL readback
+  guest_export_readonly_preflight:
+    name: Verify only THE GUEST existing-audio export eligibility
     if: github.ref == 'refs/heads/audit/legacy-readonly-two-books-20261030'
     runs-on: ubuntu-24.04
-    timeout-minutes: 8
+    timeout-minutes: 6
     permissions:
       contents: read
+      id-token: write
     steps:
-      - name: Safely create or reuse only one THE GUEST Drive folder, private by default
+      - name: Check pinned QC proof and private target, zero writes
         shell: bash
-        env:
-          GOOGLE_DRIVE_CLIENT_ID: ${{ secrets.GOOGLE_DRIVE_CLIENT_ID }}
-          GOOGLE_DRIVE_CLIENT_SECRET: ${{ secrets.GOOGLE_DRIVE_CLIENT_SECRET }}
-          GOOGLE_DRIVE_REFRESH_TOKEN: ${{ secrets.GOOGLE_DRIVE_REFRESH_TOKEN }}
         run: |
           set -Eeuo pipefail
           [[ "$GITHUB_REPOSITORY" == "Glassface-khan/aj-khan-library" ]]
           [[ "$GITHUB_REF" == "refs/heads/audit/legacy-readonly-two-books-20261030" ]]
-          python3 - <<'PY'
-          import json,os,urllib.request,urllib.parse,urllib.error
-          keys=("GOOGLE_DRIVE_CLIENT_ID","GOOGLE_DRIVE_CLIENT_SECRET","GOOGLE_DRIVE_REFRESH_TOKEN")
-          if not all(os.getenv(k) for k in keys):raise SystemExit("OAUTH_NOT_CONFIGURED")
-          data=urllib.parse.urlencode(dict(
-              grant_type="refresh_token",refresh_token=os.getenv(keys[2]),
-              client_id=os.getenv(keys[0]),client_secret=os.getenv(keys[1]))).encode()
-          with urllib.request.urlopen(urllib.request.Request("https://oauth2.googleapis.com/token",data=data),timeout=30) as r:
-              auth=json.load(r)
-          if set(auth.get("scope","").split())!={"https://www.googleapis.com/auth/drive.file"}:
-              raise SystemExit("DRIVE_OAUTH_SCOPE_NOT_LEAST_PRIVILEGE")
-          token=auth["access_token"]
-          base="https://www.googleapis.com/drive/v3"
-          def call(url,body=None,method=None):
-              headers={"Authorization":"Bearer "+token}
-              payload=None
-              if body is not None:
-                  payload=json.dumps(body).encode()
-                  headers["Content-Type"]="application/json"
-              with urllib.request.urlopen(urllib.request.Request(url,data=payload,method=method,headers=headers),timeout=45) as r:
-                  return json.load(r)
-          key="ajkGuestRescueFolder"
-          val="b_the_guest_v1"
-          query="trashed = false and appProperties has { key = 'ajkGuestRescueFolder' and value = 'b_the_guest_v1' }"
-          params=urllib.parse.urlencode({"q":query,"fields":"nextPageToken,files(id,name,mimeType,trashed,parents,appProperties)","pageSize":100})
-          candidates=call(base+"/files?"+params)
-          found=candidates.get("files",[])
-          if candidates.get("nextPageToken") or len(found)>1:raise SystemExit("DUPLICATE_TARGET_FOLDER_REJECTED")
-          created=False
-          if not found:
-              folder=call(base+"/files?fields=id,name,mimeType,parents",{
-                  "name":"THE GUEST - Private Audiobook Backup",
-                  "mimeType":"application/vnd.google-apps.folder",
-                  "appProperties":{key:val}
-              },"POST")
-              created=True
-          else:folder=found[0]
-          fid=str(folder.get("id") or "")
-          if len(fid)<20:raise SystemExit("INVALID_CREATED_FOLDER")
-          meta=call(base+"/files/"+fid+"?fields=id,name,mimeType,trashed,appProperties")
-          if (meta.get("id")!=fid or meta.get("trashed") or
-                  meta.get("name")!="THE GUEST - Private Audiobook Backup" or
-                  meta.get("mimeType")!="application/vnd.google-apps.folder" or
-                  meta.get("appProperties",{}).get(key)!=val):
-              raise SystemExit("TARGET_READBACK_MISMATCH")
-          acl=call(base+"/files/"+fid+"/permissions?fields=permissions(type,role),nextPageToken")
-          if (acl.get("nextPageToken") or not acl.get("permissions") or
-              any(p.get("type")!="user" for p in acl["permissions"])):
-              raise SystemExit("TARGET_NOT_PRIVATE")
-          print("GUEST_PRIVATE_GITHUB_DRIVE_TARGET="+fid)
-          print("GUEST_PRIVATE_GITHUB_DRIVE_TARGET_CREATED="+str(created).lower())
-          print("GUEST_PRIVATE_GITHUB_DRIVE_TARGET_READBACK=PASS")
-          PY
+          TOKEN="$(curl --fail --silent --show-error --max-time 30 \
+            -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
+            "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=ajk-guest-qc-private-source-20261030" \
+            | jq -er '.value')"
+          RESULT="$(curl --fail --silent --show-error --max-time 45 \
+            -X POST -H "Authorization: Bearer $TOKEN" \
+            -H 'Content-Type: application/json' \
+            -d '{"op":"guest-migration-preflight"}' \
+            "https://ipoqyjrojljmbqslmxxf.supabase.co/functions/v1/ajk-guest-qc-private-source-once")"
+          printf '%s' "$RESULT" | jq -e \
+            '.ok == true and .state == "ELIGIBLE_FOR_ONE_EXISTING_AUDIO_BACKUP" and
+             .folderId == "1hlhzCQa1q5R3BexWCgPBK9mGNFX-s4ho" and
+             .bookId == "9b8e8520-4aa2-4337-aa61-5c3a10ce2a6f" and
+             .chapters == 49 and .bytes == 312821132 and
+             .no_synthesis == true and .no_data_changes == true and
+             (.fingerprint | test("^[a-f0-9]{64}$"))' >/dev/null
+          echo "GUEST_EXPORT_PREFLIGHT=PASS_NO_WRITES"
