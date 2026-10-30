@@ -155,7 +155,15 @@ def copy_backup(claim, drive):
                     out.write(block)
             if path.stat().st_size != source['bytes']:
                 raise ValueError('Source size mismatch')
-            files.append(drive.upload(path, folder_id, edition + ':' + source['name']))
+            raw_tag = edition + ':' + source['name']
+            # THE GUEST only: Google Drive rejected the legacy 113-byte
+            # appProperties value (propertyLengthLimitExceeded). The full
+            # SHA-256 tag is stable, short, and never matches another edition.
+            # Other books preserve their existing tag scheme.
+            file_tag = (hashlib.sha256(raw_tag.encode('utf-8')).hexdigest()
+                        if job['audio_book_id'] == '9b8e8520-4aa2-4337-aa61-5c3a10ce2a6f'
+                        else raw_tag)
+            files.append(drive.upload(path, folder_id, file_tag))
             path.unlink()
             api('driveBackupProgress', jobId=job['id'], done=index+1)
     drive.check_private(root)
