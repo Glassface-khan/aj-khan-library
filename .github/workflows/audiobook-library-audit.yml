@@ -88,6 +88,10 @@ jobs:
             -H 'Content-Type: application/json' \
             -d '{"op":"guest-migration-preflight"}' \
             "https://ipoqyjrojljmbqslmxxf.supabase.co/functions/v1/ajk-guest-qc-private-source-once")"
+          if [[ "$(printf '%s' "$RESULT" | jq -r '.ok')" != "true" ]]; then
+            printf '%s' "$RESULT" | jq -r '"GUEST_ENQUEUE_BLOCKED="+((.error // "unknown") | tostring | .[0:100])'
+            exit 2
+          fi
           printf '%s' "$RESULT" | jq -e \
             '.ok == true and .state == "QUEUED_EXISTING_AUDIO_ONLY" and
              .folderId == "1hlhzCQa1q5R3BexWCgPBK9mGNFX-s4ho" and
