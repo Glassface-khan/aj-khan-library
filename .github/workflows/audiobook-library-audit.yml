@@ -65,10 +65,10 @@ jobs:
         run: rm -f /tmp/private-audit-oidc
 
   legacy_audio_readonly_once:
-    name: THE GUEST Coda origin diagnosis (no writes)
+    name: THE GUEST 49-track corrected source-aware ASR QC (no writes)
     if: github.ref == 'refs/heads/audit/legacy-readonly-two-books-20261030'
     runs-on: ubuntu-24.04
-    timeout-minutes: 45
+    timeout-minutes: 90
     permissions:
       contents: read
       id-token: write
@@ -127,7 +127,7 @@ jobs:
           printf '%s' "$RESPONSE" > /tmp/ajk_guest_private_snapshot.json
           chmod 600 /tmp/ajk_guest_private_snapshot.json
           echo "GUEST_LOCKED_PRIVATE_SOURCE_READBACK=PASS"
-      - name: Compare Coda tail against locked narrative and backmatter (read only)
+      - name: Full 49-track final ASR QC including locked Coda backmatter (read only)
         shell: bash
         env:
           GUEST_QC_SNAPSHOT_PATH: /tmp/ajk_guest_private_snapshot.json
@@ -136,7 +136,7 @@ jobs:
           [[ "$GITHUB_REPOSITORY" == "Glassface-khan/aj-khan-library" ]]
           [[ "$GITHUB_REF" == "refs/heads/audit/legacy-readonly-two-books-20261030" ]]
           umask 077
-          python audiobook-cloud/legacy_audio_qc_readonly_once.py --coda-origin
+          python audiobook-cloud/legacy_audio_qc_readonly_once.py
 
       - name: Erase temporary signed source and chapter URLs
         if: always()

@@ -103,6 +103,21 @@ def guest_narrative_sections(source: Path, parsed):
     ]
     if any(len(s.spoken_text.split()) < 70 for s in narrative):
         fail("GUEST_NARRATIVE_SECTION_EMPTY")
+    # Existing last MP3 includes Coda followed by locked manuscript backmatter.
+    # Keep the single physical track and its exact source text in one QC section;
+    # the original DOCX and all MP3s remain unchanged.
+    coda_starts=[i for i,p in enumerate(Document(str(source)).paragraphs)
+                 if p.style.name == "Heading 1" and p.text.strip() == "Coda"]
+    if len(coda_starts)!=1:
+        fail("GUEST_CODA_POSITION_AMBIGUOUS")
+    paras=Document(str(source)).paragraphs
+    all_coda=[p.text.strip() for p in paras[coda_starts[0]+1:] if p.text.strip()]
+    if not all(marker in all_coda for marker in back):
+        fail("GUEST_CODA_BACKMATTER_NOT_COMPLETE")
+    if not (2700 < len(" ".join(all_coda).split()) < 3300):
+        fail("GUEST_CODA_BACKMATTER_SIZE_CHANGED")
+    narrative[-1]=Section(48,narrative[-1].kind,narrative[-1].label,
+                         narrative[-1].title,all_coda)
     return narrative
 
 
@@ -192,7 +207,7 @@ def audit_edition(base, ed, model):
                 duration = retrieve_private_mp3(base, ch, audio)
                 chapter_scores = []
                 # Coda is slower than other chapters: verify a second, later point.
-                fractions = (.46, .76) if idx == 48 else (.46,)
+                fractions = (.46, .76, .96) if idx == 48 else (.46,)
                 for fraction in fractions:
                     offset = sample_mp3(audio, wav, duration, fraction)
                     segments, _ = model.transcribe(str(wav), language="en",
