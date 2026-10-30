@@ -65,8 +65,8 @@ jobs:
         if: always()
         run: rm -f /tmp/private-audit-oidc
 
-  last_one_book_backup_preflight:
-    name: THE MAN THE WORLD FORGOT verified source-to-backup no-write preflight
+  last_one_book_enqueue_once:
+    name: Queue only THE MAN THE WORLD FORGOT audited M4B and Drive backup
     if: github.ref == 'refs/heads/audit/legacy-readonly-two-books-20261030'
     runs-on: ubuntu-24.04
     timeout-minutes: 6
@@ -74,7 +74,7 @@ jobs:
       contents: read
       id-token: write
     steps:
-      - name: Reconfirm exact 48-track QC, private target, and absent jobs
+      - name: Queue precisely one checked existing-audio title after pinned successful QC
         shell: bash
         run: |
           set -Eeuo pipefail
@@ -86,18 +86,21 @@ jobs:
           RESULT="$(curl --fail --silent --show-error --max-time 45 \
             -X POST -H "Authorization: Bearer $TOKEN" \
             -H 'Content-Type: application/json' \
-            -d '{"op":"last-migration-readonly-preflight"}' \
+            -d '{"op":"last-queue-existing-audio-backup"}' \
             "https://ipoqyjrojljmbqslmxxf.supabase.co/functions/v1/ajk-man-last-private-qc-once")"
           if [[ "$(printf '%s' "$RESULT" | jq -r '.ok')" != "true" ]]; then
             printf '%s' "$RESULT" | jq -r '"LAST_BOOK_PREFLIGHT_BLOCKED="+(.error // "unknown")'
             exit 2
           fi
           printf '%s' "$RESULT" | jq -e \
-             '.ok == true and .state == "ELIGIBLE_FOR_EXISTING_AUDIO_BACKUP" and
+             '.ok == true and .state == "QUEUED_EXISTING_AUDIO_ONLY" and
               .book_id == "b4e3bde1-7d88-4a04-a68f-55ca249af0ce" and
               .folder_id == "1loeST6DXr7CsouRVKB5sz09W6TQFNgTy" and
               .mp3_count == 48 and .mp3_bytes == 283195392 and
               .source_sha256 == "10e279c192d271e0b36121c832ca18387c7b7887478ffcc1bbf94a35ee9a348a" and
-              .no_synthesis == true and .no_changes == true and
-              (.fingerprint | test("^[a-f0-9]{64}$"))' >/dev/null
-          echo "LAST_BOOK_BACKUP_PREFLIGHT=PASS_NO_WRITES"
+              .no_synthesis == true and .no_overwrite == true and
+              (.fingerprint | test("^[a-f0-9]{64}$")) and
+              (.backup_job_id | test("^[0-9a-f-]{36}$")) and
+              (.export_job_id | test("^[0-9a-f-]{36}$"))' >/dev/null
+          printf '%s' "$RESULT" | jq -r '"LAST_BOOK_EXPORT_JOB="+.export_job_id,"LAST_BOOK_BACKUP_JOB="+.backup_job_id'
+          echo "LAST_BOOK_EXISTING_AUDIO_MIGRATION_QUEUED=PASS"
