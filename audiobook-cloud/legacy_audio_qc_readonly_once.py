@@ -21,7 +21,7 @@ import requests
 from faster_whisper import WhisperModel
 
 sys.path.insert(0, str(Path(__file__).parent))
-from worker import parse_source
+from worker import parse_source, Section
 from docx import Document
 from audit_existing_audiobooks import best_alignment
 
@@ -77,7 +77,7 @@ LOCKED_SHA256 = "f73d674a3f6bcdbf63d8880c085eb447e080946128ade41b521a81b76789f9d
 LOCKED_BYTES = 243128
 
 def guest_narrative_sections(source: Path, parsed):
-    """Exclude the four *backmatter* headings; never edit the locked DOCX or worker."""
+    """Keep exactly 49 named narrative sections, ignoring parser front/back matter."""
     headings = [
         p.text.strip() for p in Document(str(source)).paragraphs
         if p.text.strip() and p.style.name == "Heading 1"
@@ -87,17 +87,23 @@ def guest_narrative_sections(source: Path, parsed):
             "Glossary", "About the Author")
     middle = headings[len(front):-len(back)]
     if (tuple(headings[:len(front)]) != front
-        or tuple(headings[-len(back):]) != back
-        or len(middle) != 49
-        or middle[0] != "Prologue" or middle[-1] != "Coda"
-        or not all(x.startswith("Chapter ") for x in middle[1:-1])
-        or len(parsed) != 53
-        or [int(s.index) for s in parsed] != list(range(53))):
+            or tuple(headings[-len(back):]) != back
+            or len(middle) != 49
+            or middle[0] != "Prologue" or middle[-1] != "Coda"
+            or not all(x.startswith("Chapter ") for x in middle[1:-1])
+            or len(parsed) != 53
+            or [int(s.index) for s in parsed] != list(range(53))
+            or tuple(s.label for s in parsed[:3]) != front
+            or parsed[-1].label != "Historical & Philosophical Context"
+            or tuple(s.label for s in parsed[3:52]) != tuple(middle)):
         fail("GUEST_LOCKED_SOURCE_CHAPTER_BOUNDARY_UNEXPECTED")
-    chapters = list(parsed[:49])
-    if any(len(s.spoken_text.split()) < 70 for s in chapters):
+    narrative = [
+        Section(i, s.kind, s.label, s.title, list(s.paragraphs))
+        for i, s in enumerate(parsed[3:52])
+    ]
+    if any(len(s.spoken_text.split()) < 70 for s in narrative):
         fail("GUEST_NARRATIVE_SECTION_EMPTY")
-    return chapters
+    return narrative
 
 
 def read_locked_master(base, title, path):
