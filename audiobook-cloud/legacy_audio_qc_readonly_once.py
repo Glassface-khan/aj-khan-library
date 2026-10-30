@@ -76,6 +76,30 @@ PINNED_MASTER_IDS = {
     "THE_MAN_THE_WORLD_FORGOT_PUBLICATION_MASTER_FINAL_v1.docx": "15GYGelGGAIPEVPGkXZeM5HpqrTRZzokq",
 }
 
+def diagnose_drive_oauth(token):
+    # Only classify the account/scope: never log an email, token or private path.
+    user = requests.get("https://www.googleapis.com/drive/v3/about",
+                        params={"fields": "user(emailAddress)"},
+                        headers={"Authorization": "Bearer " + token},
+                        timeout=25, allow_redirects=False)
+    identity = user.json().get("user", {}).get("emailAddress") if user.status_code == 200 else None
+    info = requests.get("https://oauth2.googleapis.com/tokeninfo",
+                        params={"access_token": token}, timeout=25,
+                        allow_redirects=False)
+    scopes = set(info.json().get("scope", "").split()) if info.status_code == 200 else set()
+    category = ("full_drive" if "https://www.googleapis.com/auth/drive" in scopes
+                else "drive_readonly" if "https://www.googleapis.com/auth/drive.readonly" in scopes
+                else "drive_file_only" if "https://www.googleapis.com/auth/drive.file" in scopes
+                else "other_or_unknown")
+    print("LEGACY_DRIVE_OAUTH_DIAGNOSTIC " + json.dumps({
+        "identity_check_status": user.status_code,
+        "identity_known": bool(identity),
+        "same_as_private_drive_owner": identity == "ali.khan.j@gmail.com" if identity else None,
+        "scope_check_status": info.status_code,
+        "drive_scope": category,
+        "no_mutations": True}, sort_keys=True), flush=True)
+
+
 def read_locked_master(token, title, path):
     # No publicly accessible link or signed URL. Exact-name private Drive lookup.
     escaped = title.replace("'", "\\'")
@@ -251,6 +275,7 @@ def main():
         if missing:
             fail("DRIVE_PROBE_MISSING_CONFIG_" + "_".join(missing))
         token = drive_access_token()
+        diagnose_drive_oauth(token)
         all_good = True
         with tempfile.TemporaryDirectory(prefix="ajk_source_probe_") as root:
             for ed in EDITIONS:
