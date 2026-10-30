@@ -86,7 +86,7 @@ jobs:
           RESULT="$(curl --fail --silent --show-error --max-time 45 \
             -X POST -H "Authorization: Bearer $TOKEN" \
             -H 'Content-Type: application/json' \
-            -d '{"op":"guest-migration-preflight"}' \
+            -d '{"op":"guest-queue-existing-audio-backup"}' \
             "https://ipoqyjrojljmbqslmxxf.supabase.co/functions/v1/ajk-guest-qc-private-source-once")"
           if [[ "$(printf '%s' "$RESULT" | jq -r '.ok')" != "true" ]]; then
             printf '%s' "$RESULT" | jq -r '"GUEST_ENQUEUE_BLOCKED="+((.error // "unknown") | tostring | .[0:100])'
