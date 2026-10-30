@@ -27,7 +27,7 @@ def main():
     headers={"Authorization":"Bearer "+token,"Accept":"application/json"}
     def read(path):
         if not (path.startswith("/accounts?") or re.fullmatch(
-            r"/accounts/[0-9a-f]{32}/(?:workers/(?:scripts(?:/[A-Za-z0-9_-]{1,120}(?:/settings|/subdomain)?)?|subdomain|domains)|access/apps|subscriptions)(?:\?per_page=[0-9]+)?",
+            r"/accounts/[0-9a-f]{32}/(?:workers/(?:scripts(?:/[A-Za-z0-9_-]{1,120}(?:/settings|/subdomain)?)?|subdomain|domains|account-settings)|access/apps|subscriptions)(?:\?per_page=[0-9]+)?",
             path)):
             raise ValueError("Unsafe read path")
         req=urllib.request.Request(HOST+path,headers=headers,method="GET")
@@ -132,6 +132,21 @@ def main():
     if status=="OK" and isinstance(apps,list):
         print("AF3_CF_ACCESS_APPS_COUNT="+str(len(apps)))
         print("AF3_CF_ACCESS_SELF_HOSTED_APPS="+str(sum(x.get("type")=="self_hosted" for x in apps if isinstance(x,dict))))
+    # Distinguish the Workers usage model from the billed subscription.
+    # The API can be read with Workers Scripts Read. Never infer Free from
+    # default_usage_model alone; this field is NOT the actual Workers plan.
+    settings,settings_status,_=read("/accounts/"+account_id+"/workers/account-settings")
+    print("AF3_CF_WORKERS_ACCOUNT_SETTINGS_READ="+settings_status)
+    if settings_status=="OK" and isinstance(settings,dict):
+        model=str(settings.get("default_usage_model","")).strip().lower()
+        if model in ("bundled","unbound","standard"):
+            print("AF3_CF_DEFAULT_USAGE_MODEL="+model.upper())
+        else:
+            print("AF3_CF_DEFAULT_USAGE_MODEL=UNKNOWN_OR_UNSET")
+        print("AF3_CF_WORKERS_PLAN_CONFIRMED_FREE=false")
+    else:
+        print("AF3_CF_DEFAULT_USAGE_MODEL=NOT_ACCESSIBLE")
+        print("AF3_CF_WORKERS_PLAN_CONFIRMED_FREE=false")
     # Billing Read was not granted. A 403 is expected and is NOT a free-plan proof.
     subs,status,_=read("/accounts/"+account_id+"/subscriptions")
     print("AF3_CF_SUBSCRIPTIONS_READ="+status)
