@@ -67,7 +67,7 @@ jobs:
 
   last_one_book_enqueue_once:
     name: Queue only THE MAN THE WORLD FORGOT audited M4B and Drive backup
-    if: github.ref == 'refs/heads/audit/legacy-readonly-two-books-20261030'
+    if: ${{ false }}  # Old last-title enqueue permanently disabled
     runs-on: ubuntu-24.04
     timeout-minutes: 6
     permissions:
@@ -104,3 +104,107 @@ jobs:
               (.export_job_id | test("^[0-9a-f-]{36}$"))' >/dev/null
           printf '%s' "$RESULT" | jq -r '"LAST_BOOK_EXPORT_JOB="+.export_job_id,"LAST_BOOK_BACKUP_JOB="+.backup_job_id'
           echo "LAST_BOOK_EXISTING_AUDIO_MIGRATION_QUEUED=PASS"
+
+  one_time_drive_duplicate_hash_audit:
+    name: Three same-voice audiobook folder pairs — private MD5 readback only
+    if: github.ref == 'refs/heads/audit/legacy-readonly-two-books-20261030'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    permissions:
+      contents: read
+    steps:
+      - name: Compare every M4B name, size and Drive MD5, no modifications
+        shell: bash
+        env:
+          GOOGLE_DRIVE_CLIENT_ID: ${{ secrets.GOOGLE_DRIVE_CLIENT_ID }}
+          GOOGLE_DRIVE_CLIENT_SECRET: ${{ secrets.GOOGLE_DRIVE_CLIENT_SECRET }}
+          GOOGLE_DRIVE_REFRESH_TOKEN: ${{ secrets.GOOGLE_DRIVE_REFRESH_TOKEN }}
+        run: |
+          set -Eeuo pipefail
+          [[ "$GITHUB_REPOSITORY" == "Glassface-khan/aj-khan-library" ]]
+          [[ "$GITHUB_REF" == "refs/heads/audit/legacy-readonly-two-books-20261030" ]]
+          python3 - <<'PY'
+          import json,os,urllib.parse,urllib.request,urllib.error,re
+          KEYS=("GOOGLE_DRIVE_CLIENT_ID","GOOGLE_DRIVE_CLIENT_SECRET","GOOGLE_DRIVE_REFRESH_TOKEN")
+          if not all(os.environ.get(k) for k in KEYS):raise SystemExit("DUPLICATE_AUDIT=BLOCKED_MISSING_OAUTH")
+          payload=urllib.parse.urlencode(dict(grant_type="refresh_token",
+             refresh_token=os.environ[KEYS[2]],client_id=os.environ[KEYS[0]],
+             client_secret=os.environ[KEYS[1]])).encode("utf-8")
+          with urllib.request.urlopen(urllib.request.Request(
+            "https://oauth2.googleapis.com/token",data=payload),timeout=30) as r:
+            token=json.load(r)["access_token"]
+          base="https://www.googleapis.com/drive/v3/files"
+          HEAD={"Authorization":"Bearer "+token}
+          def api(path,params=None):
+            url=base+"/"+path if path else base
+            if params:url+="?"+urllib.parse.urlencode(params)
+            try:
+              with urllib.request.urlopen(urllib.request.Request(url,headers=HEAD),
+                timeout=35) as r:return json.load(r)
+            except urllib.error.HTTPError as exc:
+              print("DUPLICATE_AUDIT_ACCESS_HTTP="+str(exc.code),flush=True)
+              raise SystemExit(3)
+          pairs=[
+            ("DIE ORDNUNG","Arne B.","1Mrk3LOuudkQXPrktjAB4eqsnzXuM3i6k",
+              "1uethUqz6H91-FFRucTc5c0d1RJcVHv4Z",7),
+            ("The Missing Cover","Peter Yearsley","1xm-7YnOVZmG9u1fDp-I-rkoVIekYB0vC",
+              "1u01WRueZxOLWnWxJFf15E3WT-M1wWwM3",5),
+            ("The Road it came by","Mike Jordan","1d-ZnkBRVaEEs7k_GmVNux3212W5pWjK3",
+              "1KqVyQvkIQ05ZsNccqpQaNnmKpHflRM37",7),
+          ]
+          MAIN="1K5_z2WLTehhTrZXuzIHaF60j2zo8G7Ld"
+          def get_folder(fid):
+            x=api(fid,{"fields":"id,name,mimeType,parents,trashed,shared"})
+            if (x.get("id")!=fid or x.get("trashed") or
+                x.get("mimeType")!="application/vnd.google-apps.folder" or
+                x.get("parents")!=[MAIN] or x.get("shared") is True):
+              raise SystemExit("DUPLICATE_AUDIT_FOLDER_OR_PRIVATE_PARENT_MISMATCH")
+            return x
+          def get_files(fid):
+            out={}
+            page=None
+            while True:
+              args={"q":"'"+fid+"' in parents and trashed=false",
+                 "fields":"nextPageToken,files(id,name,mimeType,size,md5Checksum,parents,trashed)",
+                 "pageSize":100}
+              if page:args["pageToken"]=page
+              data=api("",args)
+              for item in data.get("files",[]):
+                name=item.get("name")
+                if not re.fullmatch(r"m4b-\d{3}\.m4b",name or ""):
+                  raise SystemExit("DUPLICATE_AUDIT_UNEXPECTED_NON_M4B")
+                if (name in out or item.get("mimeType")!="audio/mp4" or
+                    item.get("parents")!=[fid] or not item.get("md5Checksum") or
+                    not re.fullmatch(r"[0-9a-f]{32}",item["md5Checksum"]) or
+                    not item.get("size")):
+                  raise SystemExit("DUPLICATE_AUDIT_UNVERIFIED_FILE_METADATA")
+                out[name]={"size":int(item["size"]),"md5":item["md5Checksum"]}
+              page=data.get("nextPageToken")
+              if not page:break
+            return out
+          total=0
+          for title,voice,canonical,duplicate,num in pairs:
+            first=get_folder(canonical)
+            second=get_folder(duplicate)
+            if first["name"]!=second["name"]:
+              raise SystemExit("DUPLICATE_AUDIT_DIFFERENT_SPEAKERS_OR_TITLES")
+            if title.casefold() not in first["name"].casefold() or voice.casefold() not in first["name"].casefold():
+              raise SystemExit("DUPLICATE_AUDIT_BOOK_OR_VOICE_MISMATCH")
+            primary=get_files(canonical)
+            copy=get_files(duplicate)
+            same=(len(primary)==len(copy)==num and primary==copy)
+            print("DUPLICATE_AUDIT_PAIR="+json.dumps({
+              "book":title,"voice":voice,"canonical_folder":canonical,
+              "candidate_folder":duplicate,"file_count":num,
+              "total_bytes":sum(x["size"] for x in primary.values()),
+              "size_md5_identical":same,"all_md5_available":True,
+              "files":[{"name":k,"size":v["size"],"md5":v["md5"]}
+                for k,v in sorted(primary.items())],
+              "no_writes":True},sort_keys=True),flush=True)
+            if not same:raise SystemExit("DUPLICATE_AUDIT_MD5_MISMATCH_NOT_SAFE_TO_DELETE")
+            total+=sum(x["size"] for x in primary.values())
+          print("DUPLICATE_AUDIT_FINAL="+json.dumps({
+            "pairs_checked":len(pairs),"identical_file_copies":sum(p[-1] for p in pairs),
+            "identical_copy_bytes":total,"all_three_pairs_identical":True,
+            "no_writes_or_deletions":True},sort_keys=True),flush=True)
+          PY
