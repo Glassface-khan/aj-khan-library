@@ -1,0 +1,39 @@
+name: AF3 Drive - verify existing private GitHub OAuth read-only
+on:
+  push:
+    branches:
+      - feature/af3-drive-token-readonly-20261030
+    paths:
+      - .github/workflows/af3-drive-existing-oauth-readonly.yml
+permissions:
+  contents: read
+concurrency:
+  group: af3-drive-existing-oauth-readonly
+  cancel-in-progress: false
+jobs:
+  existing-google-drive-auth:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 3
+    steps:
+      - name: Checkout exact branch without persisting credentials
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Check existing owner Google OAuth and selected M4B metadata (max 1024 bytes)
+        env:
+          GOOGLE_DRIVE_CLIENT_ID: ${{ secrets.GOOGLE_DRIVE_CLIENT_ID }}
+          GOOGLE_DRIVE_CLIENT_SECRET: ${{ secrets.GOOGLE_DRIVE_CLIENT_SECRET }}
+          GOOGLE_DRIVE_REFRESH_TOKEN: ${{ secrets.GOOGLE_DRIVE_REFRESH_TOKEN }}
+        run: |
+          set -Eeuo pipefail
+          [[ "$GITHUB_REPOSITORY" == "Glassface-khan/aj-khan-library" ]] || exit 2
+          [[ "$GITHUB_REF" == "refs/heads/feature/af3-drive-token-readonly-20261030" ]] || exit 2
+          python3 -B audiobook-cloud/af3_drive_player_oauth_readonly.py
+      - name: Check preexisting Cloudflare account privately read-only
+        continue-on-error: true
+        env:
+          AJK_CLOUDFLARE_READONLY_TOKEN: ${{ secrets.AJK_CLOUDFLARE_READONLY_TOKEN }}
+          AJK_CLOUDFLARE_ACCOUNT_ID: ${{ secrets.AJK_CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          set -Eeuo pipefail
+          python3 -B .github/scripts/ajk_v2_verify_cloudflare.py
