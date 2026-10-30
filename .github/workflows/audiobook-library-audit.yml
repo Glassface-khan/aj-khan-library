@@ -65,90 +65,39 @@ jobs:
         if: always()
         run: rm -f /tmp/private-audit-oidc
 
-  man_last_private_drive_target_once:
-    name: THE MAN THE WORLD FORGOT private Drive target preflight or new app-owned folder
+  last_one_book_backup_preflight:
+    name: THE MAN THE WORLD FORGOT verified source-to-backup no-write preflight
     if: github.ref == 'refs/heads/audit/legacy-readonly-two-books-20261030'
     runs-on: ubuntu-24.04
-    timeout-minutes: 8
+    timeout-minutes: 6
     permissions:
       contents: read
+      id-token: write
     steps:
-      - name: Reuse private existing target if app can access it, otherwise privately create one
+      - name: Reconfirm exact 48-track QC, private target, and absent jobs
         shell: bash
-        env:
-          GOOGLE_DRIVE_CLIENT_ID: ${{ secrets.GOOGLE_DRIVE_CLIENT_ID }}
-          GOOGLE_DRIVE_CLIENT_SECRET: ${{ secrets.GOOGLE_DRIVE_CLIENT_SECRET }}
-          GOOGLE_DRIVE_REFRESH_TOKEN: ${{ secrets.GOOGLE_DRIVE_REFRESH_TOKEN }}
         run: |
           set -Eeuo pipefail
           [[ "$GITHUB_REPOSITORY" == "Glassface-khan/aj-khan-library" ]]
           [[ "$GITHUB_REF" == "refs/heads/audit/legacy-readonly-two-books-20261030" ]]
-          python3 - <<'PY'
-          import json,os,urllib.request,urllib.error,urllib.parse
-          keys=("GOOGLE_DRIVE_CLIENT_ID","GOOGLE_DRIVE_CLIENT_SECRET","GOOGLE_DRIVE_REFRESH_TOKEN")
-          if not all(os.getenv(k) for k in keys):raise SystemExit("DRIVE_OAUTH_MISSING")
-          body=urllib.parse.urlencode(dict(
-             grant_type="refresh_token",refresh_token=os.getenv(keys[2]),
-             client_id=os.getenv(keys[0]),client_secret=os.getenv(keys[1]))).encode()
-          with urllib.request.urlopen(urllib.request.Request("https://oauth2.googleapis.com/token",data=body),timeout=25) as r:
-              auth=json.load(r)
-          if set(auth.get("scope","").split())!={"https://www.googleapis.com/auth/drive.file"}:
-              raise SystemExit("DRIVE_SCOPE_NOT_LEAST_PRIVILEGE")
-          token=auth["access_token"]
-          base="https://www.googleapis.com/drive/v3"
-          def call(url,body=None,method=None):
-              headers={"Authorization":"Bearer "+token}
-              payload=None
-              if body is not None:
-                  payload=json.dumps(body).encode()
-                  headers["Content-Type"]="application/json"
-              with urllib.request.urlopen(urllib.request.Request(url,data=payload,
-                    method=method,headers=headers),timeout=40) as r:return json.load(r)
-          def private(fid):
-              info=call(base+"/files/"+fid+"?fields=id,mimeType,trashed")
-              if (info.get("id")!=fid or info.get("trashed") or
-                  info.get("mimeType")!="application/vnd.google-apps.folder"):
-                  raise SystemExit("TARGET_METADATA_REJECTED")
-              acl=call(base+"/files/"+fid+"/permissions?fields=permissions(type,role),nextPageToken")
-              if (acl.get("nextPageToken") or not acl.get("permissions") or
-                  any(p.get("type")!="user" for p in acl["permissions"])):
-                  raise SystemExit("TARGET_BROAD_SHARING_REJECTED")
-          existing_id="1MfxOi8eFJaBiMZeKK5womrfuv5x0NW2j"
-          accessible=False
-          try:
-              private(existing_id)
-              accessible=True
-          except urllib.error.HTTPError as exc:
-              if exc.code not in (403,404):raise
-              print("MAN_LAST_EXISTING_TARGET_OAUTH_HTTP="+str(exc.code))
-          if accessible:
-              print("MAN_LAST_PRIVATE_TARGET_ID="+existing_id)
-              print("MAN_LAST_PRIVATE_TARGET_ORIGIN=EXISTING")
-              print("MAN_LAST_PRIVATE_TARGET_ACL_READBACK=PASS")
-              raise SystemExit(0)
-          key="ajkManLastTarget"
-          val="b_the_man_the_world_forgot_v1"
-          q="trashed = false and appProperties has { key = 'ajkManLastTarget' and value = 'b_the_man_the_world_forgot_v1' }"
-          query=urllib.parse.urlencode({"q":q,"fields":"nextPageToken,files(id,name,mimeType,trashed,appProperties)","pageSize":100})
-          found=call(base+"/files?"+query)
-          files=found.get("files",[])
-          if found.get("nextPageToken") or len(files)>1:raise SystemExit("AMBIGUOUS_EXISTING_APP_TARGET")
-          if files:
-              folder=files[0]
-              origin="REUSED_APP_OWNED"
-          else:
-              folder=call(base+"/files?fields=id,name,mimeType,appProperties",{
-                "name":"THE MAN THE WORLD FORGOT - Private Audiobook Backup",
-                "mimeType":"application/vnd.google-apps.folder","appProperties":{key:val}},"POST")
-              origin="NEW_APP_OWNED"
-          fid=str(folder.get("id") or "")
-          if len(fid)<20:raise SystemExit("INVALID_APP_OWNED_ID")
-          private(fid)
-          final=call(base+"/files/"+fid+"?fields=name,appProperties")
-          if (final.get("name")!="THE MAN THE WORLD FORGOT - Private Audiobook Backup" or
-              final.get("appProperties",{}).get(key)!=val):
-              raise SystemExit("APP_OWNED_TARGET_MISMATCH")
-          print("MAN_LAST_PRIVATE_TARGET_ID="+fid)
-          print("MAN_LAST_PRIVATE_TARGET_ORIGIN="+origin)
-          print("MAN_LAST_PRIVATE_TARGET_ACL_READBACK=PASS")
-          PY
+          TOKEN="$(curl --fail --silent --show-error --max-time 30 \
+            -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
+            "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=ajk-man-last-private-qc-20261030" | jq -er '.value')"
+          RESULT="$(curl --fail --silent --show-error --max-time 45 \
+            -X POST -H "Authorization: Bearer $TOKEN" \
+            -H 'Content-Type: application/json' \
+            -d '{"op":"last-migration-readonly-preflight"}' \
+            "https://ipoqyjrojljmbqslmxxf.supabase.co/functions/v1/ajk-man-last-private-qc-once")"
+          if [[ "$(printf '%s' "$RESULT" | jq -r '.ok')" != "true" ]]; then
+            printf '%s' "$RESULT" | jq -r '"LAST_BOOK_PREFLIGHT_BLOCKED="+(.error // "unknown")'
+            exit 2
+          fi
+          printf '%s' "$RESULT" | jq -e \
+             '.ok == true and .state == "ELIGIBLE_FOR_EXISTING_AUDIO_BACKUP" and
+              .book_id == "b4e3bde1-7d88-4a04-a68f-55ca249af0ce" and
+              .folder_id == "1loeST6DXr7CsouRVKB5sz09W6TQFNgTy" and
+              .mp3_count == 48 and .mp3_bytes == 283195392 and
+              .source_sha256 == "10e279c192d271e0b36121c832ca18387c7b7887478ffcc1bbf94a35ee9a348a" and
+              .no_synthesis == true and .no_changes == true and
+              (.fingerprint | test("^[a-f0-9]{64}$"))' >/dev/null
+          echo "LAST_BOOK_BACKUP_PREFLIGHT=PASS_NO_WRITES"
