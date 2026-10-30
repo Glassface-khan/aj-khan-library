@@ -160,8 +160,8 @@ def retrieve_private_mp3(base, chapter, dest):
         fail("AUDIO_DURATION_MISMATCH")
     return duration
 
-def sample_mp3(path, dest, duration):
-    start = max(0., min(duration * .46, duration - 37.))
+def sample_mp3(path, dest, duration, fraction=.46):
+    start = max(0., min(duration * fraction, duration - 37.))
     subprocess.run(["ffmpeg", "-nostdin", "-y", "-hide_banner", "-loglevel", "error",
                     "-ss", f"{start:.2f}", "-i", str(path), "-t", "35",
                     "-vn", "-ac", "1", "-ar", "16000", "-c:a", "pcm_s16le",
@@ -190,18 +190,23 @@ def audit_edition(base, ed, model):
             audio, wav = folder / "audio.mp3", folder / "clip.wav"
             try:
                 duration = retrieve_private_mp3(base, ch, audio)
-                offset = sample_mp3(audio, wav, duration)
-                segments, _ = model.transcribe(str(wav), language="en",
-                    beam_size=3, temperature=0., vad_filter=False,
-                    condition_on_previous_text=False)
-                text = " ".join(part.text.strip() for part in segments)
-                score, n = best_alignment(text, s.spoken_text)
-                scores.append(score)
-                # Never print text/audio, storage paths, URLs, or transcripts.
-                print("LEGACY_QC_CHAPTER " + json.dumps(
-                    {"book": ed["title"], "chapter_index": idx,
-                     "score": score, "recognized_words": n,
-                     "sample_second": offset}, sort_keys=True), flush=True)
+                chapter_scores = []
+                # Coda is slower than other chapters: verify a second, later point.
+                fractions = (.46, .76) if idx == 48 else (.46,)
+                for fraction in fractions:
+                    offset = sample_mp3(audio, wav, duration, fraction)
+                    segments, _ = model.transcribe(str(wav), language="en",
+                        beam_size=3, temperature=0., vad_filter=False,
+                        condition_on_previous_text=False)
+                    text = " ".join(part.text.strip() for part in segments)
+                    score, n = best_alignment(text, s.spoken_text)
+                    chapter_scores.append(score)
+                    # Never print text/audio, storage paths, URLs, or transcripts.
+                    print("LEGACY_QC_CHAPTER " + json.dumps(
+                        {"book": ed["title"], "chapter_index": idx,
+                         "score": score, "recognized_words": n,
+                         "sample_second": offset}, sort_keys=True), flush=True)
+                scores.append(min(chapter_scores))
             finally:
                 audio.unlink(missing_ok=True)
                 wav.unlink(missing_ok=True)
