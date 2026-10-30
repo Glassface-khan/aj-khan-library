@@ -64,17 +64,21 @@ jobs:
         if: always()
         run: rm -f /tmp/private-audit-oidc
 
-  guest_single_export_enqueue_once:
-    name: Queue precisely THE GUEST existing-audio M4B and private Drive backup
+  guest_backup_transport_readonly_probe:
+    name: Diagnose existing M4B signed source and Drive target without uploads
     if: github.ref == 'refs/heads/audit/legacy-readonly-two-books-20261030'
     runs-on: ubuntu-24.04
-    timeout-minutes: 6
+    timeout-minutes: 8
     permissions:
       contents: read
       id-token: write
     steps:
-      - name: Enqueue only after pinned passed 49-track ASR proof and exact private destination
+      - name: First M4B source range GET, identity and private folder readback only
         shell: bash
+        env:
+          GOOGLE_DRIVE_CLIENT_ID: ${{ secrets.GOOGLE_DRIVE_CLIENT_ID }}
+          GOOGLE_DRIVE_CLIENT_SECRET: ${{ secrets.GOOGLE_DRIVE_CLIENT_SECRET }}
+          GOOGLE_DRIVE_REFRESH_TOKEN: ${{ secrets.GOOGLE_DRIVE_REFRESH_TOKEN }}
         run: |
           set -Eeuo pipefail
           [[ "$GITHUB_REPOSITORY" == "Glassface-khan/aj-khan-library" ]]
@@ -83,22 +87,38 @@ jobs:
             -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
             "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=ajk-guest-qc-private-source-20261030" \
             | jq -er '.value')"
-          RESULT="$(curl --fail --silent --show-error --max-time 45 \
+          RESULT="$(curl --fail --silent --show-error --max-time 35 \
             -X POST -H "Authorization: Bearer $TOKEN" \
             -H 'Content-Type: application/json' \
-            -d '{"op":"guest-queue-existing-audio-backup"}' \
+            -d '{"op":"guest-backup-source-readonly-probe"}' \
             "https://ipoqyjrojljmbqslmxxf.supabase.co/functions/v1/ajk-guest-qc-private-source-once")"
-          if [[ "$(printf '%s' "$RESULT" | jq -r '.ok')" != "true" ]]; then
-            printf '%s' "$RESULT" | jq -r '"GUEST_ENQUEUE_BLOCKED="+((.error // "unknown") | tostring | .[0:100])'
-            exit 2
-          fi
-          printf '%s' "$RESULT" | jq -e \
-            '.ok == true and .state == "QUEUED_EXISTING_AUDIO_ONLY" and
-             .folderId == "1hlhzCQa1q5R3BexWCgPBK9mGNFX-s4ho" and
-             .chapters == 49 and .bytes == 312821132 and
-             .no_synthesis == true and .no_overwrites == true and
-             (.fingerprint | test("^[a-f0-9]{64}$")) and
-             (.exportJobId | test("^[0-9a-f-]{36}$")) and
-             (.backupJobId | test("^[0-9a-f-]{36}$"))' >/dev/null
-          printf '%s' "$RESULT" | jq -r '"GUEST_EXPORT_JOB_ID="+.exportJobId,"GUEST_BACKUP_JOB_ID="+.backupJobId'
-          echo "GUEST_EXISTING_AUDIO_MIGRATION_QUEUED=PASS"
+          printf '%s' "$RESULT" | jq -c '{ok,state,status,content_range_matches,content_length,source_name,no_writes,error}'
+          python3 - <<'PY'
+          import os,json,urllib.request,urllib.parse,urllib.error
+          keys=("GOOGLE_DRIVE_CLIENT_ID","GOOGLE_DRIVE_CLIENT_SECRET","GOOGLE_DRIVE_REFRESH_TOKEN")
+          if not all(os.getenv(x) for x in keys):raise SystemExit("GUEST_BACKUP_OAUTH_MISSING")
+          payload=urllib.parse.urlencode(dict(
+              client_id=os.getenv(keys[0]),client_secret=os.getenv(keys[1]),
+              refresh_token=os.getenv(keys[2]),grant_type="refresh_token")).encode()
+          with urllib.request.urlopen(urllib.request.Request("https://oauth2.googleapis.com/token",data=payload),timeout=30) as r:
+              token=json.load(r)["access_token"]
+          folder="1Vn6lY4Eyj1VyO0J8bPUjhStLzYcdeX94"
+          target="https://www.googleapis.com/drive/v3/files/"+folder+"?fields=id,capabilities(canAddChildren),mimeType,trashed"
+          req=urllib.request.Request(target,headers={"Authorization":"Bearer "+token})
+          try:
+              with urllib.request.urlopen(req,timeout=25) as r:response=json.load(r)
+              print("GUEST_BACKUP_SUBFOLDER_READ_STATUS=200")
+              print("GUEST_BACKUP_SUBFOLDER_CAN_ADD="+str(response.get("capabilities",{}).get("canAddChildren")).lower())
+              print("GUEST_BACKUP_SUBFOLDER_IS_FOLDER="+str(response.get("mimeType")=="application/vnd.google-apps.folder").lower())
+          except urllib.error.HTTPError as e:
+              print("GUEST_BACKUP_SUBFOLDER_READ_STATUS="+str(e.code))
+          req=urllib.request.Request("https://www.googleapis.com/drive/v3/about?fields=storageQuota",
+                                  headers={"Authorization":"Bearer "+token})
+          try:
+              with urllib.request.urlopen(req,timeout=25) as r:data=json.load(r)
+              q=data.get("storageQuota",{})
+              print("GUEST_DRIVE_STORAGE_LIMIT="+str(q.get("limit","unknown")))
+              print("GUEST_DRIVE_STORAGE_USAGE="+str(q.get("usage","unknown")))
+          except urllib.error.HTTPError as e:
+              print("GUEST_DRIVE_QUOTA_QUERY_HTTP="+str(e.code))
+          PY
