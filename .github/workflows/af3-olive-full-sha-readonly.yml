@@ -1,0 +1,30 @@
+name: AF3 Olive - one-shot full private Drive SHA256 readback
+on:
+  push:
+    branches:
+      - feature/af3-drive-token-readonly-20261030
+    paths:
+      - .github/workflows/af3-olive-full-sha-readonly.yml
+permissions:
+  contents: read
+concurrency:
+  group: af3-olive-full-drive-sha-readonly
+  cancel-in-progress: false
+jobs:
+  hash-existing-drive-olive-only:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Read full existing M4B via Google API, hash in memory, never store or write
+        env:
+          GOOGLE_DRIVE_CLIENT_ID: ${{ secrets.GOOGLE_DRIVE_CLIENT_ID }}
+          GOOGLE_DRIVE_CLIENT_SECRET: ${{ secrets.GOOGLE_DRIVE_CLIENT_SECRET }}
+          GOOGLE_DRIVE_REFRESH_TOKEN: ${{ secrets.GOOGLE_DRIVE_REFRESH_TOKEN }}
+        run: |
+          set -Eeuo pipefail
+          [[ "$GITHUB_REPOSITORY" == "Glassface-khan/aj-khan-library" ]] || exit 2
+          [[ "$GITHUB_REF" == "refs/heads/feature/af3-drive-token-readonly-20261030" ]] || exit 2
+          python3 -B audiobook-cloud/af3_olive_full_drive_sha_readonly.py
