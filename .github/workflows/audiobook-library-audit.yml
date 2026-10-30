@@ -130,7 +130,7 @@ jobs:
           try:
               snap=json.loads(Path("/tmp/ajk_guest_first_source.json").read_text())
               folder="1Vn6lY4Eyj1VyO0J8bPUjhStLzYcdeX94"
-              key=snap["edition_id"]+":"+snap["name"]
+              key=hashlib.sha256((snap["edition_id"]+":"+snap["name"]).encode("utf-8")).hexdigest()
               stage="validate_private_folders"
               drive=DebugDrive()
               drive.check_private("1hlhzCQa1q5R3BexWCgPBK9mGNFX-s4ho")
