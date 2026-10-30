@@ -27,7 +27,7 @@ def main():
     headers={"Authorization":"Bearer "+token,"Accept":"application/json"}
     def read(path):
         if not (path.startswith("/accounts?") or re.fullmatch(
-            r"/accounts/[0-9a-f]{32}/(?:workers/(?:scripts(?:/[A-Za-z0-9_-]{1,120}/settings)?|subdomain|domains)|access/apps|subscriptions)(?:\?per_page=[0-9]+)?",
+            r"/accounts/[0-9a-f]{32}/(?:workers/(?:scripts(?:/[A-Za-z0-9_-]{1,120}(?:/settings|/subdomain)?)?|subdomain|domains)|access/apps|subscriptions)(?:\?per_page=[0-9]+)?",
             path)):
             raise ValueError("Unsafe read path")
         req=urllib.request.Request(HOST+path,headers=headers,method="GET")
@@ -79,6 +79,32 @@ def main():
         print("AF3_CF_WORKER_"+str(idx)+"_ROLE_HINT="+(",".join(roles) if roles else "unclassified"))
         print("AF3_CF_WORKER_"+str(idx)+"_LAST_MODIFIED_PRESENT="+str(bool(s.get("modified_on"))).lower())
         print("AF3_CF_WORKER_"+str(idx)+"_WORKERS_DEV="+str(s.get("workers_dev", "not_in_list")))
+        public,substatus,_=read("/accounts/"+account_id+"/workers/scripts/"+name+"/subdomain")
+        print("AF3_CF_WORKER_"+str(idx)+"_SUBDOMAIN_STATUS="+substatus)
+        if substatus=="OK" and isinstance(public,dict):
+            print("AF3_CF_WORKER_"+str(idx)+"_WORKERS_DEV_ENABLED="+str(public.get("enabled") is True).lower())
+            print("AF3_CF_WORKER_"+str(idx)+"_PREVIEW_ENABLED="+str(public.get("previews_enabled") is True).lower())
+        # Read a limited source sample ONLY to classify this EXISTING Worker,
+        # without printing/redistributing the source or using its endpoints.
+        get=urllib.request.Request(
+            HOST+"/accounts/"+account_id+"/workers/scripts/"+name,
+            headers=headers,method="GET")
+        try:
+            with opener.open(get,timeout=25) as response:
+                if response.status!=200:raise ValueError("source status")
+                source=response.read(750_001)
+                if len(source)>750_000:raise ValueError("source too large")
+            low=source.lower()
+            print("AF3_CF_WORKER_"+str(idx)+"_SOURCE_READ=OK")
+            print("AF3_CF_WORKER_"+str(idx)+"_SOURCE_HAS_R2="+str(b"r2" in low).lower())
+            print("AF3_CF_WORKER_"+str(idx)+"_SOURCE_HAS_D1="+str(b"d1" in low).lower())
+            print("AF3_CF_WORKER_"+str(idx)+"_SOURCE_HAS_AUDIOBOOK="+str(b"audiobook" in low).lower())
+            print("AF3_CF_WORKER_"+str(idx)+"_SOURCE_HAS_CLOUDFLARE_ACCESS="+str(b"cf-access-jwt-assertion" in low).lower())
+            print("AF3_CF_WORKER_"+str(idx)+"_SOURCE_EQUALS_NEW_AF3=false")
+        except urllib.error.HTTPError as exc:
+            print("AF3_CF_WORKER_"+str(idx)+"_SOURCE_READ=HTTP_"+str(exc.code))
+        except Exception:
+            print("AF3_CF_WORKER_"+str(idx)+"_SOURCE_READ=UNAVAILABLE")
         settings,st,codes=read("/accounts/"+account_id+"/workers/scripts/"+urllib.parse.quote(name,safe="")+"/settings")
         print("AF3_CF_WORKER_"+str(idx)+"_SETTINGS="+st)
         if st=="OK" and isinstance(settings,dict):
