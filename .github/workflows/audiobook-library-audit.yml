@@ -64,8 +64,8 @@ jobs:
         if: always()
         run: rm -f /tmp/private-audit-oidc
 
-  guest_export_readonly_preflight:
-    name: Verify only THE GUEST existing-audio export eligibility
+  guest_single_export_enqueue_once:
+    name: Queue precisely THE GUEST existing-audio M4B and private Drive backup
     if: github.ref == 'refs/heads/audit/legacy-readonly-two-books-20261030'
     runs-on: ubuntu-24.04
     timeout-minutes: 6
@@ -73,7 +73,7 @@ jobs:
       contents: read
       id-token: write
     steps:
-      - name: Check pinned QC proof and private target, zero writes
+      - name: Enqueue only after pinned passed 49-track ASR proof and exact private destination
         shell: bash
         run: |
           set -Eeuo pipefail
@@ -89,10 +89,12 @@ jobs:
             -d '{"op":"guest-migration-preflight"}' \
             "https://ipoqyjrojljmbqslmxxf.supabase.co/functions/v1/ajk-guest-qc-private-source-once")"
           printf '%s' "$RESULT" | jq -e \
-            '.ok == true and .state == "ELIGIBLE_FOR_ONE_EXISTING_AUDIO_BACKUP" and
+            '.ok == true and .state == "QUEUED_EXISTING_AUDIO_ONLY" and
              .folderId == "1hlhzCQa1q5R3BexWCgPBK9mGNFX-s4ho" and
-             .bookId == "9b8e8520-4aa2-4337-aa61-5c3a10ce2a6f" and
              .chapters == 49 and .bytes == 312821132 and
-             .no_synthesis == true and .no_data_changes == true and
-             (.fingerprint | test("^[a-f0-9]{64}$"))' >/dev/null
-          echo "GUEST_EXPORT_PREFLIGHT=PASS_NO_WRITES"
+             .no_synthesis == true and .no_overwrites == true and
+             (.fingerprint | test("^[a-f0-9]{64}$")) and
+             (.exportJobId | test("^[0-9a-f-]{36}$")) and
+             (.backupJobId | test("^[0-9a-f-]{36}$"))' >/dev/null
+          printf '%s' "$RESULT" | jq -r '"GUEST_EXPORT_JOB_ID="+.exportJobId,"GUEST_BACKUP_JOB_ID="+.backupJobId'
+          echo "GUEST_EXISTING_AUDIO_MIGRATION_QUEUED=PASS"
