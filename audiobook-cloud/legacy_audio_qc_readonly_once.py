@@ -22,6 +22,7 @@ from faster_whisper import WhisperModel
 
 sys.path.insert(0, str(Path(__file__).parent))
 from worker import parse_source
+from docx import Document
 from audit_existing_audiobooks import best_alignment
 
 BASE = "https://ipoqyjrojljmbqslmxxf.supabase.co"
@@ -74,6 +75,29 @@ LOCKED_PATH = ("qc-locked-sources/9b8e8520-4aa2-4337-aa61-5c3a10ce2a6f/"
                "THE_GUEST_PUBLICATION_MASTER_v1_0_FINAL.docx")
 LOCKED_SHA256 = "f73d674a3f6bcdbf63d8880c085eb447e080946128ade41b521a81b76789f9d6"
 LOCKED_BYTES = 243128
+
+def guest_narrative_sections(source: Path, parsed):
+    """Exclude the four *backmatter* headings; never edit the locked DOCX or worker."""
+    headings = [
+        p.text.strip() for p in Document(str(source)).paragraphs
+        if p.text.strip() and p.style.name == "Heading 1"
+    ]
+    front = ("Copyright", "Dedication", "Epigraph")
+    back = ("Author’s Note", "Historical & Philosophical Context",
+            "Glossary", "About the Author")
+    middle = headings[len(front):-len(back)]
+    if (tuple(headings[:len(front)]) != front
+        or tuple(headings[-len(back):]) != back
+        or len(middle) != 49
+        or middle[0] != "Prologue" or middle[-1] != "Coda"
+        or not all(x.startswith("Chapter ") for x in middle[1:-1])
+        or len(parsed) != 53
+        or [int(s.index) for s in parsed] != list(range(53))):
+        fail("GUEST_LOCKED_SOURCE_CHAPTER_BOUNDARY_UNEXPECTED")
+    chapters = list(parsed[:49])
+    if any(len(s.spoken_text.split()) < 70 for s in chapters):
+        fail("GUEST_NARRATIVE_SECTION_EMPTY")
+    return chapters
 
 
 def read_locked_master(base, title, path):
@@ -145,7 +169,8 @@ def audit_edition(base, ed, model):
         folder = Path(tmp)
         source = folder / "locked.docx"
         source_size = read_locked_master(base, ed["document"], source)
-        _, sections, _ = parse_source(source)
+        _, all_sections, _ = parse_source(source)
+        sections = guest_narrative_sections(source, all_sections)
         chapters = list_private_chapters(base, ed)
         by_index = {int(s.index): s for s in sections}
         if len(by_index) != ed["chapters"] or set(by_index) != set(range(ed["chapters"])):
@@ -212,7 +237,8 @@ def main():
         with tempfile.TemporaryDirectory(prefix="ajk_guest_source_probe_") as root:
             dest = Path(root) / "original.docx"
             nbytes = read_locked_master(base, ed["document"], dest)
-            _, sections, _ = parse_source(dest)
+            _, all_sections, _ = parse_source(dest)
+            sections = guest_narrative_sections(dest, all_sections)
             indexes = [int(s.index) for s in sections]
             aligned = indexes == list(range(ed["chapters"]))
             print("GUEST_SOURCE_PROBE " + json.dumps({
