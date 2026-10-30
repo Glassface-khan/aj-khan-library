@@ -71,6 +71,7 @@ jobs:
     timeout-minutes: 15
     permissions:
       contents: read
+      id-token: write
     env:
       OMP_NUM_THREADS: "2"
       MKL_NUM_THREADS: "2"
@@ -95,14 +96,32 @@ jobs:
             'python-docx==1.2.0' 'rapidfuzz>=3.10,<4' 'faster-whisper==1.2.1' 'av>=14,<19'
       - name: Run synthetic-only audit self-test (no remote accesses)
         run: python audiobook-cloud/legacy_audio_qc_readonly_once.py --self-test
-      - name: Read-only ASR/MP3 audit for exactly two legacy editions
+      - name: One-time private source transfer with GitHub OIDC and byte readback
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          [[ "$GITHUB_REPOSITORY" == "Glassface-khan/aj-khan-library" ]]
+          [[ "$GITHUB_REF" == "refs/heads/audit/legacy-readonly-two-books-20261030" ]]
+          umask 077
+          OIDC_JSON="$(curl --fail --silent --show-error --max-time 30 \
+            -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
+            "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=ajk-guest-qc-private-source-20261030")"
+          OIDC_TOKEN="$(printf '%s' "$OIDC_JSON" | jq -er '.value')"
+          RESPONSE="$(curl --fail --silent --show-error --max-time 105 -X POST \
+            -H "Authorization: Bearer $OIDC_TOKEN" \
+            -H "Content-Type: application/json" \
+            "https://ipoqyjrojljmbqslmxxf.supabase.co/functions/v1/ajk-guest-qc-private-source-once")"
+          printf '%s' "$RESPONSE" | jq -e \
+            --arg hash 'f73d674a3f6bcdbf63d8880c085eb447e080946128ade41b521a81b76789f9d6' \
+            --arg path 'qc-locked-sources/9b8e8520-4aa2-4337-aa61-5c3a10ce2a6f/THE_GUEST_PUBLICATION_MASTER_v1_0_FINAL.docx' \
+            '.ok == true and .sha256 == $hash and .path == $path and .bytes == 243128 and
+             (.classification == "UPLOADED_AND_VERIFIED" or .classification == "ALREADY_VERIFIED")' >/dev/null
+          echo "GUEST_LOCKED_PRIVATE_SOURCE_READBACK=PASS"
+      - name: Verify exact locked manuscript from private storage (no audio, no writes)
         shell: bash
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-          GOOGLE_DRIVE_CLIENT_ID: ${{ secrets.GOOGLE_DRIVE_CLIENT_ID }}
-          GOOGLE_DRIVE_CLIENT_SECRET: ${{ secrets.GOOGLE_DRIVE_CLIENT_SECRET }}
-          GOOGLE_DRIVE_REFRESH_TOKEN: ${{ secrets.GOOGLE_DRIVE_REFRESH_TOKEN }}
         run: |
           set -Eeuo pipefail
           [[ "$GITHUB_REPOSITORY" == "Glassface-khan/aj-khan-library" ]]

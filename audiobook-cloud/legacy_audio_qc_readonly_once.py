@@ -7,6 +7,7 @@ The result is a *sample from each chapter*, NOT an exhaustive full-text QC pass.
 """
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import statistics
@@ -28,20 +29,14 @@ EDITIONS = (
     dict(title="The Guest", book_id="9b8e8520-4aa2-4337-aa61-5c3a10ce2a6f",
          voice="narration_us_f", chapters=49, bytes=312821132,
          document="THE_GUEST_PUBLICATION_MASTER_v1_0_FINAL.docx"),
-    dict(title="The Man the World Forgot", book_id="b4e3bde1-7d88-4a04-a68f-55ca249af0ce",
-         voice="peter_yearsley", chapters=48, bytes=283195392,
-         document="THE_MAN_THE_WORLD_FORGOT_PUBLICATION_MASTER_FINAL_v1.docx"),
 )
 
 def fail(reason):
     raise RuntimeError(reason)
 
 def require_credentials():
-    required = ("SUPABASE_SERVICE_ROLE_KEY", "GOOGLE_DRIVE_CLIENT_ID",
-                "GOOGLE_DRIVE_CLIENT_SECRET", "GOOGLE_DRIVE_REFRESH_TOKEN")
-    missing = [key for key in required if not os.getenv(key)]
-    if missing:
-        fail("MISSING_CONFIG_" + "_".join(missing))
+    if not os.getenv("SUPABASE_SERVICE_ROLE_KEY"):
+        fail("MISSING_CONFIG_SUPABASE_SERVICE_ROLE_KEY")
     base = os.getenv("SUPABASE_URL", BASE).rstrip("/")
     if base != BASE:
         fail("SUPABASE_PROJECT_MISMATCH")
@@ -57,92 +52,26 @@ def supa_get(base, endpoint, params=None, stream=False):
         fail("SUPABASE_READ_REJECTED_" + str(r.status_code))
     return r
 
-def drive_access_token():
-    r = requests.post(
-        "https://oauth2.googleapis.com/token",
-        data=dict(grant_type="refresh_token",
-                  refresh_token=os.environ["GOOGLE_DRIVE_REFRESH_TOKEN"],
-                  client_id=os.environ["GOOGLE_DRIVE_CLIENT_ID"],
-                  client_secret=os.environ["GOOGLE_DRIVE_CLIENT_SECRET"]),
-        timeout=30)
-    if r.status_code != 200:
-        fail("DRIVE_OAUTH_REJECTED_" + str(r.status_code))
-    return r.json()["access_token"]
-
-# Exact private Drive document IDs established through an authenticated metadata read.
-# The branch-only QC uses these IDs solely to diagnose the legacy OAuth name-search gap.
-PINNED_MASTER_IDS = {
-    "THE_GUEST_PUBLICATION_MASTER_v1_0_FINAL.docx": "1s1JHjYUlb2RbFPNB6X-pv-YWF9Z0ifdN",
-    "THE_MAN_THE_WORLD_FORGOT_PUBLICATION_MASTER_FINAL_v1.docx": "15GYGelGGAIPEVPGkXZeM5HpqrTRZzokq",
-}
-
-def diagnose_drive_oauth(token):
-    # Only classify the account/scope: never log an email, token or private path.
-    user = requests.get("https://www.googleapis.com/drive/v3/about",
-                        params={"fields": "user(emailAddress)"},
-                        headers={"Authorization": "Bearer " + token},
-                        timeout=25, allow_redirects=False)
-    identity = user.json().get("user", {}).get("emailAddress") if user.status_code == 200 else None
-    info = requests.get("https://oauth2.googleapis.com/tokeninfo",
-                        params={"access_token": token}, timeout=25,
-                        allow_redirects=False)
-    scopes = set(info.json().get("scope", "").split()) if info.status_code == 200 else set()
-    category = ("full_drive" if "https://www.googleapis.com/auth/drive" in scopes
-                else "drive_readonly" if "https://www.googleapis.com/auth/drive.readonly" in scopes
-                else "drive_file_only" if "https://www.googleapis.com/auth/drive.file" in scopes
-                else "other_or_unknown")
-    print("LEGACY_DRIVE_OAUTH_DIAGNOSTIC " + json.dumps({
-        "identity_check_status": user.status_code,
-        "identity_known": bool(identity),
-        "same_as_private_drive_owner": identity == "ali.khan.j@gmail.com" if identity else None,
-        "scope_check_status": info.status_code,
-        "drive_scope": category,
-        "no_mutations": True}, sort_keys=True), flush=True)
+LOCKED_BUCKET = "audiobook-factory"
+LOCKED_PATH = ("qc-locked-sources/9b8e8520-4aa2-4337-aa61-5c3a10ce2a6f/"
+               "THE_GUEST_PUBLICATION_MASTER_v1_0_FINAL.docx")
+LOCKED_SHA256 = "f73d674a3f6bcdbf63d8880c085eb447e080946128ade41b521a81b76789f9d6"
+LOCKED_BYTES = 243128
 
 
-def read_locked_master(token, title, path):
-    # No publicly accessible link or signed URL. Exact-name private Drive lookup.
-    escaped = title.replace("'", "\\'")
-    params = dict(q="name = '" + escaped +
-                  "' and mimeType = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' and trashed = false",
-                  fields="nextPageToken,incompleteSearch,files(id,name,size,mimeType)", pageSize=100)
-    headers = {"Authorization": "Bearer " + token}
-    r = requests.get("https://www.googleapis.com/drive/v3/files",
-                     headers=headers, params=params, timeout=40)
-    if r.status_code != 200:
-        fail("DRIVE_LIST_DENIED_" + str(r.status_code))
-    payload = r.json()
-    files = payload.get("files") or []
-    if payload.get("incompleteSearch") or payload.get("nextPageToken") or len(files) > 1:
-        fail("DRIVE_MASTER_SEARCH_NOT_UNIQUE_" + str(len(files)))
-    if not files:
-        # A drive.file-scoped GitHub OAuth token can fail to list user-owned legacy
-        # files. Probe only the two independently verified private IDs, read-only.
-        pinned_id = PINNED_MASTER_IDS.get(title)
-        if not pinned_id:
-            fail("DRIVE_MASTER_NOT_PINNED")
-        probe = requests.get(
-            "https://www.googleapis.com/drive/v3/files/" + quote(pinned_id, safe=""),
-            headers=headers, params={"fields": "id,name,size,mimeType,trashed"},
-            timeout=40, allow_redirects=False)
-        if probe.status_code != 200:
-            fail("DRIVE_PINNED_MASTER_METADATA_REJECTED_" + str(probe.status_code))
-        info = probe.json()
-        if (info.get("id") != pinned_id or info.get("name") != title
-                or info.get("trashed") is not False
-                or info.get("mimeType") != "application/vnd.openxmlformats-officedocument.wordprocessingml.document"):
-            fail("DRIVE_PINNED_MASTER_METADATA_MISMATCH")
-        files = [info]
-    media = requests.get("https://www.googleapis.com/drive/v3/files/" +
-                         quote(files[0]["id"], safe=""),
-                         headers=headers, params={"alt": "media"}, timeout=100,
-                         allow_redirects=False)
-    if media.status_code != 200:
-        fail("DRIVE_SOURCE_DOWNLOAD_DENIED_" + str(media.status_code))
-    if not (10000 < len(media.content) < 20000000) or media.content[:2] != b"PK":
-        fail("DRIVE_SOURCE_NOT_DOCX")
-    path.write_bytes(media.content)
-    return len(media.content)
+def read_locked_master(base, title, path):
+    if title != "THE_GUEST_PUBLICATION_MASTER_v1_0_FINAL.docx":
+        fail("UNEXPECTED_MANUSCRIPT_TITLE")
+    r = supa_get(base, "/storage/v1/object/" + LOCKED_BUCKET + "/" +
+                 quote(LOCKED_PATH, safe="/"))
+    data = r.content
+    r.close()
+    if (len(data) != LOCKED_BYTES or data[:2] != b"PK"
+            or hashlib.sha256(data).hexdigest() != LOCKED_SHA256):
+        fail("PRIVATE_MANUSCRIPT_INTEGRITY_FAILURE")
+    path.write_bytes(data)
+    return len(data)
+
 
 def list_private_chapters(base, ed):
     book = supa_get(base, "/rest/v1/audio_books",
@@ -203,11 +132,11 @@ def sample_mp3(path, dest, duration):
         fail("AUDIO_DECODED_CLIP_TOO_SHORT")
     return round(start, 1)
 
-def audit_edition(base, token, ed, model):
+def audit_edition(base, ed, model):
     with tempfile.TemporaryDirectory(prefix="ajk_legacy_qc_") as tmp:
         folder = Path(tmp)
         source = folder / "locked.docx"
-        source_size = read_locked_master(token, ed["document"], source)
+        source_size = read_locked_master(base, ed["document"], source)
         _, sections, _ = parse_source(source)
         chapters = list_private_chapters(base, ed)
         by_index = {int(s.index): s for s in sections}
@@ -256,9 +185,9 @@ def audit_edition(base, token, ed, model):
         return passed
 
 def self_test():
-    assert len(EDITIONS) == 2
-    assert EDITIONS[0]["book_id"] != EDITIONS[1]["book_id"]
-    assert sum(e["chapters"] for e in EDITIONS) == 97
+    assert len(EDITIONS) == 1
+    assert EDITIONS[0]["book_id"] == "9b8e8520-4aa2-4337-aa61-5c3a10ce2a6f"
+    assert sum(e["chapters"] for e in EDITIONS) == 49
     test = "the old house stood beside the river at dawn and waited for the visitor"
     score, words = best_alignment(test,
         "before the rain, " + test + " until the last light faded across the water")
@@ -270,52 +199,34 @@ def main():
         self_test()
         return 0
     if len(sys.argv) == 2 and sys.argv[1] == "--source-probe":
-        required = ("GOOGLE_DRIVE_CLIENT_ID", "GOOGLE_DRIVE_CLIENT_SECRET", "GOOGLE_DRIVE_REFRESH_TOKEN")
-        missing = [key for key in required if not os.getenv(key)]
-        if missing:
-            fail("DRIVE_PROBE_MISSING_CONFIG_" + "_".join(missing))
-        token = drive_access_token()
-        diagnose_drive_oauth(token)
-        all_good = True
-        with tempfile.TemporaryDirectory(prefix="ajk_source_probe_") as root:
-            for ed in EDITIONS:
-                try:
-                    dest = Path(root) / "original.docx"
-                    nbytes = read_locked_master(token, ed["document"], dest)
-                    _, sections, _ = parse_source(dest)
-                    indexes = [int(s.index) for s in sections]
-                    aligned = indexes == list(range(ed["chapters"]))
-                    print("LEGACY_SOURCE_PROBE " + json.dumps({
-                        "book": ed["title"], "docx_bytes": nbytes,
-                        "parsed_sections": len(indexes),
-                        "expected_sections": ed["chapters"],
-                        "index_continuity": aligned,
-                        "classification": "SOURCE_READY" if aligned else "SOURCE_STRUCTURE_REVIEW"
-                    }, sort_keys=True), flush=True)
-                    all_good = aligned and all_good
-                except Exception as exc:
-                    print("LEGACY_SOURCE_PROBE " + json.dumps({
-                        "book": ed["title"],
-                        "classification": "BLOCKED",
-                        "error_type": type(exc).__name__,
-                        "reason": str(exc)[:120] if isinstance(exc, RuntimeError) else "SOURCE_PARSE_ERROR"
-                    }, sort_keys=True), flush=True)
-                    all_good = False
-        print("LEGACY_SOURCE_FINAL " + json.dumps({
-            "sources_ready": all_good, "no_audio_access": True,
-            "no_writes": True}, sort_keys=True), flush=True)
-        return 0 if all_good else 2
+        base = require_credentials()
+        ed = EDITIONS[0]
+        with tempfile.TemporaryDirectory(prefix="ajk_guest_source_probe_") as root:
+            dest = Path(root) / "original.docx"
+            nbytes = read_locked_master(base, ed["document"], dest)
+            _, sections, _ = parse_source(dest)
+            indexes = [int(s.index) for s in sections]
+            aligned = indexes == list(range(ed["chapters"]))
+            print("GUEST_SOURCE_PROBE " + json.dumps({
+                "book": ed["title"], "docx_bytes": nbytes,
+                "sha256_verified": True,
+                "parsed_sections": len(indexes),
+                "expected_sections": ed["chapters"],
+                "index_continuity": aligned,
+                "classification": "SOURCE_READY" if aligned else "SOURCE_STRUCTURE_REVIEW",
+                "no_audio_access": True, "no_writes": True
+            }, sort_keys=True), flush=True)
+            return 0 if aligned else 2
     if len(sys.argv) != 1:
         fail("UNRECOGNIZED_ARGUMENTS")
     base = require_credentials()
-    print("LEGACY_QC_MODE=READ_ONLY_TWO_EXACT_EDITIONS", flush=True)
-    token = drive_access_token()
+    print("LEGACY_QC_MODE=READ_ONLY_GUEST_EXACT_EDITION", flush=True)
     model = WhisperModel("base.en", device="cpu",
                          compute_type="int8", cpu_threads=2, num_workers=1)
     results = []
     for edition in EDITIONS:
         try:
-            results.append(audit_edition(base, token, edition, model))
+            results.append(audit_edition(base, edition, model))
         except Exception as e:
             # Deliberately log only a bounded error TYPE and known fail-closed
             # error codes. Avoid HTTP exception messages containing private data.
