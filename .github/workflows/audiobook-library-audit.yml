@@ -7,6 +7,7 @@ on:
       - ".github/workflows/audiobook-library-audit.yml"
       - "audiobook-cloud/audit_existing_audiobooks.py"
       - "audiobook-cloud/legacy_audio_qc_readonly_once.py"
+      - "audiobook-cloud/man_last_audio_qc_readonly_once.py"
   workflow_dispatch:
 
 permissions:
@@ -64,18 +65,32 @@ jobs:
         if: always()
         run: rm -f /tmp/private-audit-oidc
 
-  guest_first_file_verified_upload_once:
-    name: THE GUEST one actual M4B upload using production Drive code (no overwrite)
+  last_man_48_track_private_qc:
+    name: THE MAN THE WORLD FORGOT exact-source 48-MP3 read-only ASR QC
     if: github.ref == 'refs/heads/audit/legacy-readonly-two-books-20261030'
     runs-on: ubuntu-24.04
-    timeout-minutes: 12
+    timeout-minutes: 90
     permissions:
       contents: read
       id-token: write
+    env:
+      OMP_NUM_THREADS: "2"
+      MKL_NUM_THREADS: "2"
+      TOKENIZERS_PARALLELISM: "false"
+      HF_HUB_DISABLE_TELEMETRY: "1"
     steps:
-      - name: Checkout existing production uploader without changing main
-        uses: actions/checkout@v4
-      - name: Fetch signed first-file source by strict OIDC
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install pinned private audiobook QC dependencies
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          command -v ffmpeg >/dev/null
+          python -m pip install 'numpy>=2,<3' 'requests>=2.32,<3' 'soundfile>=0.13,<1' \
+            'python-docx==1.2.0' 'rapidfuzz>=3.10,<4' 'faster-whisper==1.2.1' 'av>=14,<19'
+      - name: OIDC-verified private original import and signed read-only chapter snapshot
         shell: bash
         run: |
           set -Eeuo pipefail
@@ -84,93 +99,34 @@ jobs:
           umask 077
           TOKEN="$(curl --fail --silent --show-error --max-time 30 \
             -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
-            "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=ajk-guest-qc-private-source-20261030" \
+            "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=ajk-man-last-private-qc-20261030" \
             | jq -er '.value')"
-          curl --fail --silent --show-error --max-time 45 \
+          curl --fail --silent --show-error --max-time 85 \
             -X POST -H "Authorization: Bearer $TOKEN" \
             -H 'Content-Type: application/json' \
-            -d '{"op":"guest-first-m4b-exact-signed-read"}' \
-            "https://ipoqyjrojljmbqslmxxf.supabase.co/functions/v1/ajk-guest-qc-private-source-once" \
-            > /tmp/ajk_guest_first_source.json
-          jq -e '.ok == true and .bytes == 30862368 and
-              .name == "m4b-001.m4b" and
-              .folder_id == "1hlhzCQa1q5R3BexWCgPBK9mGNFX-s4ho" and
-              .edition_id == "9b8e8520-4aa2-4337-aa61-5c3a10ce2a6f:7ca611867b5b29cd556d9aecc476bc27cb14ffaced3aca434da168f702a90d5a" and
-              .no_audio_mutation == true and
-              (.source_url|startswith("https://ipoqyjrojljmbqslmxxf.supabase.co/storage/v1/object/sign/audiobook-downloads/"))' \
-            /tmp/ajk_guest_first_source.json >/dev/null
-          echo "GUEST_FIRST_FILE_OIDC_SIGNED_SOURCE=PASS"
-      - name: Upload first approved M4B and verify MD5 + Google file readback
+            -d '{"op":"locked-source-readonly-snapshot"}' \
+            "https://ipoqyjrojljmbqslmxxf.supabase.co/functions/v1/ajk-man-last-private-qc-once" \
+            > /tmp/ajk_man_private_snapshot.json
+          jq -e '.ok == true and .source_bytes == 3736790 and
+            .source_sha256 == "10e279c192d271e0b36121c832ca18387c7b7887478ffcc1bbf94a35ee9a348a" and
+            .book.id == "b4e3bde1-7d88-4a04-a68f-55ca249af0ce" and
+            .book.voice_key == "peter_yearsley" and
+            (.chapters | length == 48) and .audio_readonly == true and
+            .no_synthesis == true and
+            (.classification == "UPLOADED_AND_VERIFIED" or .classification == "ALREADY_VERIFIED")' \
+            /tmp/ajk_man_private_snapshot.json >/dev/null
+          chmod 600 /tmp/ajk_man_private_snapshot.json
+          echo "LAST_MAN_ORIGINAL_PRIVATE_SHA256_READBACK=PASS"
+      - name: Verify exactly 48 real narrative chapters without audio changes
         shell: bash
-        env:
-          GOOGLE_DRIVE_CLIENT_ID: ${{ secrets.GOOGLE_DRIVE_CLIENT_ID }}
-          GOOGLE_DRIVE_CLIENT_SECRET: ${{ secrets.GOOGLE_DRIVE_CLIENT_SECRET }}
-          GOOGLE_DRIVE_REFRESH_TOKEN: ${{ secrets.GOOGLE_DRIVE_REFRESH_TOKEN }}
         run: |
           set -Eeuo pipefail
-          python3 - <<'PY'
-          import sys,os,io,json,hashlib,tempfile,urllib.request,urllib.error,shutil
-          from pathlib import Path
-          sys.path.insert(0,"audiobook-cloud")
-          from drive_backup_worker import Drive
-          stage="start"
-          class DebugDrive(Drive):
-              def request(self,url,data=None,method=None,headers=None):
-                  kind="drive_upload_create_session" if "/upload/drive/v3/files" in url and method=="POST" else "drive_upload_put_bytes" if method=="PUT" else "drive_metadata"
-                  try:return super().request(url,data,method,headers)
-                  except urllib.error.HTTPError as exc:
-                      print("GUEST_FIRST_FILE_DRIVE_FAIL_STAGE="+kind,flush=True)
-                      print("GUEST_FIRST_FILE_DRIVE_HTTP="+str(exc.code),flush=True)
-                      try:
-                          error=json.loads(exc.read(4096))
-                          reasons=[str(e.get("reason","unknown")) for e in error.get("error",{}).get("errors",[])]
-                          print("GUEST_FIRST_FILE_DRIVE_REASON="+",".join(reasons[:2])[:90],flush=True)
-                      except Exception:pass
-                      raise
-          try:
-              snap=json.loads(Path("/tmp/ajk_guest_first_source.json").read_text())
-              folder="1Vn6lY4Eyj1VyO0J8bPUjhStLzYcdeX94"
-              key=hashlib.sha256((snap["edition_id"]+":"+snap["name"]).encode("utf-8")).hexdigest()
-              stage="validate_private_folders"
-              drive=DebugDrive()
-              drive.check_private("1hlhzCQa1q5R3BexWCgPBK9mGNFX-s4ho")
-              drive.check_private(folder)
-              stage="verify_absent_or_exact"
-              existing=drive.find("ajkBackupFile",key,folder)
-              if existing:
-                  if len(existing)!=1 or int(existing[0].get("size",-1))!=30862368 or not existing[0].get("md5Checksum"):
-                      raise ValueError("Existing matching-tag file is not verified; refuse overwrite")
-                  print("GUEST_FIRST_FILE_ALREADY_MATCHING=PASS")
-                  raise SystemExit(0)
-              with tempfile.TemporaryDirectory(prefix="ajk_guest_one_m4b_") as temp:
-                  path=Path(temp)/snap["name"]
-                  stage="download_private_source"
-                  with urllib.request.urlopen(snap["source_url"],timeout=180) as inp,path.open("wb") as out:
-                      shutil.copyfileobj(inp,out,length=1024*1024)
-                  if path.stat().st_size!=30862368:
-                      raise ValueError("Unexpected source bytes")
-                  stage="upload_private_target"
-                  result=drive.upload(path,folder,key)
-                  if result["bytes"]!=30862368 or len(result["md5"])!=32:
-                      raise ValueError("Drive upload result mismatch")
-                  stage="readback"
-                  info=drive.json("/files/"+result["id"]+"?fields=id,name,size,md5Checksum,parents,trashed")
-                  if (info.get("name")!=snap["name"] or info.get("trashed") or
-                      folder not in info.get("parents",[]) or int(info.get("size",0))!=30862368 or
-                      info.get("md5Checksum")!=result["md5"]):
-                      raise ValueError("Google Drive object readback mismatch")
-                  print("GUEST_FIRST_FILE_DRIVE_ID="+result["id"])
-                  print("GUEST_FIRST_FILE_MD5="+result["md5"])
-                  print("GUEST_FIRST_FILE_BYTES="+str(result["bytes"]))
-                  print("GUEST_FIRST_FILE_UPLOAD_READBACK=PASS")
-          except Exception as exc:
-              print("GUEST_FIRST_FILE_ERROR_STAGE="+stage)
-              print("GUEST_FIRST_FILE_ERROR_TYPE="+type(exc).__name__)
-              if isinstance(exc,ValueError):
-                  print("GUEST_FIRST_FILE_ERROR_REASON="+str(exc)[:130])
-              raise SystemExit(2)
-          PY
-      - name: Erase temporary signed URLs
-        if: always()
+          python audiobook-cloud/man_last_audio_qc_readonly_once.py --source-probe
+      - name: Read-only ASR against all 48 existing MP3 tracks
         shell: bash
-        run: rm -f /tmp/ajk_guest_first_source.json
+        run: |
+          set -Eeuo pipefail
+          python audiobook-cloud/man_last_audio_qc_readonly_once.py
+      - name: Erase private signed read-only URLs
+        if: always()
+        run: rm -f /tmp/ajk_man_private_snapshot.json
