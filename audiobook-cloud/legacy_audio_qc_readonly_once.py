@@ -69,6 +69,13 @@ def drive_access_token():
         fail("DRIVE_OAUTH_REJECTED_" + str(r.status_code))
     return r.json()["access_token"]
 
+# Exact private Drive document IDs established through an authenticated metadata read.
+# The branch-only QC uses these IDs solely to diagnose the legacy OAuth name-search gap.
+PINNED_MASTER_IDS = {
+    "THE_GUEST_PUBLICATION_MASTER_v1_0_FINAL.docx": "1s1JHjYUlb2RbFPNB6X-pv-YWF9Z0ifdN",
+    "THE_MAN_THE_WORLD_FORGOT_PUBLICATION_MASTER_FINAL_v1.docx": "15GYGelGGAIPEVPGkXZeM5HpqrTRZzokq",
+}
+
 def read_locked_master(token, title, path):
     # No publicly accessible link or signed URL. Exact-name private Drive lookup.
     escaped = title.replace("'", "\\'")
@@ -82,11 +89,30 @@ def read_locked_master(token, title, path):
         fail("DRIVE_LIST_DENIED_" + str(r.status_code))
     payload = r.json()
     files = payload.get("files") or []
-    if payload.get("incompleteSearch") or payload.get("nextPageToken") or len(files) != 1:
-        fail("DRIVE_MASTER_NOT_UNIQUE_OR_NOT_ACCESSIBLE_" + str(len(files)))
+    if payload.get("incompleteSearch") or payload.get("nextPageToken") or len(files) > 1:
+        fail("DRIVE_MASTER_SEARCH_NOT_UNIQUE_" + str(len(files)))
+    if not files:
+        # A drive.file-scoped GitHub OAuth token can fail to list user-owned legacy
+        # files. Probe only the two independently verified private IDs, read-only.
+        pinned_id = PINNED_MASTER_IDS.get(title)
+        if not pinned_id:
+            fail("DRIVE_MASTER_NOT_PINNED")
+        probe = requests.get(
+            "https://www.googleapis.com/drive/v3/files/" + quote(pinned_id, safe=""),
+            headers=headers, params={"fields": "id,name,size,mimeType,trashed"},
+            timeout=40, allow_redirects=False)
+        if probe.status_code != 200:
+            fail("DRIVE_PINNED_MASTER_METADATA_REJECTED_" + str(probe.status_code))
+        info = probe.json()
+        if (info.get("id") != pinned_id or info.get("name") != title
+                or info.get("trashed") is not False
+                or info.get("mimeType") != "application/vnd.openxmlformats-officedocument.wordprocessingml.document"):
+            fail("DRIVE_PINNED_MASTER_METADATA_MISMATCH")
+        files = [info]
     media = requests.get("https://www.googleapis.com/drive/v3/files/" +
                          quote(files[0]["id"], safe=""),
-                         headers=headers, params={"alt": "media"}, timeout=100)
+                         headers=headers, params={"alt": "media"}, timeout=100,
+                         allow_redirects=False)
     if media.status_code != 200:
         fail("DRIVE_SOURCE_DOWNLOAD_DENIED_" + str(media.status_code))
     if not (10000 < len(media.content) < 20000000) or media.content[:2] != b"PK":
