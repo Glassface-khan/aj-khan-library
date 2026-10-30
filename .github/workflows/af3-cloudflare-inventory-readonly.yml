@@ -1,0 +1,28 @@
+name: AF3 Cloudflare existing Worker inventory read-only
+on:
+  push:
+    branches:
+      - feature/af3-drive-token-readonly-20261030
+    paths:
+      - .github/workflows/af3-cloudflare-inventory-readonly.yml
+permissions:
+  contents: read
+concurrency:
+  group: af3-existing-cloudflare-inventory-readonly
+  cancel-in-progress: false
+jobs:
+  existing-worker-inventory:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Read existing Cloudflare Worker, domains, Access and billing gate - NO WRITES
+        env:
+          AJK_CLOUDFLARE_READONLY_TOKEN: ${{ secrets.AJK_CLOUDFLARE_READONLY_TOKEN }}
+        run: |
+          set -Eeuo pipefail
+          [[ "$GITHUB_REPOSITORY" == "Glassface-khan/aj-khan-library" &&
+             "$GITHUB_REF" == "refs/heads/feature/af3-drive-token-readonly-20261030" ]] || exit 2
+          python3 -B audiobook-cloud/af3_cloudflare_inventory_readonly.py
