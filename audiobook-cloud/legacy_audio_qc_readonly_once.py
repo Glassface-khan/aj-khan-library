@@ -293,7 +293,58 @@ def targeted_review():
     return 0
 
 
+def coda_content_origin():
+    """Classify the already-identified Coda tail without disclosing transcript."""
+    snap = require_credentials()
+    ed = EDITIONS[0]
+    with tempfile.TemporaryDirectory(prefix="ajk_guest_coda_origin_") as root:
+        folder = Path(root)
+        src = folder / "locked.docx"
+        read_locked_master(snap, ed["document"], src)
+        _, raw, _ = parse_source(src)
+        sections = guest_narrative_sections(src, raw)
+        doc = Document(str(src))
+        paragraphs = doc.paragraphs
+        headings = [(i,p.text.strip()) for i,p in enumerate(paragraphs)
+                    if p.style.name == "Heading 1" and p.text.strip()]
+        allowed = {"Author’s Note","Historical & Philosophical Context",
+                   "Glossary","About the Author"}
+        refs = {"Coda":sections[-1].spoken_text,
+                "Previous chapter":sections[-2].spoken_text}
+        for hi,(start,heading) in enumerate(headings):
+            if heading not in allowed:continue
+            stop = headings[hi+1][0] if hi+1<len(headings) else len(paragraphs)
+            refs[heading] = " ".join(p.text.strip() for p in paragraphs[start+1:stop]
+                                     if p.text.strip())
+        chapters = list_private_chapters(snap, ed)
+        audio,wav = folder/"coda.mp3",folder/"sample.wav"
+        model = WhisperModel("base.en",device="cpu",compute_type="int8",cpu_threads=2,num_workers=1)
+        try:
+            duration=retrieve_private_mp3(snap,chapters[48],audio)
+            for fraction in (.60,.70,.76,.88):
+                at=sample_mp3(audio,wav,duration,fraction)
+                segs,_=model.transcribe(str(wav),language="en",beam_size=3,
+                                        temperature=0.,vad_filter=False,
+                                        condition_on_previous_text=False)
+                speech=" ".join(seg.text.strip() for seg in segs)
+                scores=[(label,best_alignment(speech,ref)[0]) for label,ref in refs.items()]
+                scores.sort(key=lambda x:x[1],reverse=True)
+                print("GUEST_CODA_ORIGIN "+json.dumps({
+                    "sample_second":at,"top_categories":scores[:3],
+                    "coda_score":dict(scores)["Coda"],
+                    "recognized_words":len(speech.split()),"no_transcripts_logged":True
+                },sort_keys=True),flush=True)
+        finally:
+            audio.unlink(missing_ok=True)
+            wav.unlink(missing_ok=True)
+    print("GUEST_CODA_ORIGIN_DONE "+json.dumps({
+        "no_audio_changes":True,"no_db_changes":True,"not_qc_pass":True},sort_keys=True))
+    return 0
+
+
 def main():
+    if len(sys.argv) == 2 and sys.argv[1] == "--coda-origin":
+        return coda_content_origin()
     if len(sys.argv) == 2 and sys.argv[1] == "--targeted-review":
         return targeted_review()
     if len(sys.argv) == 2 and sys.argv[1] == "--self-test":
