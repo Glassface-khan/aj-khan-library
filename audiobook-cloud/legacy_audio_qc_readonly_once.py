@@ -219,6 +219,41 @@ def main():
     if len(sys.argv) == 2 and sys.argv[1] == "--self-test":
         self_test()
         return 0
+    if len(sys.argv) == 2 and sys.argv[1] == "--source-probe":
+        required = ("GOOGLE_DRIVE_CLIENT_ID", "GOOGLE_DRIVE_CLIENT_SECRET", "GOOGLE_DRIVE_REFRESH_TOKEN")
+        missing = [key for key in required if not os.getenv(key)]
+        if missing:
+            fail("DRIVE_PROBE_MISSING_CONFIG_" + "_".join(missing))
+        token = drive_access_token()
+        all_good = True
+        with tempfile.TemporaryDirectory(prefix="ajk_source_probe_") as root:
+            for ed in EDITIONS:
+                try:
+                    dest = Path(root) / "original.docx"
+                    nbytes = read_locked_master(token, ed["document"], dest)
+                    _, sections, _ = parse_source(dest)
+                    indexes = [int(s.index) for s in sections]
+                    aligned = indexes == list(range(ed["chapters"]))
+                    print("LEGACY_SOURCE_PROBE " + json.dumps({
+                        "book": ed["title"], "docx_bytes": nbytes,
+                        "parsed_sections": len(indexes),
+                        "expected_sections": ed["chapters"],
+                        "index_continuity": aligned,
+                        "classification": "SOURCE_READY" if aligned else "SOURCE_STRUCTURE_REVIEW"
+                    }, sort_keys=True), flush=True)
+                    all_good = aligned and all_good
+                except Exception as exc:
+                    print("LEGACY_SOURCE_PROBE " + json.dumps({
+                        "book": ed["title"],
+                        "classification": "BLOCKED",
+                        "error_type": type(exc).__name__,
+                        "reason": str(exc)[:120] if isinstance(exc, RuntimeError) else "SOURCE_PARSE_ERROR"
+                    }, sort_keys=True), flush=True)
+                    all_good = False
+        print("LEGACY_SOURCE_FINAL " + json.dumps({
+            "sources_ready": all_good, "no_audio_access": True,
+            "no_writes": True}, sort_keys=True), flush=True)
+        return 0 if all_good else 2
     if len(sys.argv) != 1:
         fail("UNRECOGNIZED_ARGUMENTS")
     base = require_credentials()
