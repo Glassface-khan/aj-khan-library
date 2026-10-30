@@ -68,7 +68,7 @@ jobs:
     name: Exact two-edition private MP3 vs manuscript audit (no writes)
     if: github.ref == 'refs/heads/audit/legacy-readonly-two-books-20261030'
     runs-on: ubuntu-24.04
-    timeout-minutes: 85
+    timeout-minutes: 15
     permissions:
       contents: read
     env:
@@ -108,4 +108,4 @@ jobs:
           [[ "$GITHUB_REPOSITORY" == "Glassface-khan/aj-khan-library" ]]
           [[ "$GITHUB_REF" == "refs/heads/audit/legacy-readonly-two-books-20261030" ]]
           umask 077
-          python audiobook-cloud/legacy_audio_qc_readonly_once.py
+          python audiobook-cloud/legacy_audio_qc_readonly_once.py --source-probe
