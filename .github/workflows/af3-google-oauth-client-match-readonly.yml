@@ -1,0 +1,45 @@
+name: AF3 check existing Drive client against owner Google Cloud screenshot (read-only)
+on:
+  push:
+    branches:
+      - feature/af3-drive-token-readonly-20261030
+    paths:
+      - .github/workflows/af3-google-oauth-client-match-readonly.yml
+permissions:
+  contents: read
+concurrency:
+  group: af3-google-client-match-readonly
+  cancel-in-progress: false
+jobs:
+  compare-existing-client-no-values:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 2
+    steps:
+      - name: Compare only pre-existing OAuth client ID to OWNER screenshot prefix
+        env:
+          GOOGLE_DRIVE_CLIENT_ID: ${{ secrets.GOOGLE_DRIVE_CLIENT_ID }}
+        run: |
+          set -Eeuo pipefail
+          [[ "$GITHUB_REPOSITORY" == "Glassface-khan/aj-khan-library" ]] || exit 2
+          [[ "$GITHUB_REF" == "refs/heads/feature/af3-drive-token-readonly-20261030" ]] || exit 2
+          python3 - <<'PY'
+          import os,re
+          cid=os.environ.get("GOOGLE_DRIVE_CLIENT_ID","")
+          # Owner's Google Cloud screenshot (AJK Audiobook Drive) only shows
+          # the start of the visible Web client ID; never print the actual ID.
+          # Matching its distinctive partial prefix is useful corroboration,
+          # NOT proof of the complete identifier or its OAuth configuration.
+          expected_project="460125960509-"
+          expected_visible_prefix="460125960509-gvai6lk2s7g889h"
+          wellformed=bool(re.fullmatch(
+              r"[0-9]+-[A-Za-z0-9_-]+[.]apps[.]googleusercontent[.]com",cid))
+          print("AF3_EXISTING_DRIVE_CLIENT_PRESENT="+str(bool(cid)).lower())
+          print("AF3_EXISTING_DRIVE_CLIENT_SYNTAX_OK="+str(wellformed).lower())
+          print("AF3_MATCHES_SCREENSHOT_GOOGLE_PROJECT_NUMBER="+
+                str(wellformed and cid.startswith(expected_project)).lower())
+          print("AF3_MATCHES_VISIBLE_WEB_CLIENT_PREFIX="+
+                str(wellformed and cid.startswith(expected_visible_prefix)).lower())
+          print("AF3_COMPLETE_WEB_CLIENT_ID_VERIFIED=false")
+          print("AF3_NO_SECRETS_OR_OAUTH_VALUES_PRINTED=true")
+          print("AF3_GITHUB_WORKFLOW_READONLY_NO_NETWORK_NO_DEPLOY=PASS")
+          PY
