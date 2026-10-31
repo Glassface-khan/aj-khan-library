@@ -1,0 +1,30 @@
+name: AF3 new Cloudflare token presence by repository (NO DEPLOY)
+on:
+  push:
+    branches: [feature/af3-drive-token-readonly-20261030]
+    paths:
+      - .github/workflows/af3-deploy-token-location-readonly.yml
+permissions:
+  contents: read
+concurrency:
+  group: af3-deploy-token-location-readonly
+  cancel-in-progress: false
+jobs:
+  check-no-secrets-disclosed:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 2
+    steps:
+      - name: Check existing secret presence, no secret usage or API calls
+        env:
+          DEPLOY_TOKEN: ${{ secrets.AF3_CLOUDFLARE_DEPLOY_TOKEN }}
+        run: |
+          set -Eeuo pipefail
+          [[ "$GITHUB_REPOSITORY" == "Glassface-khan/aj-khan-library" ]] || exit 2
+          [[ "$GITHUB_REF" == "refs/heads/feature/af3-drive-token-readonly-20261030" ]] || exit 2
+          if [[ -n "$DEPLOY_TOKEN" ]]; then
+            echo "AF3_LIBRARY_DEPLOY_TOKEN_PRESENT=true"
+          else
+            echo "AF3_LIBRARY_DEPLOY_TOKEN_PRESENT=false"
+          fi
+          echo "AF3_NO_SECRET_VALUES_PRINTED=true"
+          echo "AF3_NO_CLOUD_API_CALLS_NO_DEPLOY=true"
