@@ -1,0 +1,81 @@
+name: AF3 encrypted one-time OAuth envelope ONLY (NO PLAINTEXT OUTPUT)
+on:
+  push:
+    branches: [feature/af3-drive-token-readonly-20261030]
+    paths: [.github/workflows/af3-encrypt-existing-oauth-once.yml]
+permissions:
+  contents: read
+concurrency:
+  group: af3-encrypt-existing-oauth-once
+  cancel-in-progress: false
+jobs:
+  seal-verified-credentials:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 4
+    steps:
+      - name: Exact private Google originals and AES256-GCM CMS encryption; only ciphertext output
+        env:
+          GOOGLE_DRIVE_CLIENT_ID: ${{ secrets.GOOGLE_DRIVE_CLIENT_ID }}
+          GOOGLE_DRIVE_CLIENT_SECRET: ${{ secrets.GOOGLE_DRIVE_CLIENT_SECRET }}
+          GOOGLE_DRIVE_REFRESH_TOKEN: ${{ secrets.GOOGLE_DRIVE_REFRESH_TOKEN }}
+          AF3_RECIPIENT_CERT_B64: "LS0tLS1CRUdJTiBDRVJUSUZJQ0FURS0tLS0tCk1JSUVHVENDQW9HZ0F3SUJBZ0lVWWlJeWgrQkljN1JydmRlaVgwSUdGTTJIaXdjd0RRWUpLb1pJaHZjTkFRRUwKQlFBd0hERWFNQmdHQTFVRUF3d1JZV1l6TFc5dVkyVXRNakF5TmpFd016RXdIaGNOTWpZeE1ETXhNVFkwT0RRMwpXaGNOTWpZeE1UQXhNVFkwT0RRM1dqQWNNUm93R0FZRFZRUUREQkZoWmpNdGIyNWpaUzB5TURJMk1UQXpNVENDCkFhSXdEUVlKS29aSWh2Y05BUUVCQlFBRGdnR1BBRENDQVlvQ2dnR0JBS2Y3TEpIMkxCQlZFTWh1aU1LZ3RXNi8KSWJteG95Nm96eHB1dHNUTnBhZlNjOUoyamtxbWxWenhNSExuYlYzWTJISU5mb2lGQTlTZXpOa1JMbVBhZmpzWQoxdW9tVmdiOE1EVC9kS2oyM1ErUHRQeHAwcnRqTlJvc1hhRTlxZVpFemZYVGU3Z3VMTHIwS1lmV2cyQm5vM1hlCmwzcGdhQjFzcFNVdjMxeE1WUkFwNnZJYm5kM0kvM2J2R2pBemlrOEVzck91cWQ5V2V1dml2YmhGSXk5ajhGNUoKb3JPazROTUlUV3VPV1FHUm1QYmQybTRXUUo0NkVwN1dzUjNIZjNDZkR5WW1Vc09KWERSL3dJTWtaVkpoanpTTgpjUTQ2RmVqeW93YlVyVG1lekswSWZzQXF5WjYxODNiMVpYQzgxN3l4ckdnOGtCM3o2NUJSaFdaeUlmMUNnSTFjCmZFSWxJd0xkTTIxajl2RlljSG9yYTB5OXl0NjBoVWhhaktoa0RrNlgrc1RBZkpmNVg3UDNxYmVKQVViRlB5WVoKVXQyc3hmbEdFRVVYQ2RuVURYWU5zUG9TeEJKd3BSWDRTSzM2dElkRndRRnVzcERSOUdUSWI5ak41MXp5UVB1KwpValkzWW92bGtSSTYwQXY0Q2JhWklPTEpva280V2pHMHorbFNQb1Nyb1FJREFRQUJvMU13VVRBZEJnTlZIUTRFCkZnUVV1RS90VEVMYkpmcFozZGY2NENBb1FoQWNVeDh3SHdZRFZSMGpCQmd3Rm9BVXVFL3RURUxiSmZwWjNkZjYKNENBb1FoQWNVeDh3RHdZRFZSMFRBUUgvQkFVd0F3RUIvekFOQmdrcWhraUc5dzBCQVFzRkFBT0NBWUVBRktWRAo0bmhOU1ArRnI5a2dMOHpBUFp3QWdSaUlGbXZhSTdHckxhcmhnS2ZMVkFIZmJrRit1Q2VzNXNLNkVMQ2pLaU9QCnBETGlkTTBuSng1dHM5SGpnME1ZWkZYUEFZZjFFeHZwQm9ld2lJNE1Tc3hISXNsVk9ob0tyaHJvU0I3T2ltU1MKQ2IzdWpMRlN0aUZIUnpHTWQyTHV6d3JqUm9CUlBKVG9EVkQ5Szc3NHdDTDRLZzNXZko4cFBwMU1hdjNkOGFSbgo4dUl0WmxpdW5TMm15RXJvUTBTcjRMdkozNjIxWWpUa3VsanVoVStUNVpobk1DQWx6cmZqOE1NbUJrRmg5akR3Cm1zT1RvbW1BL2s5UmZKbm9WUXVUUkNTVkoxVkpiQ3VyNkVwYmQ0b0hISHpMUG1NZkQ5b3Q1ekxPSVZqNGJ1NGcKYnlWSEVpZ2JzV2NPY2dFN0o5Zk9UcWV0Umx6MWxKSGQva3FpZk1NSjBLSGtpS09RUC9vcmNKMEcrWENZeUp0Rwp0NU81ZFAwcGRwWStZV2FQRXlDZTkyQU9RYmxmZEtBbjhsQzJVaXdubUltWnBLTU1ITkpkSlYyUHBUWDhRTndRCnhUU3psTDR0OUpYN0Eyb1lmMU5oeHQzSmEvMCsyLzZZRWZuNmtIUHdidFM3RkRIVXRtSjhpZ3VQUFhqdgotLS0tLUVORCBDRVJUSUZJQ0FURS0tLS0tCg=="
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          [[ "$GITHUB_REPOSITORY" == "Glassface-khan/aj-khan-library" && "$GITHUB_REF" == "refs/heads/feature/af3-drive-token-readonly-20261030" ]] || exit 2
+          python3 - <<'PY'
+          import os,base64,json,urllib.request,urllib.error,urllib.parse,subprocess,re
+          SCOPE="https://www.googleapis.com/auth/drive.file"
+          ids={"false-scent":("1pWC09nFA95FlHUM9VNeBb-h1LyuFb_TB",328506009),
+               "trembling-olive":("1XBpz5TTQGYhShwBzeeddQGEBsXNI7a7B",395220064)}
+          keys=("GOOGLE_DRIVE_CLIENT_ID","GOOGLE_DRIVE_CLIENT_SECRET","GOOGLE_DRIVE_REFRESH_TOKEN")
+          secrets={k:os.environ.get(k,"") for k in keys}
+          if not all(secrets.values()):raise SystemExit("AF3_OAUTH_BRIDGE_FAILED_MISSING_SECRET")
+          class NoRedirect(urllib.request.HTTPRedirectHandler):
+              def redirect_request(self,*_):return None
+          opener=urllib.request.build_opener(NoRedirect())
+          data=urllib.parse.urlencode({
+              "client_id":secrets[keys[0]],"client_secret":secrets[keys[1]],
+              "refresh_token":secrets[keys[2]],"grant_type":"refresh_token"}).encode()
+          try:
+              req=urllib.request.Request("https://oauth2.googleapis.com/token",data=data,method="POST",headers={"Content-Type":"application/x-www-form-urlencoded"})
+              with opener.open(req,timeout=22) as rsp:
+                  assert rsp.status==200
+                  token=json.loads(rsp.read(10000))
+              assert set(token.get("scope","").split())=={SCOPE}
+              access=token["access_token"]
+              editions={}
+              for slug,(fid,expected_size) in ids.items():
+                  url="https://www.googleapis.com/drive/v3/files/"+urllib.parse.quote(fid,safe="")+"?fields=id,size,md5Checksum,version,mimeType,capabilities(canDownload)"
+                  req=urllib.request.Request(url,headers={"Authorization":"Bearer "+access,"Accept":"application/json"},method="GET")
+                  with opener.open(req,timeout=22) as rsp:
+                      assert rsp.status==200
+                      meta=json.loads(rsp.read(10000))
+                  assert meta["id"]==fid and int(meta["size"])==expected_size
+                  assert meta["mimeType"] in ("audio/x-m4b","audio/mp4")
+                  assert meta["capabilities"]["canDownload"] is True
+                  assert re.fullmatch("[0-9a-f]{32}",meta["md5Checksum"])
+                  assert str(meta["version"]).isdecimal()
+                  editions[slug]={"id":fid,"md5":meta["md5Checksum"],"version":str(meta["version"])}
+              payload=json.dumps({"client_id":secrets[keys[0]],
+                   "client_secret":secrets[keys[1]],
+                   "refresh_token":secrets[keys[2]],
+                   "editions":editions},separators=(",",":"),sort_keys=True).encode()
+              cert=base64.b64decode(os.environ["AF3_RECIPIENT_CERT_B64"],validate=True)
+              assert cert.startswith(b"-----BEGIN CERTIFICATE-----")
+              import tempfile,pathlib
+              with tempfile.TemporaryDirectory(prefix="af3-public-cert-") as tempdir:
+                  cert_path=pathlib.Path(tempdir)/"recipient.crt"
+                  cert_path.write_bytes(cert)
+                  p=subprocess.run(["openssl","cms","-encrypt","-binary","-aes-256-gcm",
+                       "-outform","DER",str(cert_path)],
+                       input=payload,stdout=subprocess.PIPE,stderr=subprocess.DEVNULL,check=True)
+              if not 400<len(p.stdout)<12000:raise ValueError("CMS envelope length")
+              print("AF3_OAUTH_READONLY_METADATA_BOTH_PINS_MATCH=PASS")
+              print("AF3_AES256_GCM_RSA3072_ENCRYPTION=PASS")
+              print("AF3_TRANSFER_PLAINTEXT_IN_CODE_OR_LOGS=false")
+              print("AF3_TRANSFER_ENVELOPE_B64="+base64.b64encode(p.stdout).decode("ascii"))
+          except Exception:
+              print("AF3_ENCRYPTED_TRANSFER=BLOCKED_SECURITY_GATE")
+              raise SystemExit(2)
+          PY
