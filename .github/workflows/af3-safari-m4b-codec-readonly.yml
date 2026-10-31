@@ -45,7 +45,36 @@ jobs:
           for book,(fid,size) in originals.items():
               entry={}
               try:
-                  first=get(fid,size,0,65536)
+                  first=get(fid,size,0,262144)
+                  # First 256 KiB includes the front moov atom's codec
+                  # sample descriptions even when full moov is > 2 MiB.
+                  entry["head_codec_markers"]={tag:first.find(tag.encode("latin1"))
+                    for tag in ("moov","stsd","mp4a",".mp3","alac","Opus","esds","mp3 ")
+                    if first.find(tag.encode("latin1"))>=0}
+                  entries=[]
+                  ix=first.find(b"stsd")
+                  if ix>=4 and ix+24<=len(first):
+                      n=int.from_bytes(first[ix+8:ix+12],"big")
+                      boxpos=ix+12
+                      sample_type=first[boxpos+4:boxpos+8].decode("latin1","replace")
+                      entry["sample_description_type"]=sample_type
+                      entry["sample_description_count"]=n
+                  # esds decoder-config object type: 0x40 is AAC;
+                  # 0x6b/0x69 usually indicates MP3 audio-in-MP4.
+                  esds=first.find(b"esds")
+                  if esds>=4:
+                      data=first[esds+8:esds+160]
+                      obj=[]
+                      for i in range(len(data)-4):
+                          if data[i]==4:
+                              j=i+1
+                              for _ in range(4):
+                                  if j>=len(data):break
+                                  last=data[j];j+=1
+                                  if not (last&0x80):break
+                              if j<len(data) and data[j] in (0x40,0x66,0x67,0x68,0x69,0x6b):
+                                  obj.append(hex(data[j]))
+                      entry["esds_audio_object_type_candidates"]=list(dict.fromkeys(obj))
                   boxes=[]
                   pos=0
                   nextmoov=None
@@ -78,6 +107,7 @@ jobs:
               print("AF3_SAFARI_FORMAT_"+book.upper().replace("-","_")+"="+entry["format_probe"])
               print("AF3_SAFARI_FIRST_BOXES_"+book.upper().replace("-","_")+"="+json.dumps(entry.get("first_boxes",[])))
               print("AF3_SAFARI_CODEC_MARKERS_"+book.upper().replace("-","_")+"="+json.dumps(entry.get("codec_atom_markers",[])))
+              print("AF3_SAFARI_HEAD_CODEC_"+book.upper().replace("-","_")+"="+json.dumps({"sample":entry.get("sample_description_type"),"object_types":entry.get("esds_audio_object_type_candidates"),"markers":entry.get("head_codec_markers",{})}))
           (root/"af3-safari-codec-metadata.json").write_text(json.dumps(result,indent=2))
           print("AF3_SAFARI_CODEC_READBACK_READ_ONLY=true")
           PY
