@@ -1528,7 +1528,7 @@
       const a = document.createElement('a');
       a.setAttribute(FLAG, '1');
       a.href = './audiobook-factory.html?v=20261006f';
-      a.textContent = 'Audiobook Factory';
+      a.textContent = 'Studio 1 · Hörbuchproduktion';
       a.style.cssText = [
         'display:inline-block',
         'background:#9F7A34',
@@ -1575,8 +1575,38 @@
         }
       });
 
+      // Private audio hub: navigation is shown only inside an authenticated
+      // author-admin panel. These links convey no tokens or manuscript data.
+      // Every Oracle destination performs its own server-side owner check.
+      const openPrivate = (href, title, flag) => {
+        const link = document.createElement('a');
+        link.href = href;
+        link.textContent = title;
+        link.setAttribute(flag, '1');
+        link.rel = 'noopener noreferrer';
+        link.referrerPolicy = 'no-referrer';
+        link.style.cssText = [
+          'display:inline-flex', 'align-items:center', 'justify-content:center',
+          'min-height:44px', 'padding:9px 13px', 'border:1px solid #9F7A34',
+          'color:#E6E2D7','background:#233241', 'text-decoration:none',
+          'font:600 11px/1.25 Archivo,sans-serif','letter-spacing:.03em'
+        ].join(';');
+        return link;
+      };
+      const privatePlayer = openPrivate(
+        'https://ajk-audiobook-private.tail3f4289.ts.net:10001/drive-library',
+        '▶ Mein Hörbuch-Player', 'data-ajk-private-drive-player'
+      );
+      const studio2 = openPrivate(
+        'https://ajk-audiobook-private.tail3f4289.ts.net/',
+        'Studio 2 · Oracle', 'data-ajk-private-factory2'
+      );
+      a.rel = 'noopener noreferrer';
+      a.referrerPolicy = 'no-referrer';
       actions.insertBefore(rights, actions.firstChild);
-      actions.insertBefore(a, rights);
+      actions.insertBefore(studio2, rights);
+      actions.insertBefore(a, studio2);
+      actions.insertBefore(privatePlayer, a);
     } catch (_) {}
   }
 
