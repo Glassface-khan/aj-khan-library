@@ -1,0 +1,23 @@
+name: Author site private audio hub read-only safety check
+on:
+  push:
+    branches: [feature/author-audio-private-hub-20261101]
+    paths:
+      - audio-library.js
+      - tests/author-audio-private-hub.cjs
+      - .github/workflows/author-audio-private-hub-check.yml
+permissions:
+  contents: read
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Validate JS syntax, admin-only links and credential-free routes
+        run: |
+          node --check audio-library.js
+          node tests/author-audio-private-hub.cjs
+          git diff --exit-code -- index.html audiobook-factory.html audiobook-privacy.html service-worker.js
