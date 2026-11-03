@@ -35,7 +35,7 @@ jobs:
           assert book.get('coverUrl') == 'assets/covers/the-inventory.png', 'Wrong cover URL'
           assert str(book.get('epubUrl','')).startswith('private-epub://'), 'EPUB is not a protected marker'
           img = pathlib.Path(book['coverUrl'])
-          assert img.is_file() and img.read_bytes().startswith(b'\\x89PNG\\r\\n\\x1a\\n'), 'Approved PNG missing or invalid'
+          assert img.is_file() and img.read_bytes().startswith(b'\x89PNG\r\n\x1a\n'), 'Approved PNG missing or invalid'
           print('LOCAL_CATALOGUE=PASS')
           print('LOCAL_COVER_FILE=PASS')
           print('STATIC_PUBLIC_DRIVE_LEAK=NONE')
@@ -50,7 +50,7 @@ jobs:
           for attempt in range(8):
               try:
                   result = get(url+'?check=inventory-20261103')
-                  if result[0] == 200 and result[1].startswith('image/') and result[2].startswith(b'\\x89PNG\\r\\n\\x1a\\n'):
+                  if result[0] == 200 and result[1].startswith('image/') and result[2].startswith(b'\x89PNG\r\n\x1a\n'):
                       break
               except Exception as e:
                   print('COVER_RETRY', attempt+1, type(e).__name__)
