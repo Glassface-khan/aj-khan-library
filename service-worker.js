@@ -1,3 +1,4 @@
+// v82 -> v83 (03.11.2026): register THE INVENTORY with protected EPUB and approved same-origin blue-zero cover.
 // v81 -> v82 (29.10.2026): add The Weight of Rain author-approved cover and private EPUB catalogue marker.
 // v80 -> v81 (26.10.2026): refresh author-approved Medina cover and EPUB reader cache.
 // v79 -> v80 (26.10.2026): add four THE INHERITANCE reviewer covers and refresh iPhone catalog cache.
@@ -69,8 +70,8 @@
 // BooksData remains canonical and replaces it whenever the live request succeeds.
 // v37 -> v38 (28.09.2026): force iOS to reload the exact-order cover grid.\n// v39 -> v40 (28.09.2026): deploy THE GUEST catalog entry, cover and EPUB; force clients to refresh the catalog fallback.\n// v40 -> v41 (28.09.2026): deploy THE NIGHT SIDE catalog entry, cover and EPUB; force clients to refresh the catalog fallback.
 // v70 -> v71 (14.10.2026): publish THE ROAD IT CAME BY reader-revision v2 and refresh the private reader/catalog.
-const SHELL_CACHE = 'ajk-shell-v82';
-const DATA_CACHE = 'ajk-data-v82';
+const SHELL_CACHE = 'ajk-shell-v83';
+const DATA_CACHE = 'ajk-data-v83';
 const SHELL_FILES = ['./', './index.html', './books-live.json', './manifest.webmanifest', './icons/icon-192.png', './icons/icon-512.png'];
 
 // Aktionen, deren Antwort für Offline-Nutzung zwischengespeichert werden
