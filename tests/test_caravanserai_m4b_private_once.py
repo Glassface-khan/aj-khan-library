@@ -90,11 +90,54 @@ class Tests(unittest.TestCase):
             status = 200
         with tempfile.TemporaryDirectory() as t:
             path = pathlib.Path(t) / "m4b-001.m4b"
-            with patch.object(mod, "request", return_value=Response(data)):
-                sha, md5 = mod.get_source("secret", "m4b-001.m4b", len(data), path)
+            with patch.object(mod, "get_signed_url", return_value="https://ipoqyjrojljmbqslmxxf.supabase.co/storage/v1/object/sign/audiobook-downloads/8e27c3f1-897a-4671-b95f-70547a004fe9/m4b-001.m4b?token=fixture"), \
+                 patch.object(mod, "request", return_value=Response(data)):
+                sha, md5 = mod.get_source("mock-oidc", "m4b-001.m4b", len(data), path)
             self.assertEqual(path.read_bytes(), data)
             self.assertEqual(sha, hashlib.sha256(data).hexdigest())
             self.assertEqual(md5, hashlib.md5(data).hexdigest())
+
+
+    def test_oidc_auth_missing_fail_closed(self):
+        keys = {
+            "GOOGLE_DRIVE_CLIENT_ID": "dummy",
+            "GOOGLE_DRIVE_CLIENT_SECRET": "dummy",
+            "GOOGLE_DRIVE_REFRESH_TOKEN": "dummy",
+        }
+        with patch.dict(os.environ, keys, clear=True):
+            with self.assertRaisesRegex(RuntimeError, "missing_or_untrusted_github_oidc"):
+                mod.credentials()
+
+    def test_signed_url_limits_host_job_and_filename(self):
+        correct = ("https://ipoqyjrojljmbqslmxxf.supabase.co"
+                   "/storage/v1/object/sign/audiobook-downloads/"
+                   "8e27c3f1-897a-4671-b95f-70547a004fe9/m4b-001.m4b?token=fixture")
+        good = {"ok": True, "jobId": mod.JOB, "name": "m4b-001.m4b",
+                "bytes": mod.PARTS[0], "url": correct}
+        with patch.object(mod, "as_json", return_value=good):
+            self.assertEqual(mod.get_signed_url("mock-oidc", "m4b-001.m4b", mod.PARTS[0]), correct)
+            with self.assertRaisesRegex(RuntimeError, "file_outside_six"):
+                mod.get_signed_url("mock-oidc", "m4b-007.m4b", mod.PARTS[0])
+        for broken in (
+            correct.replace(".supabase.co", ".example.com"),
+            correct.replace(mod.JOB, "not-authorized-job"),
+            correct.replace("?token=fixture", ""),
+        ):
+            with patch.object(mod, "as_json", return_value={**good, "url": broken}):
+                with self.assertRaisesRegex(RuntimeError, "signed_source_url_outside_scope"):
+                    mod.get_signed_url("mock-oidc", "m4b-001.m4b", mod.PARTS[0])
+        with patch.object(mod, "as_json", return_value={**good, "bytes": mod.PARTS[0]+1}):
+            with self.assertRaisesRegex(RuntimeError, "signed_source_manifest_mismatch"):
+                mod.get_signed_url("mock-oidc", "m4b-001.m4b", mod.PARTS[0])
+
+    def test_isolated_edge_signer_scope_static(self):
+        signer = MODULE.with_name("caravanserai_m4b_oidc_signer_index.ts").read_text()
+        for clause in ('payload.actor_id', 'payload.workflow_ref', 'payload.event_name',
+                       'createSignedUrl', 'is_active !== false', 'status !== "ready"',
+                       'jwtVerify', 'source_size_or_name_changed'):
+            self.assertIn(clause, signer)
+        for mutation in ('.upsert(', '.update(', '.remove(', '.delete('):
+            self.assertNotIn(mutation, signer)
 
 
 if __name__ == "__main__":

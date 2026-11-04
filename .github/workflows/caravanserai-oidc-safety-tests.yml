@@ -1,0 +1,21 @@
+name: CARAVANSERAI OIDC repair - offline-only safety
+on:
+  pull_request:
+    paths:
+      - 'ops/caravanserai_m4b_private_once.py'
+      - 'ops/caravanserai_m4b_oidc_signer_index.ts'
+      - 'tests/test_caravanserai_m4b_private_once.py'
+      - '.github/workflows/caravanserai-private-m4b-once.yml'
+      - '.github/workflows/caravanserai-oidc-safety-tests.yml'
+permissions:
+  contents: read
+jobs:
+  offline-only:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 4
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify Python syntax and ten network-blocked safety tests
+        run: |
+          python3 -m py_compile ops/caravanserai_m4b_private_once.py tests/test_caravanserai_m4b_private_once.py
+          python3 -m unittest -v tests/test_caravanserai_m4b_private_once.py
