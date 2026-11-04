@@ -1,0 +1,32 @@
+name: CARAVANSERAI - private 6 M4B backup (owner-only, manual)
+on:
+  workflow_dispatch:
+    inputs:
+      confirmation:
+        description: 'Type CARAVANSERAI-6-M4B to authorize only six fixed private copies'
+        type: string
+        required: true
+permissions:
+  contents: read
+concurrency:
+  group: ajk-caravanserai-m4b-20261104
+  cancel-in-progress: false
+jobs:
+  backup-once:
+    if: >-
+      github.repository == 'Glassface-khan/aj-khan-library' &&
+      github.ref == 'refs/heads/main' &&
+      inputs.confirmation == 'CARAVANSERAI-6-M4B'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 16
+    steps:
+      - uses: actions/checkout@v4
+      - name: Test isolated code offline before any remote transfer
+        run: python3 -m unittest -v tests/test_caravanserai_m4b_private_once.py
+      - name: Copy only six locked M4B files to existing private Drive folder
+        env:
+          GOOGLE_DRIVE_CLIENT_ID: ${{ secrets.GOOGLE_DRIVE_CLIENT_ID }}
+          GOOGLE_DRIVE_CLIENT_SECRET: ${{ secrets.GOOGLE_DRIVE_CLIENT_SECRET }}
+          GOOGLE_DRIVE_REFRESH_TOKEN: ${{ secrets.GOOGLE_DRIVE_REFRESH_TOKEN }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: python3 -B ops/caravanserai_m4b_private_once.py
