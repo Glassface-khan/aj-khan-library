@@ -51,7 +51,7 @@ jobs:
               report["local_catalog_and_cover"]="FAIL"
           def retry(key,fn):
               last="not attempted"
-              for k in range(5):
+              for k in range(12):
                   try:
                       result=fn()
                       report[key]=result
