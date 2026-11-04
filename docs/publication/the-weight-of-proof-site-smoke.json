@@ -1,0 +1,18 @@
+{
+  "book_id": "b_the_weight_of_proof_v1_0r",
+  "title": "THE WEIGHT OF PROOF",
+  "target_edition": "v1.0R reader proof",
+  "website_complete": false,
+  "authorized_epub_owner_login": "NOT_TESTED_REQUIRES_OWNER",
+  "retail_approval": "NOT_GRANTED_SCHOLAR_LEGAL_EPUBCHECK_GATES_OPEN",
+  "local_catalog_and_cover": "PASS",
+  "public_cover": "FAIL: HTTPError:HTTP Error 404: Not Found",
+  "homepage": "PASS",
+  "backend_catalog": "PASS, book_count=70",
+  "anonymous_epub_denial": "PASS (anonymous access denied)",
+  "public_smoke_passed": false,
+  "note": "Public catalogue and denial probes cannot substitute for an authorized owner-login EPUB open, which remains NOT TESTED.",
+  "failures": [
+    "public_cover:HTTPError:HTTP Error 404: Not Found"
+  ]
+}
