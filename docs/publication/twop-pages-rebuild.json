@@ -1,0 +1,34 @@
+{
+  "book": "THE WEIGHT OF PROOF",
+  "attempt": "targeted_pages_rebuild_20261104",
+  "cover_path": "assets/covers/the-weight-of-proof.png",
+  "authorized_epub_test": "NOT_TESTED_OWNER_AUTH_REQUIRED",
+  "pages_config": {
+    "build_type": "legacy",
+    "source": {
+      "branch": "main",
+      "path": "/"
+    },
+    "status": "errored",
+    "html_url": "https://glassface-khan.github.io/aj-khan-library/"
+  },
+  "rebuild_trigger": "REQUESTED, HTTP 201",
+  "live_cover": "FAIL",
+  "attempts": [
+    "HTTP 404",
+    "HTTP 404",
+    "HTTP 404",
+    "HTTP 404",
+    "HTTP 404",
+    "HTTP 404",
+    "HTTP 404",
+    "HTTP 404",
+    "HTTP 404",
+    "HTTP 404",
+    "HTTP 404",
+    "HTTP 404",
+    "HTTP 404",
+    "HTTP 404",
+    "HTTP 404"
+  ]
+}
