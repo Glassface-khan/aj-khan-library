@@ -140,5 +140,29 @@ class Tests(unittest.TestCase):
             self.assertNotIn(mutation, signer)
 
 
+    def test_safe_diagnostics_never_log_exception_content(self):
+        import urllib.error
+        self.assertEqual(mod.safe_failure_category(RuntimeError("secret-FAKE-token")), "guard")
+        self.assertEqual(mod.safe_failure_category(ValueError("signed-url-FAKE-secret")), "other")
+        err = urllib.error.HTTPError("https://example.invalid/?token=SECRET", 403, "sensitive", {}, None)
+        self.assertEqual(mod.safe_failure_category(err), "http_403")
+        self.assertEqual(mod.safe_failure_category(urllib.error.URLError("url-SECRET")), "transport")
+        for stage in mod.SAFE_STAGES:
+            self.assertRegex(stage, r"^[a-z_]+$")
+        with self.assertRaisesRegex(RuntimeError, "unknown_diagnostic_stage"):
+            mod.mark("Bearer SECRET")
+
+    def test_missing_oidc_stops_before_oauth_request(self):
+        keys = {
+            "GOOGLE_DRIVE_CLIENT_ID": "dummy",
+            "GOOGLE_DRIVE_CLIENT_SECRET": "dummy",
+            "GOOGLE_DRIVE_REFRESH_TOKEN": "dummy",
+        }
+        with patch.dict(os.environ, keys, clear=True), patch.object(mod, "as_json", side_effect=AssertionError("network_forbidden")):
+            with self.assertRaisesRegex(RuntimeError, "missing_or_untrusted_github_oidc"):
+                mod.credentials()
+            self.assertEqual(mod.CURRENT_STAGE, "github_oidc_preflight")
+
+
 if __name__ == "__main__":
     unittest.main()
