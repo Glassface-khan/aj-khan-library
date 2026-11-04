@@ -12,8 +12,24 @@
     "status": "errored",
     "html_url": "https://glassface-khan.github.io/aj-khan-library/"
   },
-  "rebuild_trigger": "REQUESTED, HTTP 201",
+  "latest_build_pre": {
+    "status": "building",
+    "error": {
+      "message": null
+    },
+    "created_at": "2026-11-04T17:39:03Z",
+    "updated_at": "2026-11-04T17:39:03Z"
+  },
+  "rebuild_trigger": "SKIPPED: source is not main root",
   "live_cover": "FAIL",
+  "latest_build_post": {
+    "status": "building",
+    "error": {
+      "message": null
+    },
+    "created_at": "2026-11-04T17:39:03Z",
+    "updated_at": "2026-11-04T17:39:03Z"
+  },
   "attempts": [
     "HTTP 404",
     "HTTP 404",
