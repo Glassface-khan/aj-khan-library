@@ -31,8 +31,13 @@ jobs:
           try:
             s,c=api_call(api)
             report['pages_config']={'build_type':c.get('build_type'),'source':c.get('source'),'status':c.get('status'),'html_url':c.get('html_url')}
+            try:
+              _,latest=api_call(api+'/builds/latest')
+              report['latest_build_pre']={'status':latest.get('status'),'error':latest.get('error'),'created_at':latest.get('created_at'),'updated_at':latest.get('updated_at')}
+            except Exception as err:
+              report['latest_build_pre_error']=type(err).__name__+':'+str(err)[:140]
             source=c.get('source') or {}
-            if source.get('branch')=='main' and source.get('path')=='/':
+            if False:  # diagnostic-only rerun: previous rebuild already accepted HTTP 201
               try:
                 status,out=api_call(api+'/builds',method='POST')
                 report['rebuild_trigger']='REQUESTED, HTTP '+str(status)
@@ -64,6 +69,11 @@ jobs:
             time.sleep(10)
           else:
             report['live_cover']='FAIL'
+          try:
+            _,latest2=api_call(api+'/builds/latest')
+            report['latest_build_post']={'status':latest2.get('status'),'error':latest2.get('error'),'created_at':latest2.get('created_at'),'updated_at':latest2.get('updated_at')}
+          except Exception as err:
+            report['latest_build_post_error']=type(err).__name__+':'+str(err)[:140]
           report['attempts']=attempts
           dest=pathlib.Path('docs/publication/twop-pages-rebuild.json')
           dest.parent.mkdir(parents=True,exist_ok=True)
