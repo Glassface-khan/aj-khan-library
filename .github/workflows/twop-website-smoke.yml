@@ -1,0 +1,113 @@
+name: THE WEIGHT OF PROOF public author-site smoke
+
+on:
+  push:
+    paths:
+      - '.github/workflows/twop-website-smoke.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 7
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check static catalog, live cover, backend, and private access boundary
+        id: check
+        run: |
+          python3 - <<'PY'
+          import json,pathlib,urllib.request,urllib.parse,time,sys
+          book_id = "b_the_weight_of_proof_v1_0r"
+          title = "THE WEIGHT OF PROOF"
+          site = "https://glassface-khan.github.io/aj-khan-library/"
+          backend = "https://script.google.com/macros/s/AKfycbwcbRDaWkM1wf3MV_dj4RPw9jQl2Fgc4YfGcmFrGU1S243yvh8WGW7mbyXLbSeVJKI/exec"
+          report = {"book_id":book_id,"title":title,"target_edition":"v1.0R reader proof","website_complete":False,
+                    "authorized_epub_owner_login":"NOT_TESTED_REQUIRES_OWNER",
+                    "retail_approval":"NOT_GRANTED_SCHOLAR_LEGAL_EPUBCHECK_GATES_OPEN"}
+          failures=[]
+          def get(url):
+              req=urllib.request.Request(url,headers={"User-Agent":"AJK-TWOP-Smoke/1.0","Cache-Control":"no-cache"})
+              with urllib.request.urlopen(req,timeout=25) as r:
+                  return r.status,r.headers.get("Content-Type",""),r.read()
+          try:
+              raw=pathlib.Path("books-live.json").read_text(encoding="utf-8")
+              assert not any(z in raw for z in ("drive.google.com","docs.google.com","drive-private://"))
+              obj=json.loads(raw)
+              books=json.loads(obj["books"]) if isinstance(obj["books"],str) else obj["books"]
+              matches=[b for b in books if b.get("id")==book_id]
+              assert len(matches)==1,"Not exactly one fallback catalog entry"
+              b=matches[0]
+              assert b.get("title")==title and b.get("chapterCount")==40
+              assert b.get("coverUrl")=="assets/covers/the-weight-of-proof.png"
+              assert str(b.get("epubUrl","")).startswith("private-epub://")
+              cover=pathlib.Path(b["coverUrl"])
+              assert cover.is_file() and cover.read_bytes().startswith(b"\x89PNG\r\n\x1a\n")
+              report["local_catalog_and_cover"]="PASS"
+          except Exception as e:
+              failures.append("local_catalog_or_cover:"+str(e)[:180])
+              report["local_catalog_and_cover"]="FAIL"
+          def retry(key,fn):
+              last="not attempted"
+              for k in range(5):
+                  try:
+                      result=fn()
+                      report[key]=result
+                      return
+                  except Exception as e:
+                      last=type(e).__name__+":"+str(e)[:120]
+                      time.sleep(10)
+              report[key]="FAIL: "+last
+              failures.append(key+":"+last)
+          def cover_check():
+              code,ctype,data=get(site+"assets/covers/the-weight-of-proof.png?qa=twop-20261104")
+              assert code==200 and ctype.startswith("image/") and data.startswith(b"\x89PNG\r\n\x1a\n"),"Cover not live image"
+              return "PASS, bytes="+str(len(data))
+          def home_check():
+              code,ctype,data=get(site+"?qa=twop-20261104")
+              assert code==200 and len(data)>3000, "Homepage not live"
+              return "PASS"
+          def backend_check():
+              code,ctype,body=get(backend+"?action=getBooks")
+              obj=json.loads(body.decode("utf-8"))
+              allbooks=json.loads(obj["books"]) if isinstance(obj["books"],str) else obj["books"]
+              matches=[b for b in allbooks if b.get("id")==book_id or b.get("title")==title]
+              assert len(matches)==1,"Not exactly one backend entry"
+              b=matches[0]
+              assert b.get("coverUrl")=="assets/covers/the-weight-of-proof.png"
+              assert str(b.get("epubUrl","")).startswith("private-epub://")
+              assert "drive.google.com" not in json.dumps(allbooks) and "drive-private://" not in json.dumps(allbooks)
+              return "PASS, book_count="+str(len(allbooks))
+          def anon_check():
+              q=urllib.parse.urlencode({"action":"getPrivateEpub","bookTitle":title,"langCode":"EN","intent":"read"})
+              status,ctype,body=get(backend+"?"+q)
+              answer=json.loads(body.decode("utf-8"))
+              assert answer.get("ok") is not True,"CRITICAL anonymous EPUB route succeeded"
+              return "PASS (anonymous access denied)"
+          retry("public_cover",cover_check)
+          retry("homepage",home_check)
+          retry("backend_catalog",backend_check)
+          retry("anonymous_epub_denial",anon_check)
+          report["public_smoke_passed"]=not bool(failures)
+          report["website_complete"]=False
+          report["note"]="Public catalogue and denial probes cannot substitute for an authorized owner-login EPUB open, which remains NOT TESTED."
+          report["failures"]=failures
+          target=pathlib.Path("docs/publication/the-weight-of-proof-site-smoke.json")
+          target.parent.mkdir(parents=True,exist_ok=True)
+          target.write_text(json.dumps(report,indent=2,ensure_ascii=False)+"\n",encoding="utf-8")
+          print(json.dumps({k:v for k,v in report.items() if k not in ("note",)},ensure_ascii=False))
+          if failures:sys.exit(1)
+          PY
+      - name: Persist report, including failing checks
+        if: always()
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add docs/publication/the-weight-of-proof-site-smoke.json
+          if ! git diff --cached --quiet; then
+            git commit -m "Record THE WEIGHT OF PROOF live author-site smoke"
+            git pull --rebase origin main
+            git push origin main
+          fi
