@@ -4,6 +4,7 @@ import json
 import os
 import urllib.parse
 import urllib.request
+import urllib.error
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
@@ -19,6 +20,34 @@ SUPABASE = f"https://{PROJECT}.supabase.co"
 SIGNER = SUPABASE + "/functions/v1/ajk-caravanserai-m4b-source-once"
 OIDC_AUDIENCE = "ajk-caravanserai-m4b-sign-once-v1"
 assert len(PARTS) == 6 and sum(PARTS) == TOTAL
+
+# Safe diagnostics: static labels and numeric status only, never exception text.
+SAFE_STAGES = frozenset({
+    "initial", "drive_env", "github_oidc_preflight", "google_token",
+    "google_scope", "github_oidc_request", "github_oidc_response",
+    "drive_folder", "source", "drive_lookup", "drive_upload",
+    "drive_readback", "drive_final_privacy",
+})
+CURRENT_STAGE = "initial"
+
+
+def mark(stage):
+    global CURRENT_STAGE
+    if stage not in SAFE_STAGES:
+        raise RuntimeError("unknown_diagnostic_stage")
+    CURRENT_STAGE = stage
+
+
+def safe_failure_category(exc):
+    if isinstance(exc, urllib.error.HTTPError):
+        code = exc.code
+        return "http_" + str(code) if isinstance(code, int) and 400 <= code <= 599 else "http_error"
+    if isinstance(exc, urllib.error.URLError):
+        return "transport"
+    if isinstance(exc, RuntimeError):
+        return "guard"
+    return "other"
+
 
 
 class NoRedirect(urllib.request.HTTPRedirectHandler):
@@ -39,11 +68,13 @@ def as_json(url, *, data=None, headers=None, method=None):
 
 
 def credentials():
+    mark("drive_env")
     keys = ("GOOGLE_DRIVE_CLIENT_ID", "GOOGLE_DRIVE_CLIENT_SECRET", "GOOGLE_DRIVE_REFRESH_TOKEN")
     if any(not os.getenv(k) for k in keys):
         raise RuntimeError("missing_drive_oauth")
     oidc_url = os.environ.get("ACTIONS_ID_TOKEN_REQUEST_URL", "")
     oidc_bearer = os.environ.get("ACTIONS_ID_TOKEN_REQUEST_TOKEN", "")
+    mark("github_oidc_preflight")
     parsed = urllib.parse.urlparse(oidc_url)
     if (not oidc_bearer or parsed.scheme != "https" or
         not (parsed.hostname or "").endswith(".actions.githubusercontent.com")):
@@ -52,13 +83,17 @@ def credentials():
         "client_id": os.environ[keys[0]], "client_secret": os.environ[keys[1]],
         "refresh_token": os.environ[keys[2]], "grant_type": "refresh_token",
     }).encode("ascii")
+    mark("google_token")
     result = as_json("https://oauth2.googleapis.com/token", data=payload, method="POST",
                      headers={"Content-Type": "application/x-www-form-urlencoded"})
+    mark("google_scope")
     if set(result.get("scope", "").split()) != {SCOPE}:
         raise RuntimeError("unexpected_oauth_scope")
     sep = "&" if parsed.query else "?"
+    mark("github_oidc_request")
     oidc_response = as_json(oidc_url + sep + "audience=" + urllib.parse.quote(OIDC_AUDIENCE),
                             headers={"Authorization": "bearer " + oidc_bearer})
+    mark("github_oidc_response")
     id_token = oidc_response.get("value")
     if not isinstance(id_token, str) or id_token.count(".") != 2:
         raise RuntimeError("bad_oidc_response")
@@ -181,13 +216,16 @@ def readback(token, file_id, name, size, sha, md5):
 
 def run():
     token, supabase_key = credentials()
+    mark("drive_folder")
     private(token, FOLDER, folder=True)
     completed = []
     with TemporaryDirectory() as directory:
         for index, size in enumerate(PARTS, 1):
             name = f"m4b-{index:03d}.m4b"
             path = Path(directory) / name
+            mark("source")
             sha, md5 = get_source(supabase_key, name, size, path)
+            mark("drive_lookup")
             found = candidates(token, name)
             if found:
                 obj = found[0]
@@ -196,10 +234,13 @@ def run():
                     raise RuntimeError("existing_target_conflict_no_overwrite")
                 file_id = obj["id"]
             else:
+                mark("drive_upload")
                 file_id = upload(token, name, size, path)["id"]
+            mark("drive_readback")
             completed.append(readback(token, file_id, name, size, sha, md5))
             path.unlink()
             print("CARAVANSERAI_PART_PASS", name, size, "sha256=" + sha, flush=True)
+    mark("drive_final_privacy")
     private(token, FOLDER, folder=True)
     if len(completed) != 6 or sum(x["bytes"] for x in completed) != TOTAL:
         raise RuntimeError("incomplete_manifest")
@@ -209,7 +250,9 @@ def run():
 if __name__ == "__main__":
     try:
         run()
-    except Exception:
-        # Don't print private HTTP payloads, OAuth tokens, service key, or signed URLs.
-        print("CARAVANSERAI_COPY_BLOCKED_NO_DELETE_NO_PUBLIC_SHARE", flush=True)
+    except Exception as exc:
+        # Never echo OAuth responses, tokens, signed URLs, or exception strings.
+        print("CARAVANSERAI_COPY_BLOCKED_NO_DELETE_NO_PUBLIC_SHARE"
+              + " stage=" + CURRENT_STAGE
+              + " category=" + safe_failure_category(exc), flush=True)
         raise SystemExit(1)
