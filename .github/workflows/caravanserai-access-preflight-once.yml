@@ -1,0 +1,46 @@
+name: CARAVANSERAI - one-time access preflight (zero audio transfer)
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/caravanserai-access-preflight-once.yml'
+permissions:
+  contents: read
+  id-token: write
+concurrency:
+  group: ajk-caravanserai-access-preflight-once
+  cancel-in-progress: false
+jobs:
+  preflight:
+    if: >-
+      github.repository == 'Glassface-khan/aj-khan-library' &&
+      github.ref == 'refs/heads/main' &&
+      contains(github.event.head_commit.message, 'caravanserai-access-preflight-once')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 4
+    steps:
+      - uses: actions/checkout@v4
+      - name: Execute all 12 network-isolated safety tests
+        run: python3 -m unittest -q tests/test_caravanserai_m4b_private_once.py
+      - name: Verify Google access and GitHub OIDC without source download or upload
+        env:
+          GOOGLE_DRIVE_CLIENT_ID: ${{ secrets.GOOGLE_DRIVE_CLIENT_ID }}
+          GOOGLE_DRIVE_CLIENT_SECRET: ${{ secrets.GOOGLE_DRIVE_CLIENT_SECRET }}
+          GOOGLE_DRIVE_REFRESH_TOKEN: ${{ secrets.GOOGLE_DRIVE_REFRESH_TOKEN }}
+        run: |
+          python3 - <<'PY'
+          import importlib.util,sys
+          from pathlib import Path
+          source=Path("ops/caravanserai_m4b_private_once.py")
+          spec=importlib.util.spec_from_file_location("caravanserai_once",source)
+          module=importlib.util.module_from_spec(spec);spec.loader.exec_module(module)
+          try:
+              token,oidc=module.credentials()
+              print("CARAVANSERAI_ACCESS_PREFLIGHT_OAUTH_AND_GITHUB_OIDC_PASS",flush=True)
+              module.private(token,module.FOLDER,folder=True)
+              print("CARAVANSERAI_ACCESS_PREFLIGHT_OWNER_ONLY_DRIVE_PASS_NO_AUDIO_TRANSFER",flush=True)
+          except Exception as exc:
+              print("CARAVANSERAI_ACCESS_PREFLIGHT_FAILED stage="+module.CURRENT_STAGE+
+                    " category="+module.safe_failure_category(exc),flush=True)
+              sys.exit(1)
+          PY
