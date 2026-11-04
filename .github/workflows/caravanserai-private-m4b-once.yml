@@ -8,6 +8,7 @@ on:
         required: true
 permissions:
   contents: read
+  id-token: write
 concurrency:
   group: ajk-caravanserai-m4b-20261104
   cancel-in-progress: false
@@ -28,5 +29,5 @@ jobs:
           GOOGLE_DRIVE_CLIENT_ID: ${{ secrets.GOOGLE_DRIVE_CLIENT_ID }}
           GOOGLE_DRIVE_CLIENT_SECRET: ${{ secrets.GOOGLE_DRIVE_CLIENT_SECRET }}
           GOOGLE_DRIVE_REFRESH_TOKEN: ${{ secrets.GOOGLE_DRIVE_REFRESH_TOKEN }}
-          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          # GitHub OIDC token authenticates to a fixed six-file signer.
         run: python3 -B ops/caravanserai_m4b_private_once.py
