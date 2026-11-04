@@ -1,0 +1,79 @@
+name: THE WEIGHT OF PROOF author-site delivery probe
+on:
+  push:
+    paths:
+      - '.github/workflows/diagnose-the-weight-of-proof.yml'
+      - 'books-live.json'
+      - 'assets/covers/the-weight-of-proof.png'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  website-proof:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate book card, cover and protected EPUB gateway
+        run: |
+          python3 - <<'PY'
+          import json, pathlib, urllib.request, urllib.parse, urllib.error, time
+          title='THE WEIGHT OF PROOF'
+          cover='assets/covers/the-weight-of-proof.png'
+          root='https://glassface-khan.github.io/aj-khan-library/'
+          backend='https://script.google.com/macros/s/AKfycbwcbRDaWkM1wf3MV_dj4RPw9jQl2Fgc4YfGcmFrGU1S243yvh8WGW7mbyXLbSeVJKI/exec'
+          raw=pathlib.Path('books-live.json').read_text(encoding='utf-8')
+          assert all(word not in raw for word in ('drive.google.com','docs.google.com','drive-private://')), 'Public catalogue exposes private Drive reference'
+          payload=json.loads(raw)
+          books=json.loads(payload['books']) if isinstance(payload['books'],str) else payload['books']
+          found=[b for b in books if b.get('title')==title]
+          assert len(found)==1, f'Expected one book, found {len(found)}'
+          b=found[0]
+          assert b.get('coverUrl')==cover, 'Cover path mismatch'
+          assert b.get('wordCount')==102691 and b.get('chapterCount')==40, 'Book metadata mismatch'
+          assert b.get('langs',{}).get('EN',{}).get('epubUrl','').startswith('private-epub://'), 'EN EPUB is not protected'
+          assert 'reader_proof' in b.get('publicationStatus',''), 'Reader-proof gate missing'
+          p=pathlib.Path(cover)
+          assert p.is_file() and p.read_bytes().startswith(b'\x89PNG\r\n\x1a\n'), 'Public cover is absent/corrupt'
+          print('LOCAL_CATALOGUE_AND_COVER=PASS')
+          def get(url,retries=8,wait=7):
+            last=None
+            for i in range(retries):
+              try:
+                req=urllib.request.Request(url,headers={'User-Agent':'AJK-Weight-of-Proof-Reader-Proof-Verification/1.0','Cache-Control':'no-cache'})
+                with urllib.request.urlopen(req,timeout=28) as res:
+                  return res.status,res.headers.get('Content-Type',''),res.read()
+              except Exception as ex:
+                last=ex
+                print('REMOTE_RETRY',i+1,str(ex)[:130])
+                if i<retries-1: time.sleep(wait)
+            raise AssertionError(f'Live URL failed: {url.split("?")[0]}, {last}')
+          status,ctype,html=get(root,retries=8,wait=7)
+          assert status==200 and 'html' in ctype.lower(), f'Author site inaccessible: {status}, {ctype}'
+          print('LIVE_AUTHOR_SITE=PASS')
+          status,ctype,data=get(root+cover+'?proof=20261104',retries=10,wait=7)
+          assert status==200 and ctype.lower().startswith('image/') and data.startswith(b'\x89PNG\r\n\x1a\n'), 'Live cover invalid'
+          assert len(data)==p.stat().st_size, 'Live cover size differs from repository'
+          print('LIVE_COVER=PASS',len(data))
+          status,ctype,data=get(backend+'?action=getBooks',retries=8,wait=8)
+          assert status==200, 'Backend not responding'
+          listing=json.loads(data)
+          remote=json.loads(listing['books']) if isinstance(listing.get('books'),str) else listing.get('books',[])
+          assert isinstance(remote,list), 'Invalid live books payload'
+          matches=[x for x in remote if x.get('title')==title]
+          assert len(matches)==1, f'Live backend count for title: {len(matches)}'
+          rb=matches[0]
+          assert rb.get('coverUrl')==cover, 'Live backend cover mismatch'
+          assert rb.get('wordCount')==102691 and rb.get('chapterCount')==40, 'Live backend metadata mismatch'
+          assert str(rb.get('epubUrl','')).startswith('private-epub://'), 'Live backend EPUB not protected'
+          assert all(x not in json.dumps(remote,ensure_ascii=False) for x in ('drive.google.com','docs.google.com','drive-private://')), 'Live catalogue has private URLs'
+          print('LIVE_BOOKS_DATA=PASS',len(matches))
+          query=urllib.parse.urlencode({'action':'getPrivateEpub','bookTitle':title,'langCode':'EN','intent':'read'})
+          status,ctype,body=get(backend+'?'+query,retries=6,wait=6)
+          denied=json.loads(body)
+          assert denied.get('ok') is not True, 'SECURITY FAILURE: anonymous EPUB read succeeded'
+          assert 'zugriff' in str(denied.get('error','')).lower(), f'Unexpected EPUB route response: {denied}'
+          print('ANONYMOUS_PRIVATE_EPUB_DENIAL=PASS')
+          print('AUTHORIZED_EPUB_READER_TEST=NOT_TESTED_REQUIRES_OWNER_LOGIN')
+          print('SCIENTIFIC_AND_RETAIL_RELEASE=NOT_APPROVED_READER_PROOF_ONLY')
+          PY
