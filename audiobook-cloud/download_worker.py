@@ -160,17 +160,16 @@ def main():
                         out.write(block)
                 ch["local"]=path;ch["seconds"]=duration(path)
                 api("downloadWorkerProgress",jobId=job["id"],done=i+1,total=len(chapters)+2)
-            stage="zip"
+            stage="prepare_chapters"
             export_chapters=split_oversized_chapters(chapters,folder)
-            outputs=pack_zip(export_chapters,folder)
             api("downloadWorkerProgress",jobId=job["id"],done=len(chapters)+1,total=len(chapters)+2)
             stage="m4b"
-            outputs+=pack_m4b(export_chapters,claim["book"],folder)
+            outputs=pack_m4b(export_chapters,claim["book"],folder)
             for path in outputs:
                 stage="upload_sign"
                 signed=api("downloadWorkerUpload",jobId=job["id"],name=path.name)
                 # Direct private Storage upload bypasses Edge memory limits.
-                content_type="application/zip" if path.suffix==".zip" else "audio/mp4"
+                content_type="audio/mp4"
                 request=urllib.request.Request(signed["url"],data=path.read_bytes(),method="PUT",headers={"Content-Type":content_type,"x-upsert":"true"})
                 stage="storage_upload"
                 with urllib.request.urlopen(request,timeout=120) as r:

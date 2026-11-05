@@ -907,7 +907,7 @@
   function downloadHtml_(bookId){
     const d=downloadStates.get(bookId)||{};
     const waiting=d.status==='queued'||d.status==='building'||downloadRequests.has(bookId);
-    const label=waiting?tr('Download wird vorbereitet …','Preparing download …'):tr('M4B + MP3-ZIP vorbereiten','Prepare M4B + MP3 ZIP');
+    const label=waiting?tr('Download wird vorbereitet …','Preparing download …'):tr('M4B vorbereiten','Prepare M4B');
     const message=d.status==='queued'?tr('Angefordert · wartet auf den Download-Worker.','Requested · waiting for the download worker.'):
       d.status==='building'?tr('Dateien werden privat gebündelt','Files are being packaged privately')+(d.progressTotal?' · '+d.progressDone+'/'+d.progressTotal:''):
       d.status==='ready'?tr('Download bereit. Große Bücher sind in nummerierte Teile aufgeteilt.','Download ready. Large books are split into numbered parts.'):

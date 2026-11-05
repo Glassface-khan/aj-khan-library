@@ -491,7 +491,7 @@ Deno.serve(async (req: Request) => {
           if(listing.error||!(listing.data||[]).some((x:any)=>x.name===file.name))throw new Error("DOWNLOAD_FILE_MISSING");
           files.push({name:file.name,path,format:file.name.endsWith(".zip")?"ZIP":"M4B",bytes:Math.max(0,Number(file.bytes)||0)});
         }
-        if(!files.some((x:any)=>x.format==="ZIP")||!files.some((x:any)=>x.format==="M4B"))throw new Error("DOWNLOAD_FORMAT_MISSING");
+        if(!files.some((x:any)=>x.format==="M4B"))throw new Error("DOWNLOAD_FORMAT_MISSING");
       }
       const r=await supabase.from("audiobook_download_jobs").update({status:ready?"ready":"failed",files,error_detail:ready?null:"Download packaging failed or edition changed",updated_at:new Date().toISOString()}).eq("id",job.id).eq("worker_run_id",runId);
       if(r.error)throw r.error;
