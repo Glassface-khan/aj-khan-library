@@ -1,0 +1,46 @@
+name: Audio Factory - owner-authorized 225 ZIP-only cleanup (once)
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/af-zip-delete-once.yml'
+permissions:
+  contents: read
+concurrency:
+  group: af-zip-20261105-only
+  cancel-in-progress: false
+jobs:
+  offline-tests:
+    if: >-
+      github.repository == 'Glassface-khan/aj-khan-library' &&
+      github.ref == 'refs/heads/main' &&
+      github.actor == 'Glassface-khan' &&
+      contains(github.event.head_commit.message, 'af-zip-delete-remaining-225-once')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify fail-closed offline safety tests
+        run: python3 -m unittest -v tests/test_af_zip_cleanup_owner_once.py
+  five-zip-pilot:
+    needs: offline-tests
+    permissions:
+      contents: read
+      id-token: write
+    runs-on: ubuntu-24.04
+    timeout-minutes: 6
+    steps:
+      - uses: actions/checkout@v4
+      - name: Delete exactly 5 allowlisted ZIPs and verify M4B unchanged
+        run: python3 -B ops/af_zip_cleanup_owner_once.py pilot
+  remaining-220-zips:
+    needs: five-zip-pilot
+    permissions:
+      contents: read
+      id-token: write
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Delete at most 20 allowed ZIP files per batch and verify after every batch
+        run: python3 -B ops/af_zip_cleanup_owner_once.py remaining

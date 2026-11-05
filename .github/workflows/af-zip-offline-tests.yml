@@ -1,0 +1,20 @@
+name: Audio Factory ZIP-only deletion safety tests
+on:
+  pull_request:
+    paths:
+      - 'ops/af_zip_cleanup_owner_once.py'
+      - 'tests/test_af_zip_cleanup_owner_once.py'
+      - '.github/workflows/af-zip-delete-once.yml'
+      - '.github/workflows/af-zip-offline-tests.yml'
+permissions:
+  contents: read
+jobs:
+  test-offline:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@v4
+      - name: No-network ZIP deletion unit tests
+        run: |
+          python3 -m py_compile ops/af_zip_cleanup_owner_once.py tests/test_af_zip_cleanup_owner_once.py
+          python3 -m unittest -v tests/test_af_zip_cleanup_owner_once.py
