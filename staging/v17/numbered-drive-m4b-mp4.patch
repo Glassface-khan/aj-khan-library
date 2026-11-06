@@ -1,0 +1,59 @@
+--- a/docs/af3/safari-preview/af3_drive_inventory_v17.py
++++ b/docs/af3/safari-preview/af3_drive_inventory_v17.py
+@@ -32,6 +32,8 @@
+     return name
+ 
+ def part_number(name):
++    if name.lower().endswith('.m4b.mp4'):
++        name=name[:-4]
+     for pattern in PART_PATTERNS:
+         m=pattern.fullmatch(name)
+         if m:return int(m[1])
+@@ -166,7 +168,7 @@
+                 raise ImportFailure('Unterordner vorhanden. Buchstruktur zuerst eindeutig klären.')
+             name=row.get('name','')
+             if not isinstance(name,str):raise ImportFailure('Unbekannte Datei im Buchordner.')
+-            if name.lower().endswith('.m4b') or row.get('mimeType') in M4B_MIMES:
++            if name.lower().endswith(('.m4b','.m4b.mp4')) or row.get('mimeType') in M4B_MIMES:
+                 if row.get('parents')!=[folder_id]:
+                     raise ImportFailure('Dateizuordnung zum Buchordner nicht eindeutig.')
+                 m4bs.append(validate_metadata(row))
+--- a/docs/af3/safari-preview/drive_import_v14.py
++++ b/docs/af3/safari-preview/drive_import_v14.py
+@@ -14,9 +14,10 @@
+ def validate_metadata(m):
+     try:
+         assert re.fullmatch(r'[A-Za-z0-9_-]{12,128}',m['id'])
+-        assert m['name'].lower().endswith('.m4b') and not m.get('trashed',True)
++        alias = bool(re.fullmatch(r'm4b-[0-9]{3}\.m4b\.mp4',m['name'],re.I))
++        assert (m['name'].lower().endswith('.m4b') or alias) and not m.get('trashed',True)
+         assert m['ownedByMe'] is True and m['capabilities']['canDownload'] is True
+-        assert m['mimeType'] in ('audio/mp4','audio/x-m4b','application/octet-stream')
++        assert m['mimeType'] in ('audio/mp4','audio/x-m4b','application/octet-stream') or (alias and m['mimeType']=='video/mp4')
+         assert 100000<=int(m['size'])<=MAX_BYTES
+         assert re.fullmatch('[0-9a-f]{32}',m['md5Checksum'])
+         assert str(m['version']).isdecimal()
+--- a/docs/af3/safari-preview/drive_stream_gateway.py
++++ b/docs/af3/safari-preview/drive_stream_gateway.py
+@@ -133,7 +133,7 @@
+             raise DriveFailure("private Drive OAuth not configured")
+         uri = ("https://www.googleapis.com/drive/v3/files/" +
+                urllib.parse.quote(file_id, safe="") +
+-               ("?fields=id,mimeType,size,md5Checksum,version,capabilities(canDownload)"
++               ("?fields=id,name,mimeType,size,md5Checksum,version,capabilities(canDownload)"
+                 if metadata else "?alt=media"))
+         headers = {"Authorization": "Bearer " + token,
+                    "Accept": "application/json" if metadata else "audio/mp4"}
+@@ -180,9 +180,10 @@
+                      int(data["size"]) == edition.size and
+                      str(data["version"]) == edition.drive_version and
+                      data.get("md5Checksum", "").lower() == edition.drive_md5 and
+-                     data.get("mimeType") in (
++                     (data.get("mimeType") in (
+                          "audio/x-m4b", "audio/mp4", "application/octet-stream"
+-                     ) and
++                     ) or (data.get("mimeType") == "video/mp4" and
++                           re.fullmatch(r"m4b-[0-9]{3}\.m4b\.mp4", data.get("name",""), re.I))) and
+                      data.get("capabilities", {}).get("canDownload") is True)
+         except (KeyError, ValueError, TypeError, AttributeError):
+             valid = False

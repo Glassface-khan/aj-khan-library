@@ -3,7 +3,16 @@ import { downloadSnapshot } from "./download_helpers.ts";
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 
-const m4bEditions = JSON.parse(Deno.env.get("V17_VERIFIED_EDITIONS") || "{}");
+function readM4bEditions() {
+  try {
+    const value = JSON.parse(Deno.env.get("V17_VERIFIED_EDITIONS") || "{}");
+    return value && typeof value === "object" && !Array.isArray(value) ? value : {};
+  } catch {
+    console.error("Invalid V17 edition configuration; M4B pilot disabled");
+    return {};
+  }
+}
+const m4bEditions = readM4bEditions();
 const privateOrigin = Deno.env.get("V17_PRIVATE_ORIGIN") || "";
 const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwcbRDaWkM1wf3MV_dj4RPw9jQl2Fgc4YfGcmFrGU1S243yvh8WGW7mbyXLbSeVJKI/exec";
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
