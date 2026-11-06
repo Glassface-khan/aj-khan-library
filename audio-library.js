@@ -1014,10 +1014,12 @@
     });
 
     panel.querySelector('#ajka-back').addEventListener('click', () => {
-      if (state.audio) state.audio.currentTime = Math.max(0, state.audio.currentTime - 15);
+      if (m4b && !loadingSource) seekBook(bookPosition() - 15, !state.audio.paused);
+      else if (!m4b && state.audio) state.audio.currentTime = Math.max(0, state.audio.currentTime - 15);
     });
     panel.querySelector('#ajka-forward').addEventListener('click', () => {
-      if (state.audio) state.audio.currentTime = Math.min(state.audio.duration || Infinity, state.audio.currentTime + 15);
+      if (m4b && !loadingSource) seekBook(bookPosition() + 15, !state.audio.paused);
+      else if (!m4b && state.audio) state.audio.currentTime = Math.min(state.audio.duration || Infinity, state.audio.currentTime + 15);
     });
     const speed = panel.querySelector('#ajka-speed');
     if (speed) {
@@ -1036,6 +1038,10 @@
 
     seek.addEventListener('input', () => {
       if (!state.audio || !Number.isFinite(state.audio.duration) || state.audio.duration <= 0) return;
+      if (m4b) {
+        if (!loadingSource) seekBook(Number(seek.value) / 1000 * m4b.timeline.duration, !state.audio.paused);
+        return;
+      }
       state.audio.currentTime = (Number(seek.value) / 1000) * state.audio.duration;
     });
 
@@ -1076,6 +1082,17 @@
   async function startBook(bookId) {
     const book = state.catalog.find((b) => b.id === bookId);
     if (!book || !(book.chapters || []).length) return;
+    const ticket = ++opening;
+    if (state.audio) {
+      await saveProgress(false, false, true);
+      if (ticket !== opening) return;
+      state.audio.pause();
+      state.audio.removeAttribute('src');
+      state.audio.load();
+    }
+    m4b = null;
+    activePart = 0;
+    loadingSource = true;
     state.activeBook = book;
 
     let chapter = book.chapters[0];
@@ -1088,7 +1105,44 @@
     render();
     const savedRate = Number(book.progress && book.progress.playback_rate);
     if (Number.isFinite(savedRate) && savedRate >= .5 && savedRate <= 2) state.playbackRate = savedRate;
-    await loadChapter(book, chapter, seek, true, state.playbackRate);
+    if (book.m4bAvailable) {
+      try {
+        const [{source}, {createPlayback}] = await Promise.all([
+          api({op:'m4bSource', bookId:book.id, chapterId:chapter.id}),
+          import('./audio-m4b-playback.mjs'),
+        ]);
+        if (opening !== ticket) return;
+        m4b = createPlayback(source, book.chapters);
+      } catch (err) {
+        if (opening === ticket) { state.error = friendlyError(err); render(); }
+        return;
+      }
+    }
+    if (opening === ticket) await loadChapter(book, chapter, seek, true, state.playbackRate);
+  }
+
+  let m4b = null;
+  let activePart = 0;
+  let loadingSource = false;
+  let opening = 0;
+
+  function bookPosition() {
+    return m4b && activePart ? m4b.timeline.bookSeconds(activePart, state.audio.currentTime) : state.audio.currentTime;
+  }
+
+  function seekBook(seconds, play) {
+    const audio = ensureAudio();
+    const {partNumber, localSeconds} = m4b.timeline.locate(seconds);
+    if (partNumber !== activePart || !audio.readyState) {
+      loadingSource = true;
+      state.desiredSeek = localSeconds;
+      activePart = partNumber;
+      audio.src = m4b.source(partNumber);
+      audio.load();
+    } else {
+      audio.currentTime = localSeconds;
+    }
+    if (play) audio.play().catch(() => updatePlayerUi());
   }
 
   function ensureAudio() {
@@ -1097,7 +1151,16 @@
     audio.preload = 'metadata';
     audio.defaultPlaybackRate = state.playbackRate;
     audio.playbackRate = state.playbackRate;
+    audio.addEventListener('error', () => {
+      if (m4b && audio.src) {
+        loadingSource = true;
+        state.error = tr('Privaten M4B-Zugang und Audioformat prüfen.', 'Check private M4B access and audio format.');
+        render();
+      }
+    });
     audio.addEventListener('timeupdate', () => {
+      if (loadingSource) return;
+      if (m4b) state.activeChapter = m4b.position(bookPosition()).chapter;
       updatePlayerUi();
       if (Date.now() - state.lastSavedAt > 15000) saveProgress(false, false);
     });
@@ -1108,6 +1171,7 @@
         audio.currentTime = Math.min(state.desiredSeek, Math.max(0, audio.duration - .25));
       }
       state.desiredSeek = 0;
+      loadingSource = false;
       audio.defaultPlaybackRate = state.playbackRate;
       audio.playbackRate = state.playbackRate;
       updatePlayerUi();
@@ -1121,10 +1185,18 @@
     state.error = '';
     state.activeBook = book;
     state.activeChapter = chapter;
+    if (book.m4bAvailable) {
+      if (m4b) seekBook(m4b.chapterTime(chapter.id, seek), autoplay);
+      updatePlayerUi();
+      return;
+    }
+    const ticket = ++opening;
+    loadingSource = true;
     state.desiredSeek = Math.max(0, Number(seek) || 0);
     render();
     try {
       const data = await api({ op: 'chapterUrl', chapterId: chapter.id });
+      if (opening !== ticket) return;
       const audio = ensureAudio();
       const nextRate = rate != null
         ? Math.min(2, Math.max(.5, Number(rate) || 1))
@@ -1162,6 +1234,17 @@
     if (audio && seek && Number.isFinite(audio.duration) && audio.duration > 0) seek.value = String(Math.round((audio.currentTime / audio.duration) * 1000));
     if (now) now.textContent = formatTime(audio ? audio.currentTime : 0);
     if (duration) duration.textContent = formatTime(audio && Number.isFinite(audio.duration) ? audio.duration : (state.activeChapter && state.activeChapter.duration_seconds || 0));
+    if (m4b && audio && activePart && !loadingSource) {
+      const at = bookPosition();
+      const chapter = m4b.position(at).chapter;
+      if (seek) seek.value = String(Math.round(1000 * at / m4b.timeline.duration));
+      if (now) now.textContent = formatTime(at);
+      if (duration) duration.textContent = formatTime(m4b.timeline.duration);
+      const title = root.querySelector('#ajka-current-chapter');
+      const picker = root.querySelector('#ajka-chapter-select');
+      if (title) title.textContent = chapter.title;
+      if (picker) picker.value = chapter.id;
+    }
     const rate = audio ? audio.playbackRate : state.playbackRate;
     if (speed) speed.value = String(Math.round(rate * 100));
     if (speedValue) speedValue.textContent = Math.round(rate * 100) + '%';
@@ -1169,6 +1252,16 @@
 
   async function onEnded() {
     if (!state.activeBook || !state.activeChapter) return;
+    if (loadingSource) return;
+    if (m4b) {
+      if (activePart < m4b.parts) {
+        seekBook(m4b.timeline.bookSeconds(activePart + 1, 0), true);
+      } else {
+        await saveProgress(true, false, true);
+        await loadCatalog();
+      }
+      return;
+    }
     const chapters = state.activeBook.chapters || [];
     const idx = chapters.findIndex((x) => x.id === state.activeChapter.id);
     const last = idx < 0 || idx >= chapters.length - 1;
@@ -1182,31 +1275,24 @@
 
   async function saveProgress(completed = false, keepalive = false, force = false) {
     if (!state.activeBook || !state.activeChapter || !state.audio) return;
-    const pos = Math.max(0, Number(state.audio.currentTime) || 0);
+    if (loadingSource || !state.audio.src) return;
+    const book = state.activeBook;
+    const current = m4b ? m4b.position(bookPosition()) : {chapter:state.activeChapter, offset:state.audio.currentTime};
+    const pos = Math.max(0, Number(current.offset) || 0);
+    const progress = {chapter_id:current.chapter.id, position_seconds:pos,
+      playback_rate:state.playbackRate || state.audio.playbackRate || 1, completed:!!completed};
     if (!force && !completed && Math.abs(pos - state.lastSavedPosition) < 1 && Date.now() - state.lastSavedAt < 30000) return;
     state.lastSavedAt = Date.now();
     state.lastSavedPosition = pos;
     try {
       await api({
         op: 'saveProgress',
-        chapterId: state.activeChapter.id,
+        chapterId: progress.chapter_id,
         positionSeconds: pos,
-        playbackRate: state.playbackRate || state.audio.playbackRate || 1,
-        completed: !!completed
+        playbackRate: progress.playback_rate,
+        completed: progress.completed
       }, { keepalive });
-      if (state.activeBook.progress) {
-        state.activeBook.progress.chapter_id = state.activeChapter.id;
-        state.activeBook.progress.position_seconds = pos;
-        state.activeBook.progress.playback_rate = state.playbackRate || state.audio.playbackRate || 1;
-        state.activeBook.progress.completed = !!completed;
-      } else {
-        state.activeBook.progress = {
-          chapter_id: state.activeChapter.id,
-          position_seconds: pos,
-          playback_rate: state.playbackRate || state.audio.playbackRate || 1,
-          completed: !!completed
-        };
-      }
+      book.progress = progress;
     } catch (_) {}
   }
 
@@ -1589,3 +1675,4 @@
   }
   window.addEventListener('storage', installFactoryLink);
 })();
+
