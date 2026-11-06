@@ -1,0 +1,242 @@
+{
+  "id": "5849d4bf-f7ef-4b38-a1ab-dae70497428f",
+  "title": "The Lamp Keeper",
+  "is_active": true,
+  "status": "ready",
+  "folder_id": "1DTe1e04r4ybB2FQ8x6_6ivUFYjJv0euJ",
+  "files": [
+    {
+      "id": "1v54Io9QidgSZ7yyTwpHNMgDZzfAbuRFd",
+      "md5": "09b0c8b97eca6593a4df31fafbeac11e",
+      "name": "m4b-001.m4b",
+      "bytes": 39139616,
+      "sha256": "60508ed9b8f0d88a57f7934f0abfb8796a571062b25e5e8b752d257a18dab7f0"
+    },
+    {
+      "id": "13Naps0btEqnUzFDFEyCY-LI0fJo0VRdo",
+      "md5": "4bfd351f330758be9c176d27b4f08bfa",
+      "name": "m4b-002.m4b",
+      "bytes": 38070907,
+      "sha256": "be8528be39aff24f5e12fdb063436dc2269477d6ca2599b67d60688585f89c80"
+    },
+    {
+      "id": "13im_gLZV1EGq0hCTnK_TkdPRtUFhZBmp",
+      "md5": "30008ea7810ea4bdf43c7190538b1277",
+      "name": "m4b-003.m4b",
+      "bytes": 38378055,
+      "sha256": "1426961c6712229709a12fc923b814e17514206bc552948be940a9a5a0bbad6a"
+    },
+    {
+      "id": "1IsEzwzjD3pkzl0XF7s17omEDolJvC2y9",
+      "md5": "eca7002ea056044f8888ae2f4009743f",
+      "name": "m4b-004.m4b",
+      "bytes": 40678316,
+      "sha256": "ceff97b5685341d0d92c23880e15923aa24eb1123e077a7c23ae44f07581ac41"
+    },
+    {
+      "id": "11XkZL7Sa9knx6cvQumI-d3y6T7vUtjsK",
+      "md5": "967594936a9a4a69bb2e92a678b6a14d",
+      "name": "m4b-005.m4b",
+      "bytes": 20322986,
+      "sha256": "810f62c7c0ecf0212dbff6c63dc5f941810d709ca3f014387386cd79d1d158c2"
+    }
+  ],
+  "chapters": [
+    {
+      "id": "fe41c065-e745-4ae5-afb7-22b4e45b801c",
+      "title": "The Lamp Keeper"
+    },
+    {
+      "id": "14318add-d8d8-4d40-aaaa-bedad754e846",
+      "title": "Prologue"
+    },
+    {
+      "id": "e2a1b2cd-0f5f-4f91-a477-499317b11285",
+      "title": "Chapter 1"
+    },
+    {
+      "id": "51d2c02b-07c1-4b3b-a0b0-1c76f6760350",
+      "title": "Chapter 2"
+    },
+    {
+      "id": "159846b1-f79e-42f4-aae9-c0c5e460221d",
+      "title": "Chapter 3"
+    },
+    {
+      "id": "b80b3c65-84d2-40dd-a1a3-5754ba9da5b1",
+      "title": "Chapter 4"
+    },
+    {
+      "id": "0a3cc0bc-803b-4f04-9a8b-11c8a299f1db",
+      "title": "Chapter 5"
+    },
+    {
+      "id": "f9ef0359-d9c5-489f-af6b-4ed580198268",
+      "title": "Chapter 6"
+    },
+    {
+      "id": "c7b68e7e-b8ae-49d8-bcad-34ecccb4073a",
+      "title": "Chapter 7"
+    },
+    {
+      "id": "90e1211c-c3a6-49c1-9763-48444d3b0f8b",
+      "title": "Chapter 8"
+    },
+    {
+      "id": "b38472d2-b87c-43e8-bcb4-da754142517e",
+      "title": "Chapter 9"
+    },
+    {
+      "id": "8aabf72c-50b2-4f34-98db-fb7238ab5d7a",
+      "title": "Chapter 10"
+    },
+    {
+      "id": "09bb4f97-2166-4d7f-9bc6-80aaf9baf1f4",
+      "title": "Chapter 11"
+    },
+    {
+      "id": "e8a89764-9f81-4b7c-9bc5-75b46bc9c616",
+      "title": "Chapter 12"
+    },
+    {
+      "id": "2b7b3efb-b292-4162-bcc3-a256de853354",
+      "title": "Chapter 13"
+    },
+    {
+      "id": "01d27019-3b55-4011-aba1-856a8c58efcd",
+      "title": "Chapter 14"
+    },
+    {
+      "id": "154e1182-1c67-491f-9e41-4a99596f0e65",
+      "title": "Chapter 15"
+    },
+    {
+      "id": "1f3d9088-025e-45d0-abfb-3e56d86c5177",
+      "title": "Chapter 16"
+    },
+    {
+      "id": "af18b0c1-f160-40b7-9166-0e1a6fc07195",
+      "title": "Chapter 17"
+    },
+    {
+      "id": "2dac3cc3-56cd-4158-8b26-1bea192b6297",
+      "title": "Chapter 18"
+    },
+    {
+      "id": "8759f23b-7514-43e6-b334-c3ba43e0739f",
+      "title": "Chapter 19"
+    },
+    {
+      "id": "a766e141-e736-44eb-a48a-0ef3b8fe5ccf",
+      "title": "Chapter 20"
+    },
+    {
+      "id": "871b2cb5-4f88-405d-9720-f5f53eb90516",
+      "title": "Chapter 21"
+    },
+    {
+      "id": "0bcc3b57-2485-4d98-bdac-f07350bf8d80",
+      "title": "Chapter 22"
+    },
+    {
+      "id": "cca3229c-2813-48fe-9165-0abc680a51bf",
+      "title": "Chapter 23"
+    },
+    {
+      "id": "6af20dad-7b50-419a-a94c-89ef51f6afee",
+      "title": "Chapter 24"
+    },
+    {
+      "id": "8c843216-974c-4022-a172-e8945062e880",
+      "title": "Chapter 25"
+    },
+    {
+      "id": "9dfd494d-ef08-4515-9dcf-b35c0f648af7",
+      "title": "Chapter 26"
+    },
+    {
+      "id": "54119b49-14c2-49da-a0e8-0b7a3464a003",
+      "title": "Chapter 27"
+    },
+    {
+      "id": "5909f257-0023-423c-bc79-84b2e1511bce",
+      "title": "Chapter 28"
+    },
+    {
+      "id": "450d1891-9dca-4081-8c1f-3a310c4cfa23",
+      "title": "Chapter 29"
+    },
+    {
+      "id": "9b093595-c168-49a3-bd27-d67ff76445eb",
+      "title": "Chapter 30"
+    },
+    {
+      "id": "b4539eb2-b6d8-4e0e-ba16-c8c9fe5dac3b",
+      "title": "Chapter 31"
+    },
+    {
+      "id": "39a8ebb8-2516-4136-b0da-9407b8f0cfa7",
+      "title": "Chapter 32"
+    },
+    {
+      "id": "40b8fd19-df38-4a92-a2d4-61ceb942e758",
+      "title": "Chapter 33"
+    },
+    {
+      "id": "d0929d13-0d02-404a-b267-0aa57bfc6e37",
+      "title": "Chapter 34"
+    },
+    {
+      "id": "e47db073-6a15-4735-bbc8-76ee7fbdfe8c",
+      "title": "Chapter 35"
+    },
+    {
+      "id": "a515ce4e-b6f9-4bb9-bc0d-09bf5d7224b7",
+      "title": "Chapter 36"
+    },
+    {
+      "id": "5308a5ac-9a15-4a2e-a4ee-b0b69d251842",
+      "title": "Chapter 37"
+    },
+    {
+      "id": "2a729282-dfd0-4548-87db-65e566c766d5",
+      "title": "Chapter 38"
+    },
+    {
+      "id": "0d189fcb-770c-4e8a-afb0-ce7bb2dc15bf",
+      "title": "Chapter 39"
+    },
+    {
+      "id": "77be6e07-d31b-40b0-a364-187389374f4e",
+      "title": "Chapter 40"
+    },
+    {
+      "id": "92ea4de3-ec13-4e9e-a7b7-56bbb2a610c1",
+      "title": "Chapter 41"
+    },
+    {
+      "id": "90819e0b-0d44-4360-bcce-def5a88327fe",
+      "title": "Chapter 42"
+    },
+    {
+      "id": "1786bd77-c925-4b85-aa82-b33e3d93a329",
+      "title": "Chapter 43"
+    },
+    {
+      "id": "2267b8fd-e4ed-4970-bce8-7825a83fc183",
+      "title": "Chapter 44"
+    },
+    {
+      "id": "db346f0a-5bc1-42a9-8dc7-bf70ac1127c3",
+      "title": "Chapter 45"
+    },
+    {
+      "id": "1e5d8c9a-28ba-456f-a0a7-26f78e9e8335",
+      "title": "Chapter 46"
+    },
+    {
+      "id": "11898dff-fb7e-48ca-8f15-3d2a80cee97b",
+      "title": "Epilogue"
+    }
+  ]
+}

@@ -17,22 +17,14 @@ HERE = Path(__file__).resolve().parent
 BASE = Path('/home/ajk-tts-ci/ajk-v2-tts/private')
 WORK = BASE / 'legacy-m4b-pilot-d9b78f8'
 DB = BASE / 'af3-drive-v17-data/books.sqlite3'
-FOLDER = '1PyURHFMnsHsF6JLMvtbAq20Gl021KFCa'
+PILOT = json.loads((HERE/'pilot-edition.json').read_text())
+FOLDER = PILOT['folder_id']
 SLUG = 'set-' + hashlib.sha256(FOLDER.encode()).hexdigest()[:24]
 BOOK = '/drive-book/' + SLUG
 PART = '/drive-private/books/' + SLUG + '/part/{}/audio.m4b'
 PORT = 10003
 TS = [str(BASE/'tailscale-user/bin/tailscale'),'--socket='+str(BASE/'tailscale-user/state/tailscaled.sock')]
 MODULES = WORK/'modules'
-PINS = [
- ('1ipRfwbovBCzCn9YymfI0AuEPM92jFFaU',37310395),
- ('1Pn40KG6PhxOi0te4KGoqwTMjUqTi-AmY',37444721),
- ('1I68BZBcXqqRAfaVgSUc-PAlUm7_3WRh6',39925212),
- ('1_JOADagx_chYLjCytFsfTlFfraw1ZwHR',38929494),
- ('112YfFTYShfO-cjMyBmfNuNSDtkqWC_XN',37993062),
- ('1MeSOVLzyHcrPB_GAShB3sBIRrTtuV8CM',18733474),
-]
-
 def require(condition,msg):
     if not condition: raise RuntimeError(msg)
 
@@ -67,10 +59,15 @@ def find_live():
     require(len(matches)==1,'Expected exactly one live V17 service process')
     proc,src=matches[0]
     # Use only the application-specific settings of the existing process.
+    os.environ.pop('AF3_TAILSCALE_DRIVE_CONF',None)
     for item in (proc/'environ').read_bytes().split(b'\0'):
         k,_,v=item.partition(b'=')
         if k in (b'AF3_TAILSCALE_DRIVE_CONF',b'AF3_FFMPEG',b'AF3_FFPROBE',b'PATH'):
             os.environ[os.fsdecode(k)]=os.fsdecode(v)
+    require(bool(os.environ.get('AF3_TAILSCALE_DRIVE_CONF')),'V17_SERVICE_DRIVE_CONFIG_MISSING')
+    local_git=Path.home()/'AJK_M4B_Tools/bin'
+    if (local_git/'git').is_file():
+        os.environ['PATH']=str(local_git)+os.pathsep+os.environ['PATH']
     return src
 
 def prepare(src):
@@ -118,10 +115,14 @@ def serve(src):
             db=sqlite3.connect(DB.as_uri()+'?mode=rw',uri=True,timeout=10)
             db.row_factory=sqlite3.Row
             return db
-    budget=v.Budget(LiveLedger());provider=v.Provider(v.private_config(),budget)
-    inv=provider.inventory(FOLDER)
-    expected=[(fid,sz,f'm4b-{i:03d}.m4b.mp4') for i,(fid,sz) in enumerate(PINS,1)]
-    require([(p['id'],int(p['size']),p['name']) for p in inv['parts']]==expected,'Six-part archive mismatch')
+    budget=v.Budget(LiveLedger())
+    try:
+        config=v.private_config()
+    except Exception:
+        raise RuntimeError('V17_SERVICE_DRIVE_CONFIG_INVALID') from None
+    provider=v.Provider(config,budget)
+    from drive_receipt import load_receipt_inventory
+    inv=load_receipt_inventory(provider,PILOT)
     old=registry.get(SLUG)
     if not old or old['state'] not in ('verified','ready'):
         q=budget.snapshot()
@@ -133,8 +134,12 @@ def serve(src):
     row=registry.get(slug)
     require(row and row['state'] in ('verified','ready'),'V17 verification incomplete; no route opened')
     doc=json.loads(row['document'])
-    require(doc['inventoryFingerprint']==inv['fingerprint'] and len(doc['parts'])==6,'Stored inventory mismatch')
-    for p in doc['parts']: provider.inspect(v.VerifiedEdition(**p['edition']))
+    require(doc['inventoryFingerprint']==inv['fingerprint'] and len(doc['parts'])==len(PILOT['files']),'Stored inventory mismatch')
+    pins={pin['id']:pin for pin in PILOT['files']}
+    for p in doc['parts']:
+        ed=v.VerifiedEdition(**p['edition'])
+        require(ed.sha256==pins[ed.drive_file_id]['sha256'],'Verified audio differs from backup')
+        provider.inspect(ed)
     if row['state']=='verified': registry.confirm(slug)
     template=(src/'private-drive-stage/drive-false.html').read_text()
     app=v.App(registry,provider,template)
@@ -142,16 +147,24 @@ def serve(src):
         def route(self):
             path=urlsplit(self.path).path
             if not self.allowed(): return self.send(403,{'error':'private'})
-            if self.command not in ('GET','HEAD') or not (path in (BOOK,'/drive-book/false-scent','/drive-private/books/false-scent/info','/drive-private/books/false-scent/audio.m4b') or path=='/drive-private/books/'+SLUG+'/info'
-                or path in [PART.format(i) for i in range(1,7)]): return self.send(404,{'error':'pilot only'})
+            if self.command not in ('GET','HEAD') or not (path==BOOK or path=='/drive-private/books/'+SLUG+'/info'
+                or path in [PART.format(i) for i in range(1,len(PILOT['files'])+1)]): return self.send(404,{'error':'pilot only'})
             return super().route()
         do_GET=do_HEAD=do_POST=route
     server=ThreadingHTTPServer(('127.0.0.1',0),Owner)
     (WORK/'port').write_text(str(server.server_port))
     (WORK/'ready-row.json').write_text(json.dumps(dict(registry.get(slug))))
-    (WORK/'archive-receipt.json').write_text(json.dumps({'audio_book_id':'8de77e34-9dfd-4ef9-ad21-fbe901b24619',
+    (WORK/'archive-receipt.json').write_text(json.dumps({'audio_book_id':PILOT['id'],
         'files':[{'id':x['id'],'name':x['name'],'bytes':int(x['size']),'md5':x['md5Checksum']} for x in inv['parts']]}))
     server.serve_forever()
+
+def show_ready(link):
+    row=json.loads((WORK/'ready-row.json').read_text())
+    doc=json.loads(row['document'])
+    seconds=max(0,int(doc['parts'][0]['info']['durationSeconds'])-5)
+    print('OWNER READY',link,flush=True)
+    print(f'Teilwechsel in Safari: auf {seconds//3600:d}:{seconds//60%60:02d}:{seconds%60:02d} springen und weiterhören.')
+    print('Danach ein späteres Kapitel wählen, pausieren, erneut öffnen und die Hörposition vergleichen.')
 
 def activate():
     require(os.geteuid()!=0 and DB.is_file(),'Use the existing ajk-tts-ci ShellFish connection')
@@ -160,6 +173,16 @@ def activate():
     fcntl.flock(lock,fcntl.LOCK_EX|fcntl.LOCK_NB)
     src=find_live()
     require((src/'private-drive-stage/drive-false.html').is_file(),'Existing V17 player template missing')
+    sys.path.insert(0,str(src))
+    from drive_server_v17 import oracle_tailscale_owner
+    label=__import__('urllib.parse',fromlist=['quote']).quote(PILOT['title'])
+    # A successful search requires a Drive API call in the running V17 process.
+    try:
+        live_status=probe(8802,'/drive-import/folders?q='+label,oracle_tailscale_owner())
+    except (OSError,http.client.HTTPException):
+        live_status='UNAVAILABLE'
+    print('RUNNING_V17_DRIVE_SEARCH_HTTP',live_status,flush=True)
+    # Run the patched pilot in a fresh child interpreter; the parent uses the live module.
     prepare(src)
     import drive_server_v17 as v
     owner=v.oracle_tailscale_owner()
@@ -172,7 +195,8 @@ def activate():
     if str(PORT) in before.get('TCP',{}) or f'{host}:{PORT}' in before.get('Web',{}):
         port=int((WORK/'port').read_text())
         require(check_route(before,host,PORT,port) and probe(port,BOOK)==403 and probe(port,BOOK,owner)==200,'Pilot port occupied')
-        print(link);return
+        probe(port,PART.format(1),owner,True)
+        show_ready(link);return
     portfile=WORK/'port'
     if portfile.exists():
         try:
@@ -182,18 +206,24 @@ def activate():
         require(not occupied,'Unrouted pilot already running; inspect owner.pid before restarting')
         portfile.unlink()
     log=(WORK/'owner.log').open('ab')
+    log_start=log.tell()
     child=subprocess.Popen([sys.executable,'-B',str(Path(__file__).resolve()),'serve',str(src)],
         stdin=subprocess.DEVNULL,stdout=log,stderr=log,start_new_session=True)
     added=False
     try:
         for _ in range(1800):
-            require(child.poll() is None,'Registration stopped; see private owner.log')
+            if child.poll() is not None:
+                import re
+                with (WORK/'owner.log').open('rb') as handle:
+                    handle.seek(log_start)
+                    errors=re.findall(rb'RuntimeError: (V17_[A-Z0-9_]+)',handle.read()[-8192:])
+                raise RuntimeError(errors[-1].decode() if errors else 'Registration stopped; see private owner.log')
             if portfile.exists() and portfile.stat().st_size: break
             time.sleep(1)
         require(portfile.exists(),'Registration timed out')
         port=int(portfile.read_text())
         require(probe(port,BOOK)==403 and probe(port,BOOK,owner)==200,'Pilot authorization failed')
-        for i in (1,2): probe(port,PART.format(i),owner,True)
+        for i in range(1,min(2,len(PILOT['files']))+1): probe(port,PART.format(i),owner,True)
         subprocess.run(TS+['serve','--bg','--yes',f'--https={PORT}',f'http://127.0.0.1:{port}'],timeout=30,check=True)
         added=True
         after=ts_json('serve','status','--json')
@@ -202,7 +232,7 @@ def activate():
             current=dict(after.get(category,{}));current.pop(f'{host}:{PORT}' if category=='Web' else str(PORT),None)
             require(current==before.get(category,{}),'Unexpected Serve route change')
         (WORK/'owner.pid').write_text(str(child.pid))
-        print('OWNER READY',link,flush=True)
+        show_ready(link)
     except BaseException:
         if added: subprocess.run(TS+['serve',f'--https={PORT}','off'],timeout=15)
         child.terminate()

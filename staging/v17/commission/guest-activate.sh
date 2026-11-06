@@ -9,9 +9,10 @@ work="$HOME/ajk-v2-tts/private/legacy-m4b-pilot-d9b78f8"
 : "${V17_GUEST_PORT:?Reserved loopback port matching the reverse proxy required}"
 : "${V17_GUEST_LISTENER:?Existing test listener ID required}"
 : "${V17_OWNER_LISTENER_ID:?Existing owner listener ID required}"
-: "${GUEST_READY_ROW:?JSON row from the live V17 ready registry}"
-: "${GUEST_CATALOG_EDITION:?Authorized active guest catalog edition JSON}"
-: "${GUEST_DRIVE_RECEIPT:?Existing verified archive receipt JSON}"
+GUEST_READY_ROW=${GUEST_READY_ROW:-"$work/ready-row.json"}
+GUEST_CATALOG_EDITION=${GUEST_CATALOG_EDITION:-"$here/pilot-edition.json"}
+GUEST_DRIVE_RECEIPT=${GUEST_DRIVE_RECEIPT:-"$work/archive-receipt.json"}
+export GUEST_CATALOG_EDITION
 : "${PILOT_ASSETS_DIR:?Dedicated new staging directory on the existing authenticated author site}"
 [[ "${COST_FREE_INGRESS_VERIFIED:-}" == yes && "$V17_GUEST_LISTENER" != '*' && ! -e "$PILOT_ASSETS_DIR" ]]
 command -v node >/dev/null; command -v supabase >/dev/null
@@ -25,7 +26,7 @@ assert 1024<int(sys.argv[2])<=65535
 b=json.load(open(sys.argv[3]))
 assert b['is_active'] is True and b['status']=='ready' and b['id']!='8de77e34-9dfd-4ef9-ad21-fbe901b24619'
 PY
-node "$root/staging/v17/build-edition.mjs" "$work/ready-row.json" "$here/caravanserai-catalog.json" "$work/archive-receipt.json" > "$work/owner-mapping.json"
+node "$root/staging/v17/build-edition.mjs" "$work/ready-row.json" "$here/pilot-edition.json" "$work/archive-receipt.json" > "$work/owner-mapping.json"
 node "$root/staging/v17/build-edition.mjs" "$GUEST_READY_ROW" "$GUEST_CATALOG_EDITION" "$GUEST_DRIVE_RECEIPT" > "$work/guest-mapping.json"
 if [[ ! -f "$work/guest-ticket.key" ]]; then
   python3 - "$work/guest-ticket.key" <<'PY'

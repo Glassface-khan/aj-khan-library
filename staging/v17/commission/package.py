@@ -17,8 +17,8 @@ digest=hashlib.sha256(payload).hexdigest()
 template="""#!/usr/bin/env bash
 set -euo pipefail
 umask 077
-mode=${1:-owner}
-case "$mode" in owner|guest|extract) ;; *) echo 'Use owner, guest or extract'; exit 2;; esac
+mode=${1:-auto}
+case "$mode" in auto|owner|guest|extract) ;; *) echo 'Use owner, guest or extract'; exit 2;; esac
 base="$HOME/.local/share/ajk-m4b-commission"
 mkdir -p "$base"
 tmp=$(mktemp -d "$base/tmp.XXXXXXXX")
@@ -30,6 +30,12 @@ tar -xzf "$tmp/pilot.tgz" -C "$tmp/files"
 dest="$base/DIGEST"
 if [[ ! -d "$dest" ]]; then mv -T "$tmp/files" "$dest"; fi
 app="$dest/staging/v17/commission"
+conf="$HOME/ajk-v2-tts/private/legacy-m4b-pilot-d9b78f8/guest.env"
+if [[ "$mode" == auto ]]; then
+  python3 -B "$app/owner.py"
+  if [[ ! -f "$conf" ]]; then echo "GUEST BLOCKED: private guest.env / verified HTTPS ingress missing"; exit 0; fi
+  mode=guest
+fi
 case "$mode" in
  extract) echo "$app";;
  owner) python3 -B "$app/owner.py";;

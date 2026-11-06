@@ -21,10 +21,21 @@ def main():
             return db
         get=SafeRegistry.get
         is_ready=SafeRegistry.is_ready
-    registry=Live()
+    ledger=Live()
+    pilot=json.loads((Path(__file__).resolve().parent/'pilot-edition.json').read_text())
+    if json.loads(Path(os.environ['GUEST_CATALOG_EDITION']).read_text())['id']==pilot['id']:
+        class Pilot(Live):
+            def db(self):
+                path=(WORK/'owner-books.sqlite3').resolve(strict=True)
+                db=sqlite3.connect(path.as_uri()+'?mode=ro',uri=True,timeout=10)
+                db.row_factory=sqlite3.Row
+                return db
+        registry=Pilot()
+    else:
+        registry=ledger
     key=bytes.fromhex((WORK/'guest-ticket.key').read_text().strip())
     require(len(key)==32,'Invalid guest signing key')
-    budget=Budget(registry)
+    budget=Budget(ledger)
     server=ThreadingHTTPServer(('127.0.0.1',int(os.environ['V17_GUEST_PORT'])),
             media_handler(registry,FolderInventory(private_config(),budget),budget,key))
     server.serve_forever()
