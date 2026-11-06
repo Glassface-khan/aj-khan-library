@@ -35,9 +35,16 @@ export function createFamilySlotHandlers({verifyAccess, supabase}) {
     return {ok:true,activeCount:row.active_count,slotLimit:row.slot_limit};
   }
   async function removal(body) {
-    const a = await authorize(body);
+    // Removal must still work after a book is archived, deactivated, or its
+    // listening grant is revoked. Only the authenticated listener's own slot
+    // may be removed; the RPC never deletes audio or Drive originals.
+    const bookId = String(body?.bookId ?? '');
+    if (!UUID.test(bookId)) throw Error('INVALID_BOOK_ID');
+    const access = await verifyAccess(body);
+    const listenerId = String(access?.listenerId ?? '');
+    if (!access?.ok || !listenerId || listenerId.length > 200) throw Error('UNAUTHORIZED');
     const {data,error} = await supabase.rpc('af3_remove_family_book',{
-      p_listener_id:a.listenerId,p_audio_book_id:a.bookId
+      p_listener_id:listenerId,p_audio_book_id:bookId
     });
     if (error) throw error;
     // No Drive API calls, deletions, or mutation of original audio objects.
