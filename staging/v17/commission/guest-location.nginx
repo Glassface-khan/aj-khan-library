@@ -1,0 +1,16 @@
+# Existing TLS vhost only. In its http{} context first configure:
+# limit_req_zone $binary_remote_addr zone=ajk_guest_media:1m rate=10r/s;
+location ^~ /guest-m4b/ {
+    limit_except GET { deny all; }
+    limit_req zone=ajk_guest_media burst=20 nodelay;
+    access_log off;
+    error_log /dev/null crit;
+    proxy_cache off;
+    proxy_buffering off;
+    proxy_max_temp_file_size 0;
+    proxy_set_header Range $http_range;
+    proxy_set_header Authorization "";
+    proxy_set_header Cookie "";
+    proxy_set_header Tailscale-User-Login "";
+    proxy_pass http://127.0.0.1:18874;
+}

@@ -1,0 +1,13 @@
+<!doctype html><html lang="de"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>M4B-Pilot</title>
+<button id="open" type="button">Hörbuch-Pilot öffnen</button><p id="status" role="status"></p>
+<script defer src="audio-library.js"></script><script>
+document.getElementById('open').onclick=async()=>{
+ const lib=window.AJKAudioLibrary, s=document.getElementById('status');
+ if(!lib){s.textContent='Player nicht geladen.';return}
+ await lib.refresh();
+ const books=lib.getCatalog().filter(b=>b.m4bAvailable);
+ s.replaceChildren();
+ if(!books.length){s.textContent='Bitte auf der Autorenseite anmelden. Für diesen Zugang ist keine Pilot-Ausgabe verfügbar.';return}
+ for(const b of books){const button=document.createElement('button');button.textContent=b.title+' · '+(b.narrator_name||'');button.onclick=()=>lib.openAudioBook(b.id);s.append(button)}
+};
+</script></html>
