@@ -5,7 +5,7 @@ import {createDriveAudioAdapter} from './drive-audio-adapter.mjs';
 // The caller owns the Google OAuth token provider; no token is persisted here.
 export function createDrivePartSource({parts,getToken,fetchImpl,urls}) {
   if (!Array.isArray(parts) || parts.length < 1 || parts.length > 500 ||
-      parts.some(p => !p || !/^[\\w-]{10,200}$/.test(p.fileId ?? '') ||
+      parts.some(p => !p || !/^[\w-]{10,200}$/.test(p.fileId ?? '') ||
         !Number.isSafeInteger(p.bytes) || p.bytes < 1 || p.bytes > 48*1024*1024)) {
     throw Error('INVALID_PRIVATE_DRIVE_SOURCE');
   }
