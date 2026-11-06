@@ -1,0 +1,10 @@
+import assert from 'node:assert/strict';
+import {lampKeeper,validateMultipartBook} from './lamp-keeper-pilot.mjs';
+const result=validateMultipartBook(lampKeeper);
+assert.equal(result.bookCount,1);
+assert.equal(result.partCount,5);
+assert.equal(result.totalBytes,176589880);
+assert.deepEqual(lampKeeper.parts.map(p=>p.index),[1,2,3,4,5]);
+assert.throws(()=>validateMultipartBook({...lampKeeper,parts:[lampKeeper.parts[1],lampKeeper.parts[0]]}),/INVALID_PART_SEQUENCE/);
+assert.throws(()=>validateMultipartBook({...lampKeeper,parts:[]}),/EMPTY_BOOK/);
+console.log('AF3 Lamp Keeper pilot metadata assertions passed');
