@@ -1157,7 +1157,7 @@
       activePart = partNumber;
       lastBookTime = seconds;
       let url = m4b.source(partNumber);
-      if (m4b.guest) {
+      if (m4b.guest && !m4b.drive) {
         audio.pause();
         try {
           const part = await api({op:'m4bPart',bookId:state.activeBook.id,
