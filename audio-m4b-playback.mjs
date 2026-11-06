@@ -13,7 +13,7 @@ export function createPlayback(source, chapters, options = {}) {
   // or tokens are accepted from browser-local storage.
   const drive = source.drive === true;
   if (drive && (typeof options.getDriveToken !== 'function' ||
-      source.parts.some(p => !/^[\\w-]{10,200}$/.test(p.fileId ?? '') ||
+      source.parts.some(p => !/^[\w-]{10,200}$/.test(p.fileId ?? '') ||
         !Number.isSafeInteger(p.bytes) || p.bytes < 1 || p.bytes > 48*1024*1024))) {
     throw Error('PRIVATE_DRIVE_AUTH_OR_METADATA_REQUIRED');
   }
