@@ -1005,7 +1005,7 @@
     play.addEventListener('click', async () => {
       if (!state.activeChapter) return startBook(state.activeBook.id);
       if (!state.audio || !state.audio.src) return loadChapter(state.activeBook, state.activeChapter, 0, true);
-      if (m4b?.guest && state.audio.paused && (loadingSource || Date.now() >= guestExpiry - 5000)) {
+      if (m4b?.guest && !m4b.drive && state.audio.paused && (loadingSource || Date.now() >= guestExpiry - 5000)) {
         await seekBook(lastBookTime, true);
         return;
       }
@@ -1094,6 +1094,7 @@
       state.audio.removeAttribute('src');
       state.audio.load();
     }
+    m4b?.dispose?.();
     m4b = null;
     ++mediaRequest;
     guestExpiry = 0;
@@ -1150,7 +1151,7 @@
     const {partNumber, localSeconds} = m4b.timeline.locate(seconds);
     const request = ++mediaRequest;
     const bookRequest = opening;
-    const expired = m4b.guest && Date.now() >= guestExpiry - 5000;
+    const expired = m4b.guest && !m4b.drive && Date.now() >= guestExpiry - 5000;
     if (partNumber !== activePart || !audio.readyState || expired || loadingSource) {
       loadingSource = true;
       state.desiredSeek = localSeconds;
