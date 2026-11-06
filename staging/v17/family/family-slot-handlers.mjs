@@ -12,14 +12,17 @@ export function createFamilySlotHandlers({verifyAccess, supabase}) {
     const bookId = String(body?.bookId ?? '');
     if (!UUID.test(bookId)) throw Error('INVALID_BOOK_ID');
     // Never derive identity from the request body.
-    const access = await verifyAccess(body);
-    const listenerId = String(access?.listenerId ?? '');
-    if (!access?.ok || !listenerId || listenerId.length > 200) throw Error('UNAUTHORIZED');
+    // Read book metadata before requesting a title-specific authorization.
+    // Existing production verifyAccess(body, bookTitle) returns "allowed".
     const {data:book,error} = await supabase.from('audio_books')
       .select('id,title,is_active,status').eq('id',bookId).maybeSingle();
     if (error) throw error;
     if (!book || book.is_active !== true || book.status !== 'ready') throw Error('BOOK_UNAVAILABLE');
-    if (access.fullAudioAccess !== true && access.audioAccess?.[book.title] !== true) {
+    const access = await verifyAccess(body, book.title);
+    const listenerId = String(access?.listenerId ?? '');
+    if (!access?.ok || !listenerId || listenerId.length > 200) throw Error('UNAUTHORIZED');
+    if (access.fullAudioAccess !== true && access.allowed !== true &&
+        access.audioAccess?.[book.title] !== true) {
       throw Error('FORBIDDEN');
     }
     return {bookId,listenerId,isOwner:access.isAdmin === true};
