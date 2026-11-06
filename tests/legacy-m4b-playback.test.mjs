@@ -75,3 +75,32 @@ test('inactive CARAVANSERAI pilot requires the registered edition and the exact 
   assert.equal(permitsOwnerPilot(owner,'',registered),false);
   assert.equal(permitsOwnerPilot(owner,'owner',{}),false);
 });
+
+test('guest renews an expired ticket and preserves chapter offsets across parts', async()=>{
+  const book={id:'fixture',m4bAvailable:true,chapters:[{id:'first'},{id:'second'}],
+    progress:{chapter_id:'first',position_seconds:4}};
+  const source={guest:true,info:{durationSeconds:40},
+    chapters:[{id:'first',start:0},{id:'second',start:20}],
+    parts:[{info:{durationSeconds:20}},{info:{durationSeconds:20}}]};
+  const requested=[];
+  const api=async msg=>{
+    if(msg.op==='m4bSource') return {source};
+    if(msg.op==='saveProgress') return {};
+    assert.equal(msg.op,'m4bPart');
+    requested.push(msg.part);
+    return {url:'https://fixture.invalid/ticket-'+requested.length,
+      expires:Math.floor(Date.now()/1000)+(requested.length===1?-1:300)};
+  };
+  const state={catalog:[book],playbackRate:1,lastSavedAt:0,lastSavedPosition:-1};
+  const p=harness(state,api,Media,()=>{},String,async()=>{},{setItem(){}},{createPlayback});
+  await p.startBook(book.id);state.audio.metadata(20);
+  assert.equal(state.audio.currentTime,4);
+  await p.seekBook(8,true);state.audio.metadata(20);
+  assert.equal(state.audio.currentTime,8);
+  await p.onEnded();state.audio.metadata(20);
+  state.audio.currentTime=3;
+  await p.saveProgress(false,false,true);
+  assert.deepEqual(requested,[1,1,2]);
+  assert.equal(book.progress.chapter_id,'second');
+  assert.equal(book.progress.position_seconds,3);
+});

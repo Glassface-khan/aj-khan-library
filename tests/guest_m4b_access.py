@@ -2,6 +2,8 @@
 from http.client import HTTPConnection
 from http.server import ThreadingHTTPServer
 import json
+from unittest.mock import patch
+import time
 from pathlib import Path
 import subprocess
 import sys
@@ -9,7 +11,7 @@ from threading import Thread
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0,str(ROOT / "staging/v17"))
-from guest_media import media_handler
+from guest_media import media_handler, read_ticket
 
 key = "ab"*32  # test fixture
 js = """
@@ -22,6 +24,13 @@ const reply=await guestTicket({listenerId:'guest',audioAccess:{Fixture:true}},..
 console.log(new URL(reply.url).pathname);
 """
 ticket = subprocess.check_output(["node","--input-type=module","-e",js],cwd=ROOT,text=True).strip()
+with patch("guest_media.time.time", return_value=time.time()+301):
+    try:
+        read_ticket(ticket,bytes.fromhex(key))
+    except ValueError:
+        pass
+    else:
+        raise AssertionError("Expired guest ticket accepted")
 edition = dict(slug="fixture",drive_file_id="fixture000000001",size=100000,sha256="a"*64,
                drive_md5="a"*32,drive_version="1",readback_sha256="a"*64,readback_size=100000,
                private=True,original_cover_verified=True,technical_qc=True)

@@ -76,8 +76,7 @@ PY
 stage=$(mktemp -d); trap 'rm -rf "$stage"; kill "$pid" 2>/dev/null || true' EXIT
 fn=audio-library-m4b-pilot
 mkdir -p "$stage/supabase/functions/$fn"
-cp "$root"/staging/supabase/audio-library/* "$stage/supabase/functions/$fn/"
-sed -i 's/Deno.env.get("V17_/Deno.env.get("PILOT_V17_/g' "$stage/supabase/functions/$fn/index.ts"
+python3 "$here/prepare-edge.py" "$stage/supabase/functions/$fn"
 python3 - "$work" "$stage/secrets" <<'PY'
 import os,json,sys
 from pathlib import Path
