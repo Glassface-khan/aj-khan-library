@@ -67,3 +67,25 @@ test('removal rejects invalid book ID without database access',async()=>{
  await assert.rejects(handlers.removal({bookId:'not-a-uuid'}),/INVALID_BOOK_ID/);
  assert.equal(calls.length,0);
 });
+
+test('production verifyAccess receives exact title and accepts allowed grant',async()=>{
+ const calls=[];
+ const {handlers}=setup({ok:true,listenerId:'guest-1',allowed:true});
+ // The original mock does not expose verifyAccess arguments; verify with a
+ // dedicated wrapper using the same Supabase mock shape.
+ const db={
+   from(){const q={select(){return q},eq(){return q},
+     async maybeSingle(){return {data:{id:ID,title:'Pilot Book',is_active:true,status:'ready'},error:null}}};return q;},
+   async rpc(){return {data:[{assigned:true,active_count:1,slot_limit:1}],error:null}}
+ };
+ const api=createFamilySlotHandlers({supabase:db,verifyAccess:async(_body,title)=>{
+   calls.push(title);return {ok:true,listenerId:'guest-1',allowed:true};
+ }});
+ assert.equal((await api.assignment({bookId:ID})).ok,true);
+ assert.deepEqual(calls,['Pilot Book']);
+});
+test('production denied title grant rejects even with verified identity',async()=>{
+ const {handlers,calls}=setup({ok:true,listenerId:'guest-1',allowed:false,audioAccess:{}});
+ await assert.rejects(handlers.assignment({bookId:ID}),/FORBIDDEN/);
+ assert.equal(calls.some(x=>x[0]==='rpc'),false);
+});
