@@ -1,4 +1,4 @@
-import { registeredSource } from "./m4b-source.mjs";
+import { registeredSource, caravanseraiId, permitsOwnerPilot } from "./m4b-source.mjs";
 import { downloadSnapshot } from "./download_helpers.ts";
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
@@ -13,6 +13,9 @@ function readM4bEditions() {
   }
 }
 const m4bEditions = readM4bEditions();
+function ownerPilot(access: any) {
+  return permitsOwnerPilot(access, Deno.env.get("V17_OWNER_LISTENER_ID"), m4bEditions);
+}
 const privateOrigin = Deno.env.get("V17_PRIVATE_ORIGIN") || "";
 const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwcbRDaWkM1wf3MV_dj4RPw9jQl2Fgc4YfGcmFrGU1S243yvh8WGW7mbyXLbSeVJKI/exec";
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
@@ -153,7 +156,7 @@ async function verifyAccess(body: any, bookTitle = "") {
   return data;
 }
 
-async function getChapterWithBook(chapterId: string) {
+async function getChapterWithBook(chapterId: string, includePilot = false) {
   const { data: chapter, error: chapterError } = await supabase
     .from("audio_chapters")
     .select("id,audio_book_id,chapter_index,title,storage_path,duration_seconds")
@@ -164,11 +167,11 @@ async function getChapterWithBook(chapterId: string) {
 
   const { data: book, error: bookError } = await supabase
     .from("audio_books")
-    .select("id,site_book_id,title,language_code,narrator_name,cover_url,total_duration_seconds,is_active")
+    .select("id,site_book_id,title,language_code,narrator_name,cover_url,total_duration_seconds,is_active,status")
     .eq("id", chapter.audio_book_id)
     .maybeSingle();
   if (bookError) throw bookError;
-  if (!book || !book.is_active) return null;
+  if (!book || (!book.is_active && !(includePilot && book.id === caravanseraiId && book.status === "ready"))) return null;
   return { chapter, book };
 }
 
@@ -222,9 +225,12 @@ Deno.serve(async (req: Request) => {
       let q = supabase
         .from("audio_books")
         .select("id,site_book_id,title,language_code,voice_key,narrator_name,cover_url,total_duration_seconds,series_key,series_title,series_number,series_total")
-        .eq("is_active", true)
         .order("title", { ascending: true })
         .order("language_code", { ascending: true });
+
+      q = ownerPilot(access)
+        ? q.or(`is_active.eq.true,and(id.eq.${caravanseraiId},status.eq.ready)`)
+        : q.eq("is_active", true);
 
       if (access.fullAudioAccess !== true) {
         const allowedTitles = Object.keys(access.audioAccess || {}).filter((title) => access.audioAccess[title] === true);
@@ -315,9 +321,10 @@ Deno.serve(async (req: Request) => {
     }
 
     if (op === "m4bSource") {
-      const pair = await getChapterWithBook(String(body.chapterId || ""));
+      const pair = await getChapterWithBook(String(body.chapterId || ""), true);
       if (!pair || pair.book.id !== body.bookId) return json({ok:false,error:"book_not_found"},404);
       const access = await verifyAccess(body, pair.book.title);
+      if (!pair.book.is_active && !ownerPilot(access)) return json({ok:false,error:"FORBIDDEN"},403);
       // V17 is an owner-only origin. Preserve its independent Tailscale check.
       if (access.isAdmin !== true) return json({ok:false,error:"FORBIDDEN"},403);
       const source = registeredSource(m4bEditions, pair.book.id, privateOrigin);
@@ -344,10 +351,11 @@ Deno.serve(async (req: Request) => {
     if (op === "saveProgress" || op === "save-progress") {
       const chapterId = String(body?.chapterId || "").trim();
       if (!chapterId) return json({ ok: false, error: "missing_chapter_id" }, 400);
-      const pair = await getChapterWithBook(chapterId);
+      const pair = await getChapterWithBook(chapterId, true);
       if (!pair) return json({ ok: false, error: "chapter_not_found" }, 404);
 
       const access = await verifyAccess(body, pair.book.title);
+      if (!pair.book.is_active && !ownerPilot(access)) return json({ok:false,error:"FORBIDDEN"},403);
       const position = Math.max(0, Number(body?.positionSeconds || 0));
       const rate = Math.min(3, Math.max(0.5, Number(body?.playbackRate || 1)));
       const completed = body?.completed === true;

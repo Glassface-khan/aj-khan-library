@@ -64,3 +64,14 @@ test('reject unexpected origin and mismatched chapter mapping',()=>{
   assert.throws(()=>registeredSource({book:entry},'book','https://example.org'));
   assert.throws(()=>createPlayback(registeredSource({book:entry},'book','https://test.ts.net'),[{id:'wrong'}]));
 });
+
+test('inactive CARAVANSERAI pilot requires the registered edition and the exact authenticated owner', async()=>{
+  const {permitsOwnerPilot,caravanseraiId}=await import('../staging/supabase/audio-library/m4b-source.mjs');
+  const registered={[caravanseraiId]:{}};
+  const owner={isAdmin:true,listenerId:'owner'};
+  assert.equal(permitsOwnerPilot(owner,'owner',registered),true);
+  for(const access of [{...owner,isAdmin:false},{...owner,listenerId:'other'},null])
+    assert.equal(permitsOwnerPilot(access,'owner',registered),false);
+  assert.equal(permitsOwnerPilot(owner,'',registered),false);
+  assert.equal(permitsOwnerPilot(owner,'owner',{}),false);
+});

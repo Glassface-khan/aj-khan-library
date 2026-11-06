@@ -18,3 +18,10 @@ export function registeredSource(config, bookId, origin) {
     })),
   };
 }
+
+export const caravanseraiId = '8de77e34-9dfd-4ef9-ad21-fbe901b24619';
+
+export function permitsOwnerPilot(access, ownerListenerId, config) {
+  return Boolean(ownerListenerId && access?.isAdmin === true &&
+    access.listenerId === ownerListenerId && Object.hasOwn(config, caravanseraiId));
+}
