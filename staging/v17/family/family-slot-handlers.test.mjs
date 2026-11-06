@@ -50,3 +50,20 @@ test('hasSlot requires authenticated entitlement and assignment',async()=>{
  assert.equal((await handlers.hasSlot({bookId:ID})).bookId,ID);
  assert.ok(calls.some(x=>x[0]==='table'&&x[1]==='af3_family_book_slots'));
 });
+
+test('removal works when title entitlement was revoked',async()=>{
+ const {handlers,calls}=setup({ok:true,listenerId:'guest-1',audioAccess:{}});
+ assert.deepEqual(await handlers.removal({bookId:ID}),{ok:true,removed:true});
+ assert.equal(calls.some(x=>x[0]==='table'),false);
+ assert.equal(calls.find(x=>x[0]==='rpc')[2].p_listener_id,'guest-1');
+});
+test('removal refuses forged or unverified listener identity',async()=>{
+ const {handlers,calls}=setup({ok:false,listenerId:'forged',fullAudioAccess:true});
+ await assert.rejects(handlers.removal({bookId:ID,listenerId:'owner'}),/UNAUTHORIZED/);
+ assert.equal(calls.some(x=>x[0]==='rpc'),false);
+});
+test('removal rejects invalid book ID without database access',async()=>{
+ const {handlers,calls}=setup();
+ await assert.rejects(handlers.removal({bookId:'not-a-uuid'}),/INVALID_BOOK_ID/);
+ assert.equal(calls.length,0);
+});
