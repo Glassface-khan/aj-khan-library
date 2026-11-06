@@ -16,14 +16,14 @@ This is a branch-scoped implementation checkpoint, not a replacement for the can
 - drive-range-probe.test.mjs: mocked test source; **not executed**.
 
 ## OFFEN / BLOCKIERT
-- Need identify current external listener authentication mapping; Supabase auth.users=0 means do not assume Supabase Auth users exist.
+- GEPRÜFT: Production Edge Function audio-library v15 validates guest codes/admin tokens via existing Google Apps Script action checkAudioAccess; its response contains listenerId, isAdmin, fullAudioAccess, audioAccess. Supabase auth.users=0 is expected for this custom login path. Reuse server-verified listenerId, not browser claims.
 - Browser Google OAuth consent and actual private Drive Range/CORS response not tested; no guest file permission changes.
 - Server-side assignment must be transactional and authenticated. The policy helper is NOT enforcement.
 - No downgrade while ~36 GB storage remains; protect legacy guest playback.
 - No production deployment, no successful guest playback claim.
 
 ## Next safe gate
-1. Inspect existing auth/listener service and identify actual account-to-listener mapping.
+1. Reuse existing audio-library v15 checkAudioAccess response (listenerId / isAdmin / audioAccess) as the authoritative identity and entitlement input; do not replace login.
 2. Execute isolated Node tests.
 3. Only with authorized pilot Google account and one explicitly shared file, run the single Safari capability test.
 4. If Drive API works, integrate as a separate adapter without modifying the V17 UI.
