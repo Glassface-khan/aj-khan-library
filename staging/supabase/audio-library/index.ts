@@ -1,7 +1,10 @@
+import { registeredSource } from "./m4b-source.mjs";
 import { downloadSnapshot } from "./download_helpers.ts";
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 
+const m4bEditions = JSON.parse(Deno.env.get("V17_VERIFIED_EDITIONS") || "{}");
+const privateOrigin = Deno.env.get("V17_PRIVATE_ORIGIN") || "";
 const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwcbRDaWkM1wf3MV_dj4RPw9jQl2Fgc4YfGcmFrGU1S243yvh8WGW7mbyXLbSeVJKI/exec";
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_ROLE = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -263,6 +266,7 @@ Deno.serve(async (req: Request) => {
         listenerName: access.name || "",
         books: list.map((b: any) => ({
           ...b,
+          m4bAvailable: access.isAdmin === true && Object.hasOwn(m4bEditions, b.id),
           chapters: chaptersByBook.get(b.id) || [],
           progress: progressByBook.get(b.id) || null
         }))
@@ -299,6 +303,17 @@ Deno.serve(async (req: Request) => {
         }
       }
       return json({ok:true,status:job.status,progressDone:job.progress_done,progressTotal:job.progress_total,files,error:job.status==="failed"?"Download konnte nicht vorbereitet werden. Bitte erneut versuchen.":null});
+    }
+
+    if (op === "m4bSource") {
+      const pair = await getChapterWithBook(String(body.chapterId || ""));
+      if (!pair || pair.book.id !== body.bookId) return json({ok:false,error:"book_not_found"},404);
+      const access = await verifyAccess(body, pair.book.title);
+      // V17 is an owner-only origin. Preserve its independent Tailscale check.
+      if (access.isAdmin !== true) return json({ok:false,error:"FORBIDDEN"},403);
+      const source = registeredSource(m4bEditions, pair.book.id, privateOrigin);
+      if (!source) return json({ok:false,error:"m4b_unregistered"},404);
+      return json({ok:true,source});
     }
 
     if (op === "chapterUrl" || op === "chapter-url") {
@@ -374,3 +389,4 @@ Deno.serve(async (req: Request) => {
     return json({ ok: false, error: "server_error", detail: String(err?.message || err) }, 500);
   }
 });
+
