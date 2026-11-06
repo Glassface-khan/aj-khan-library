@@ -1005,6 +1005,10 @@
     play.addEventListener('click', async () => {
       if (!state.activeChapter) return startBook(state.activeBook.id);
       if (!state.audio || !state.audio.src) return loadChapter(state.activeBook, state.activeChapter, 0, true);
+      if (m4b?.guest && state.audio.paused && (loadingSource || Date.now() >= guestExpiry - 5000)) {
+        await seekBook(lastBookTime, true);
+        return;
+      }
       if (state.audio.paused) {
         try { await state.audio.play(); } catch (_) {}
       } else {
@@ -1091,6 +1095,9 @@
       state.audio.load();
     }
     m4b = null;
+    ++mediaRequest;
+    guestExpiry = 0;
+    lastBookTime = 0;
     activePart = 0;
     loadingSource = true;
     state.activeBook = book;
@@ -1125,19 +1132,45 @@
   let activePart = 0;
   let loadingSource = false;
   let opening = 0;
+  let mediaRequest = 0;
+  let guestExpiry = 0;
+  let lastBookTime = 0;
+  let resumeAfterError = false;
 
   function bookPosition() {
     return m4b && activePart ? m4b.timeline.bookSeconds(activePart, state.audio.currentTime) : state.audio.currentTime;
   }
 
-  function seekBook(seconds, play) {
+  async function seekBook(seconds, play) {
     const audio = ensureAudio();
     const {partNumber, localSeconds} = m4b.timeline.locate(seconds);
-    if (partNumber !== activePart || !audio.readyState) {
+    const request = ++mediaRequest;
+    const bookRequest = opening;
+    const expired = m4b.guest && Date.now() >= guestExpiry - 5000;
+    if (partNumber !== activePart || !audio.readyState || expired || loadingSource) {
       loadingSource = true;
       state.desiredSeek = localSeconds;
       activePart = partNumber;
-      audio.src = m4b.source(partNumber);
+      lastBookTime = seconds;
+      let url = m4b.source(partNumber);
+      if (m4b.guest) {
+        audio.pause();
+        try {
+          const part = await api({op:'m4bPart',bookId:state.activeBook.id,
+            chapterId:state.activeChapter.id,part:partNumber});
+          if (opening !== bookRequest || mediaRequest !== request) return;
+          url = part.url;
+          guestExpiry = part.expires * 1000;
+        } catch (err) {
+          if (opening === bookRequest && mediaRequest === request) {
+            guestExpiry = 0;
+            state.error = friendlyError(err);
+            render();
+          }
+          return;
+        }
+      }
+      audio.src = url;
       audio.load();
     } else {
       audio.currentTime = localSeconds;
@@ -1152,6 +1185,10 @@
     audio.defaultPlaybackRate = state.playbackRate;
     audio.playbackRate = state.playbackRate;
     audio.addEventListener('error', () => {
+      if (m4b?.guest && guestExpiry > 0 && Date.now() >= guestExpiry - 5000 && !loadingSource) {
+        void seekBook(lastBookTime, resumeAfterError);
+        return;
+      }
       if (m4b && audio.src) {
         loadingSource = true;
         state.error = tr('Privaten M4B-Zugang und Audioformat prüfen.', 'Check private M4B access and audio format.');
@@ -1160,7 +1197,11 @@
     });
     audio.addEventListener('timeupdate', () => {
       if (loadingSource) return;
-      if (m4b) state.activeChapter = m4b.position(bookPosition()).chapter;
+      if (m4b) {
+        lastBookTime = bookPosition();
+        state.activeChapter = m4b.position(lastBookTime).chapter;
+        if (!audio.error) resumeAfterError = !audio.paused;
+      }
       updatePlayerUi();
       if (Date.now() - state.lastSavedAt > 15000) saveProgress(false, false);
     });
@@ -1186,7 +1227,7 @@
     state.activeBook = book;
     state.activeChapter = chapter;
     if (book.m4bAvailable) {
-      if (m4b) seekBook(m4b.chapterTime(chapter.id, seek), autoplay);
+      if (m4b) await seekBook(m4b.chapterTime(chapter.id, seek), autoplay);
       updatePlayerUi();
       return;
     }
@@ -1255,7 +1296,7 @@
     if (loadingSource) return;
     if (m4b) {
       if (activePart < m4b.parts) {
-        seekBook(m4b.timeline.bookSeconds(activePart + 1, 0), true);
+        await seekBook(m4b.timeline.bookSeconds(activePart + 1, 0), true);
       } else {
         await saveProgress(true, false, true);
         await loadCatalog();

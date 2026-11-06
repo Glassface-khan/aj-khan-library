@@ -15,6 +15,7 @@ export function createPlayback(source, chapters) {
   }
   return {
     timeline, position,
+    guest: source.guest === true,
     source(part) { return source.parts[part-1].url; },
     chapterTime(id, offset) {
       const i=marks.findIndex(m=>m.id===id);
