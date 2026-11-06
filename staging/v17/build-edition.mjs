@@ -26,11 +26,11 @@ if (chapters.length !== book.chapters.length ||
     chapters.some((c,i) => !book.chapters[i].id || normalize(c.title) !== normalize(book.chapters[i].title))) {
   throw Error('Chapter mapping needs review');
 }
-const entry = {slug:row.id, info:{durationSeconds:doc.info.durationSeconds},
+const entry = {slug:row.id, info:{durationSeconds:doc.info.durationSeconds,sha256:doc.edition.sha256},
   chapters:chapters.map((c,i)=>({id:book.chapters[i].id, start:c.start}))};
 if (doc.parts) {
   if (doc.parts.some((p,i)=>p.number!==i+1)) throw Error('Part order mismatch');
-  entry.parts = doc.parts.map(p=>({durationSeconds:p.info.durationSeconds}));
+  entry.parts = doc.parts.map(p=>({durationSeconds:p.info.durationSeconds,sha256:p.edition.sha256}));
 }
 const mapping = {[book.id]:entry};
 // Validation only. The real private hostname is configured separately.

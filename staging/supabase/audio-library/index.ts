@@ -1,3 +1,4 @@
+import { guestEnabled, guestAllowed, guestTicket } from "./guest-m4b.mjs";
 import { registeredSource, caravanseraiId, permitsOwnerPilot } from "./m4b-source.mjs";
 import { downloadSnapshot } from "./download_helpers.ts";
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
@@ -16,6 +17,12 @@ const m4bEditions = readM4bEditions();
 function ownerPilot(access: any) {
   return permitsOwnerPilot(access, Deno.env.get("V17_OWNER_LISTENER_ID"), m4bEditions);
 }
+// Empty by default. Pilot exactly one existing guest before wider cutover.
+const guestPilotListener = Deno.env.get("V17_GUEST_LISTENER") || "";
+const guestRollout = (access:any) => guestPilotListener === "*" ||
+  (Boolean(guestPilotListener) && guestPilotListener === access.listenerId);
+const guestOrigin = Deno.env.get("V17_GUEST_ORIGIN") || "";
+const guestKey = Deno.env.get("V17_GUEST_TICKET_KEY") || "";
 const privateOrigin = Deno.env.get("V17_PRIVATE_ORIGIN") || "";
 const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwcbRDaWkM1wf3MV_dj4RPw9jQl2Fgc4YfGcmFrGU1S243yvh8WGW7mbyXLbSeVJKI/exec";
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
@@ -224,7 +231,7 @@ Deno.serve(async (req: Request) => {
 
       let q = supabase
         .from("audio_books")
-        .select("id,site_book_id,title,language_code,voice_key,narrator_name,cover_url,total_duration_seconds,series_key,series_title,series_number,series_total")
+        .select("id,site_book_id,title,language_code,voice_key,narrator_name,cover_url,total_duration_seconds,is_active,status,series_key,series_title,series_number,series_total")
         .order("title", { ascending: true })
         .order("language_code", { ascending: true });
 
@@ -281,7 +288,8 @@ Deno.serve(async (req: Request) => {
         listenerName: access.name || "",
         books: list.map((b: any) => ({
           ...b,
-          m4bAvailable: access.isAdmin === true && Object.hasOwn(m4bEditions, b.id),
+          m4bAvailable: access.isAdmin === true ? Object.hasOwn(m4bEditions, b.id) :
+            guestRollout(access) && guestAllowed(access,b) && guestEnabled(m4bEditions[b.id],guestOrigin,guestKey),
           chapters: chaptersByBook.get(b.id) || [],
           progress: progressByBook.get(b.id) || null
         }))
@@ -320,11 +328,25 @@ Deno.serve(async (req: Request) => {
       return json({ok:true,status:job.status,progressDone:job.progress_done,progressTotal:job.progress_total,files,error:job.status==="failed"?"Download konnte nicht vorbereitet werden. Bitte erneut versuchen.":null});
     }
 
-    if (op === "m4bSource") {
+    if (op === "m4bSource" || op === "m4bPart") {
       const pair = await getChapterWithBook(String(body.chapterId || ""), true);
       if (!pair || pair.book.id !== body.bookId) return json({ok:false,error:"book_not_found"},404);
       const access = await verifyAccess(body, pair.book.title);
       if (!pair.book.is_active && !ownerPilot(access)) return json({ok:false,error:"FORBIDDEN"},403);
+      const edition = m4bEditions[pair.book.id];
+      if (access.isAdmin !== true) {
+        if (!guestRollout(access) || !guestAllowed(access,pair.book) || !guestEnabled(edition,guestOrigin,guestKey)) {
+          return json({ok:false,error:"FORBIDDEN"},403);
+        }
+        if (op === "m4bPart") {
+          return json({ok:true,...await guestTicket(access,pair.book,edition,body.part,guestOrigin,guestKey)});
+        }
+        return json({ok:true,source:{guest:true,info:{durationSeconds:edition.info.durationSeconds},
+          chapters:edition.chapters,parts:(edition.parts ?? [edition.info]).map((p:any)=>({
+            info:{durationSeconds:p.durationSeconds}
+          }))}});
+      }
+      if (op === "m4bPart") return json({ok:false,error:"FORBIDDEN"},403);
       // V17 is an owner-only origin. Preserve its independent Tailscale check.
       if (access.isAdmin !== true) return json({ok:false,error:"FORBIDDEN"},403);
       const source = registeredSource(m4bEditions, pair.book.id, privateOrigin);
