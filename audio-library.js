@@ -1119,7 +1119,11 @@
           import('./audio-m4b-playback.mjs'),
         ]);
         if (opening !== ticket) return;
-        m4b = createPlayback(source, book.chapters);
+        m4b?.dispose?.();
+        const driveOptions = source.drive === true
+          ? {getDriveToken:(await import('./audio-google-drive-oauth.mjs')).getDriveToken}
+          : {};
+        m4b = createPlayback(source, book.chapters, driveOptions);
       } catch (err) {
         if (opening === ticket) { state.error = friendlyError(err); render(); }
         return;
@@ -1165,6 +1169,20 @@
           if (opening === bookRequest && mediaRequest === request) {
             guestExpiry = 0;
             state.error = friendlyError(err);
+            render();
+          }
+          return;
+        }
+      }
+      if (m4b.drive) {
+        audio.pause();
+        try {
+          url = await m4b.resolvePart(partNumber);
+          if (opening !== bookRequest || mediaRequest !== request) return;
+        } catch (err) {
+          if (opening === bookRequest && mediaRequest === request) {
+            state.error = friendlyError(err);
+            loadingSource = false;
             render();
           }
           return;
