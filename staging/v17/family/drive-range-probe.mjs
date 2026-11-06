@@ -24,7 +24,7 @@ export async function probePrivateDriveM4b({ fileId, accessToken, fetchImpl = fe
       rangeSupported: response.status === 206 && /^bytes 0-1\/\d+$/.test(range),
       status: response.status,
       contentType: type,
-      authorized: response.status !== 401 && response.status !== 403,
+      authorized: response.status === 200 || response.status === 206,
       corsReachable: true
     };
   } finally {
