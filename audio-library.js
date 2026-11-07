@@ -1219,6 +1219,8 @@
       }
       audio.src = url;
       audio.load();
+      // Safari must stop referencing the previous blob before it is revoked.
+      if (m4b.drive) m4b.releasePrevious();
     } else {
       audio.currentTime = localSeconds;
     }
