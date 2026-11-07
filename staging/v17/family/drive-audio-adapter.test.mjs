@@ -91,3 +91,35 @@ test('failed next part preserves current audio until explicit disposal',async()=
   adapter.dispose();
   assert.deepEqual(revoked,['blob:current']);
 });
+
+test('disposing during an in-flight request prevents any playable blob',async()=>{
+  let release, blobs=0;
+  const adapter=createDriveAudioAdapter({
+    getToken:async()=> 'test-token',
+    fetchImpl:async()=>await new Promise(resolve=>{release=resolve;}),
+    urls:{createObjectURL:()=>{blobs++;return 'blob:unexpected';},revokeObjectURL:()=>{}}
+  });
+  const pending=adapter.resolvePart(part);
+  await Promise.resolve();await Promise.resolve();
+  assert.equal(typeof release,'function');
+  adapter.dispose();
+  release(new Response(new Uint8Array(4)));
+  await assert.rejects(pending,/CANCELLED/);
+  assert.equal(blobs,0);
+});
+
+test('truncated Drive response is rejected without replacing existing audio',async()=>{
+  let calls=0, created=0;
+  const revoked=[];
+  const adapter=createDriveAudioAdapter({
+    getToken:async()=> 'test-token',
+    fetchImpl:async()=>new Response(new Uint8Array(++calls===1?4:3)),
+    urls:{createObjectURL:()=>{created++;return 'blob:current';},revokeObjectURL:url=>revoked.push(url)}
+  });
+  assert.equal(await adapter.resolvePart(part),'blob:current');
+  await assert.rejects(adapter.resolvePart(part),/DRIVE_SIZE_MISMATCH/);
+  assert.equal(created,1);
+  assert.deepEqual(revoked,[]);
+  adapter.dispose();
+  assert.deepEqual(revoked,['blob:current']);
+});
