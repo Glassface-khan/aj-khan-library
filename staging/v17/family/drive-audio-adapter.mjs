@@ -36,6 +36,7 @@ export function createDriveAudioAdapter({getToken, fetchImpl = fetch, urls = URL
       await response.body?.cancel();
       throw Error(response.status === 403 ? 'DRIVE_PERMISSION_REQUIRED' : 'DRIVE_FETCH_FAILED');
     }
+    if (!response.body || request !== generation) throw Error('CANCELLED_OR_EMPTY_RESPONSE');
     const reader = response.body.getReader();
     const chunks = [];
     let bytes = 0;
@@ -50,11 +51,13 @@ export function createDriveAudioAdapter({getToken, fetchImpl = fetch, urls = URL
       if (bytes !== part.bytes) throw Error('DRIVE_SIZE_MISMATCH');
       if (request !== generation) throw Error('CANCELLED');
       const next = urls.createObjectURL(new Blob(chunks,{type:'audio/mp4'}));
+      if (request !== generation) { urls.revokeObjectURL(next); throw Error('CANCELLED'); }
       if (activeUrl) urls.revokeObjectURL(activeUrl);
       activeUrl = next;
       return next;
     } finally {
-      await reader.cancel();
+      try { await reader.cancel(); } catch (_) { /* cancellation must not hide original result */ }
+      if (controller === abort) controller = undefined;
     }
   }
   return {resolvePart, dispose};
