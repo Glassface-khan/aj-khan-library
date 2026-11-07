@@ -1,0 +1,29 @@
+name: AF3 V17 private Drive unit tests
+on:
+  push:
+    branches:
+      - feature/af3-family-drive-pilot-20261106
+    paths:
+      - 'staging/v17/family/**'
+      - 'audio-m4b-playback.mjs'
+      - 'audio-m4b-timeline.mjs'
+      - '.github/workflows/af3-v17-private-drive-tests.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: af3-v17-tests-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Syntax check and isolated unit tests
+        run: |
+          find staging/v17/family -name '*.mjs' -print0 | xargs -0 -n1 node --check
+          node --test staging/v17/family/*.test.mjs
