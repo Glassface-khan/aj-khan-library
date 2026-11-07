@@ -123,3 +123,21 @@ test('truncated Drive response is rejected without replacing existing audio',asy
   adapter.dispose();
   assert.deepEqual(revoked,['blob:current']);
 });
+
+test('completed failed request does not retain an abort controller',async()=>{
+  const signals=[];
+  let calls=0;
+  const adapter=createDriveAudioAdapter({
+    getToken:async()=> 'test-token',
+    fetchImpl:async(_url,opts)=>{
+      signals.push(opts.signal);
+      return ++calls===1 ? new Response('',{status:403}) : new Response(new Uint8Array(4));
+    },
+    urls:{createObjectURL:()=> 'blob:ok',revokeObjectURL:()=>{}}
+  });
+  await assert.rejects(adapter.resolvePart(part),/DRIVE_PERMISSION_REQUIRED/);
+  assert.equal(signals[0].aborted,false);
+  assert.equal(await adapter.resolvePart(part),'blob:ok');
+  assert.equal(signals[0].aborted,false,'completed requests must not be aborted by later chapters');
+  adapter.dispose();
+});
