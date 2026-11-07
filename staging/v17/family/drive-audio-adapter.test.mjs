@@ -26,3 +26,9 @@ test('denies permissions, oversized responses and invalid metadata',async()=>{
   const adapter=createDriveAudioAdapter({getToken:async()=>{throw Error('must not run');}});
   await assert.rejects(adapter.resolvePart({...part,bytes:100000000}),/INVALID_DRIVE_PART/);
 });
+
+test('rejects empty Drive response stream without creating a blob',async()=>{
+ const adapter=createDriveAudioAdapter({getToken:async()=> 'token',
+  fetchImpl:async()=>({status:200,body:null})});
+ await assert.rejects(adapter.resolvePart(part),/CANCELLED_OR_EMPTY_RESPONSE/);
+});
