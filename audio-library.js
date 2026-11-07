@@ -787,6 +787,12 @@
     '</div>';
   }
 
+  let driveOAuthModule = null;
+  import('./audio-google-drive-oauth.mjs').then(async m => {
+    driveOAuthModule=m;
+    await m.prepareDriveOAuth();
+  }).catch(()=>{});
+
   function renderLibrary(panel) {
     const c = credentials();
     const adminButton = c.isAdmin
@@ -855,11 +861,22 @@
     panel.innerHTML =
       '<div class="ajka-head"><div><div class="ajka-kicker">A. J. Khan</div><h2 class="ajka-title">' + esc(tr('Audio-Bibliothek', 'Audio Library')) + '</h2></div>' +
       '<button class="ajka-close" id="ajka-close" aria-label="' + esc(tr('Schließen', 'Close')) + '">×</button></div>' +
-      '<div class="ajka-toolbar">' + adminButton + '<button class="ajka-smallbtn" id="ajka-refresh">' + esc(tr('Aktualisieren', 'Refresh')) + '</button></div>' +
+      '<div class="ajka-toolbar">' + adminButton + '<button class="ajka-smallbtn" id="ajka-drive-connect" type="button">' + esc(tr('Google Drive verbinden', 'Connect Google Drive')) + '</button><button class="ajka-smallbtn" id="ajka-refresh">' + esc(tr('Aktualisieren', 'Refresh')) + '</button></div>' +
       error + player + list;
 
     panel.querySelector('#ajka-close').addEventListener('click', close);
     panel.querySelector('#ajka-refresh').addEventListener('click', loadCatalog);
+    // Preload GIS without opening consent. The popup must be triggered by a direct tap.
+    import('./audio-google-drive-oauth.mjs').then(m=>m.prepareDriveOAuth()).catch(()=>{});
+    panel.querySelector('#ajka-drive-connect')?.addEventListener('click', () => {
+      // Module is preloaded by renderLibrary; do not await network work in this gesture.
+      if (!driveOAuthModule) {
+        state.error = tr('Google-Anmeldung wird vorbereitet. Bitte erneut tippen.', 'Preparing Google sign-in. Please tap again.');
+        render();return;
+      }
+      const connection=driveOAuthModule.connectDriveFromClick();
+      connection.then(()=>{state.error='';render();}).catch(err=>{state.error=friendlyError(err);render();});
+    });
     const admin = panel.querySelector('#ajka-admin-rights');
     if (admin) admin.addEventListener('click', openAdmin);
 
