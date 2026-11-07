@@ -15,7 +15,7 @@ export function prepareDriveOAuth() {
   if (ready) return ready;
   ready = (async () => {
     const clientId = document.querySelector('meta[name="ajk-google-drive-client-id"]')?.content?.trim();
-    if (!clientId || !/^[0-9]+-[a-z0-9]+\\.apps\\.googleusercontent\\.com$/.test(clientId))
+    if (!clientId || !/^[0-9]+-[a-z0-9]+\.apps\.googleusercontent\.com$/.test(clientId))
       throw Error('GOOGLE_DRIVE_OAUTH_NOT_CONFIGURED');
     if (!window.google?.accounts?.oauth2?.initTokenClient) {
       await new Promise((resolve,reject) => {
