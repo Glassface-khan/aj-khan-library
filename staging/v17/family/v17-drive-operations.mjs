@@ -1,10 +1,12 @@
+import {createPrivateManifestStore} from './private-manifest-store.mjs';
 // AF3 V17 private Drive backend wiring. STAGING ONLY.
 // Mount these operations in the existing audio-library Edge Function only
 // after the slot migration and private manifest source are independently verified.
 import {createFamilySlotHandlers} from './family-slot-handlers.mjs';
 import {createPrivateDriveEndpoints} from './private-drive-endpoints.mjs';
 
-export function createV17DriveOperations({verifyAccess,supabase,loadManifest,loadChapterIds}) {
+export function createV17DriveOperations({verifyAccess,supabase}) {
+  const {loadManifest,loadChapterIds}=createPrivateManifestStore(supabase);
   const slots=createFamilySlotHandlers({verifyAccess,supabase});
   const drive=createPrivateDriveEndpoints({hasSlot:slots.hasSlot,loadManifest,loadChapterIds});
   return Object.freeze({
