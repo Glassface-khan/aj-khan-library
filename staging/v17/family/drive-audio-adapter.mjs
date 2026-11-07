@@ -2,13 +2,21 @@
 // The caller obtains consent through Google OAuth and supplies short-lived tokens.
 export function createDriveAudioAdapter({getToken, fetchImpl = fetch, urls = URL}) {
   let activeUrl;
+  const retiredUrls = new Set();
   let controller;
   let generation = 0;
   function dispose() {
     generation++;
     controller?.abort();
     if (activeUrl) urls.revokeObjectURL(activeUrl);
+    for (const url of retiredUrls) urls.revokeObjectURL(url);
+    retiredUrls.clear();
     activeUrl = undefined;
+  }
+  // Release previous parts only after the audio element has switched sources.
+  function releasePrevious() {
+    for (const url of retiredUrls) urls.revokeObjectURL(url);
+    retiredUrls.clear();
   }
   async function resolvePart(part) {
     if (!/^[\w-]{10,200}$/.test(part?.fileId ?? '') ||
@@ -57,7 +65,7 @@ export function createDriveAudioAdapter({getToken, fetchImpl = fetch, urls = URL
       if (request !== generation) throw Error('CANCELLED');
       const next = urls.createObjectURL(new Blob(chunks,{type:'audio/mp4'}));
       if (request !== generation) { urls.revokeObjectURL(next); throw Error('CANCELLED'); }
-      if (activeUrl) urls.revokeObjectURL(activeUrl);
+      if (activeUrl) retiredUrls.add(activeUrl);
       activeUrl = next;
       return next;
     } finally {
@@ -67,5 +75,5 @@ export function createDriveAudioAdapter({getToken, fetchImpl = fetch, urls = URL
       if (controller === abort) controller = undefined;
     }
   }
-  return {resolvePart, dispose};
+  return {resolvePart, releasePrevious, dispose};
 }
