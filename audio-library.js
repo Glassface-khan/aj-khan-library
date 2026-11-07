@@ -789,8 +789,8 @@
 
   let driveOAuthModule = null;
   import('./audio-google-drive-oauth.mjs').then(async m => {
-    driveOAuthModule=m;
     await m.prepareDriveOAuth();
+    driveOAuthModule=m;
   }).catch(()=>{});
 
   function renderLibrary(panel) {
@@ -867,7 +867,6 @@
     panel.querySelector('#ajka-close').addEventListener('click', close);
     panel.querySelector('#ajka-refresh').addEventListener('click', loadCatalog);
     // Preload GIS without opening consent. The popup must be triggered by a direct tap.
-    import('./audio-google-drive-oauth.mjs').then(m=>m.prepareDriveOAuth()).catch(()=>{});
     panel.querySelector('#ajka-drive-connect')?.addEventListener('click', () => {
       // Module is preloaded by renderLibrary; do not await network work in this gesture.
       if (!driveOAuthModule) {
