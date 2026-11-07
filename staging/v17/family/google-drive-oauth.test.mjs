@@ -51,6 +51,7 @@ test('token cleared in memory cannot be refreshed without click',async()=>{
   h.api.clearDriveToken();
   await assert.rejects(h.api.getDriveToken(),/GOOGLE_DRIVE_RECONNECT_REQUIRED/);
   await assert.rejects(h.api.getDriveToken({refresh:true}),/GOOGLE_DRIVE_RECONNECT_REQUIRED/);
+  assert.equal(h.api.hasDriveToken(),false);
   assert.equal(h.requestCount,1);
 });
 
@@ -74,4 +75,15 @@ test('player and OAuth module use the same valid client ID pattern',async()=>{
   const pattern = vm.runInNewContext(match[1]);
   assert.equal(pattern.test('12345-abc.apps.googleusercontent.com'),true);
   assert.equal(pattern.test('not-a-client-id'),false);
+});
+
+
+test('Drive 401 invalidates previously valid token without a new OAuth popup',async()=>{
+  const h=harness();await h.api.prepareDriveOAuth();
+  const p=h.api.connectDriveFromClick();h.respond({access_token:'old-token',expires_in:3600});await p;
+  assert.equal(h.api.hasDriveToken(),true);
+  await assert.rejects(h.api.getDriveToken({refresh:true}),/GOOGLE_DRIVE_RECONNECT_REQUIRED/);
+  assert.equal(h.api.hasDriveToken(),false);
+  await assert.rejects(h.api.getDriveToken(),/GOOGLE_DRIVE_RECONNECT_REQUIRED/);
+  assert.equal(h.requestCount,1);
 });
