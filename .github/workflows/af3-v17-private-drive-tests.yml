@@ -5,6 +5,8 @@ on:
       - feature/af3-family-drive-pilot-20261106
     paths:
       - 'staging/v17/family/**'
+      - 'audio-google-drive-oauth.mjs'
+      - 'audio-library.js'
       - 'audio-m4b-playback.mjs'
       - 'audio-m4b-timeline.mjs'
       - '.github/workflows/af3-v17-private-drive-tests.yml'
@@ -25,5 +27,7 @@ jobs:
           node-version: '22'
       - name: Syntax check and isolated unit tests
         run: |
+          node --check audio-google-drive-oauth.mjs
+          node --check audio-library.js
           find staging/v17/family -name '*.mjs' -print0 | xargs -0 -n1 node --check
           node --test staging/v17/family/*.test.mjs
