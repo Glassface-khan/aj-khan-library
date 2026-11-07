@@ -87,3 +87,10 @@ test('Drive 401 invalidates previously valid token without a new OAuth popup',as
   await assert.rejects(h.api.getDriveToken(),/GOOGLE_DRIVE_RECONNECT_REQUIRED/);
   assert.equal(h.requestCount,1);
 });
+
+test('player gives a specific private Drive error for truncated and unavailable audio',async()=>{
+  const player=await readFile(new URL('../../../audio-library.js',import.meta.url),'utf8');
+  assert.match(player,/m === 'DRIVE_SIZE_MISMATCH'/);
+  assert.match(player,/m === 'DRIVE_FETCH_FAILED'/);
+  assert.match(player,/Die Audiodatei wurde unvollständig übertragen/);
+});
