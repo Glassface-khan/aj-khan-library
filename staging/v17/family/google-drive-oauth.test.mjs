@@ -66,3 +66,12 @@ test('OAuth denial and popup cancellation reject safely',async()=>{
   const p2=h.api.connectDriveFromClick();h.cancelled();
   await assert.rejects(p2,/GOOGLE_DRIVE_OAUTH_CANCELLED/);
 });
+
+test('player and OAuth module use the same valid client ID pattern',async()=>{
+  const player = await readFile(new URL('../../../audio-library.js',import.meta.url),'utf8');
+  const match = player.match(/const driveClientConfigured = (\/\^[^\n]+\$\/).test\(/);
+  assert.ok(match,'player OAuth client ID pattern must exist');
+  const pattern = vm.runInNewContext(match[1]);
+  assert.equal(pattern.test('12345-abc.apps.googleusercontent.com'),true);
+  assert.equal(pattern.test('not-a-client-id'),false);
+});
