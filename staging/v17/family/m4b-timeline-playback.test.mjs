@@ -45,3 +45,14 @@ test('Drive metadata and chapter order must be consistent before playback',()=>{
   assert.throws(()=>createPlayback({...source,chapters:[source.chapters[0],source.chapters[2],source.chapters[1]]},
     chapters,{getDriveToken:async()=> 'test-only'}),/M4B chapter mapping mismatch/);
 });
+
+test('private player exposes source-handoff cleanup and does not persist Drive metadata',async()=>{
+  const {source,chapters}=fixture();
+  const p=createPlayback(source,chapters,{getDriveToken:async()=> 'test-only'});
+  assert.equal(typeof p.releasePrevious,'function');
+  p.releasePrevious();
+  p.dispose();
+  const {readFile}=await import('node:fs/promises');
+  const player=await readFile(new URL('../../../audio-library.js',import.meta.url),'utf8');
+  assert.match(player,/audio\.src = url;\s*audio\.load\(\);[\s\S]*?if \(m4b\.drive\) m4b\.releasePrevious\(\)/);
+});
