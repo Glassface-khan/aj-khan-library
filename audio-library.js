@@ -575,6 +575,9 @@
 
   function friendlyError(err) {
     const m = String(err && err.message || '');
+    if (m === 'GOOGLE_DRIVE_RECONNECT_REQUIRED' || m === 'OAUTH_REQUIRED') return tr('Bitte Google Drive erneut verbinden und das Kapitel wieder starten.', 'Please reconnect Google Drive and restart the chapter.');
+    if (m === 'DRIVE_PERMISSION_REQUIRED') return tr('Dein Google-Konto hat keinen Zugriff auf diese private Audiodatei.', 'Your Google account cannot access this private audio file.');
+    if (m === 'GOOGLE_DRIVE_OAUTH_CANCELLED' || m === 'GOOGLE_DRIVE_OAUTH_DENIED') return tr('Die Google-Anmeldung wurde nicht abgeschlossen.', 'Google sign-in was not completed.');
     if (m === 'unauthorized' || (err && err.status === 401)) return tr('Dein Zugang ist nicht mehr gültig. Bitte melde dich auf der Autorenseite erneut an.', 'Your access is no longer valid. Please sign in to the author site again.');
     if (m === 'forbidden' || (err && err.status === 403)) return tr('Für dieses Hörbuch ist dein Zugang nicht freigeschaltet.', 'Your access does not include this audiobook.');
     if (m === 'access_service_unavailable' || m === 'access_service_invalid_response' || m === 'unknown_operation') return tr('Das Audio-Modul des Backends ist noch nicht live geschaltet.', 'The audio backend module has not been deployed yet.');
@@ -788,10 +791,14 @@
   }
 
   let driveOAuthModule = null;
-  import('./audio-google-drive-oauth.mjs').then(async m => {
-    await m.prepareDriveOAuth();
-    driveOAuthModule=m;
-  }).catch(()=>{});
+  const driveClientConfigured = /^[0-9]+-[a-z0-9]+\\.apps\\.googleusercontent\\.com$/.test(
+    document.querySelector('meta[name="ajk-google-drive-client-id"]')?.content?.trim() || '');
+  if (driveClientConfigured) {
+    import('./audio-google-drive-oauth.mjs').then(async m => {
+      await m.prepareDriveOAuth();
+      driveOAuthModule=m;
+    }).catch(()=>{});
+  }
 
   function renderLibrary(panel) {
     const c = credentials();
@@ -861,7 +868,7 @@
     panel.innerHTML =
       '<div class="ajka-head"><div><div class="ajka-kicker">A. J. Khan</div><h2 class="ajka-title">' + esc(tr('Audio-Bibliothek', 'Audio Library')) + '</h2></div>' +
       '<button class="ajka-close" id="ajka-close" aria-label="' + esc(tr('Schließen', 'Close')) + '">×</button></div>' +
-      '<div class="ajka-toolbar">' + adminButton + '<button class="ajka-smallbtn" id="ajka-drive-connect" type="button">' + esc(tr('Google Drive verbinden', 'Connect Google Drive')) + '</button><button class="ajka-smallbtn" id="ajka-refresh">' + esc(tr('Aktualisieren', 'Refresh')) + '</button></div>' +
+      '<div class="ajka-toolbar">' + adminButton + (driveClientConfigured ? '<button class="ajka-smallbtn" id="ajka-drive-connect" type="button">' + esc(tr('Google Drive verbinden', 'Connect Google Drive')) + '</button>' : '') + '<button class="ajka-smallbtn" id="ajka-refresh">' + esc(tr('Aktualisieren', 'Refresh')) + '</button></div>' +
       error + player + list;
 
     panel.querySelector('#ajka-close').addEventListener('click', close);
