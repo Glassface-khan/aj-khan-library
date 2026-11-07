@@ -37,7 +37,7 @@ export function createPlayback(source, chapters, options = {}) {
       const i=marks.findIndex(m=>m.id===id);
       if(i<0) throw Error('Unknown chapter');
       const end=marks[i+1]?.start ?? timeline.duration;
-      return Math.min(Math.max(marks[i].start,end-0.01),marks[i].start+Math.max(0,offset));
+      return Math.max(marks[i].start, Math.min(end-0.01, marks[i].start+Math.max(0,offset)));
     },
     parts:source.parts.length,
   };
