@@ -20,6 +20,7 @@ export function createDrivePartSource({parts,getToken,fetchImpl,urls}) {
       }
       return adapter.resolvePart(parts[partNumber-1]);
     },
+    releasePrevious() { if (closed) throw Error('SOURCE_CLOSED'); adapter.releasePrevious(); },
     dispose() { closed = true; adapter.dispose(); },
     get count() { return parts.length; }
   };
