@@ -4,9 +4,9 @@
 import {createFamilySlotHandlers} from './family-slot-handlers.mjs';
 import {createPrivateDriveEndpoints} from './private-drive-endpoints.mjs';
 
-export function createV17DriveOperations({verifyAccess,supabase,loadManifest}) {
+export function createV17DriveOperations({verifyAccess,supabase,loadManifest,loadChapterIds}) {
   const slots=createFamilySlotHandlers({verifyAccess,supabase});
-  const drive=createPrivateDriveEndpoints({hasSlot:slots.hasSlot,loadManifest});
+  const drive=createPrivateDriveEndpoints({hasSlot:slots.hasSlot,loadManifest,loadChapterIds});
   return Object.freeze({
     familyAssign:slots.assignment,
     familyRemove:slots.removal,
