@@ -29,5 +29,7 @@ jobs:
         run: |
           node --check audio-google-drive-oauth.mjs
           node --check audio-library.js
+          node --check audio-m4b-playback.mjs
+          node --check audio-m4b-timeline.mjs
           find staging/v17/family -name '*.mjs' -print0 | xargs -0 -n1 node --check
           node --test staging/v17/family/*.test.mjs
