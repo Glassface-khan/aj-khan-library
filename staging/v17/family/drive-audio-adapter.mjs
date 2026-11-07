@@ -20,6 +20,7 @@ export function createDriveAudioAdapter({getToken, fetchImpl = fetch, urls = URL
     const abort = new AbortController();
     controller = abort;
     let response;
+    try {
     for (let attempt = 0; attempt < 2; attempt++) {
       const token = await getToken({refresh:attempt === 1});
       if (request !== generation) throw Error('CANCELLED');
@@ -31,6 +32,10 @@ export function createDriveAudioAdapter({getToken, fetchImpl = fetch, urls = URL
       });
       if (response.status !== 401 || attempt === 1) break;
       await response.body?.cancel();
+    }
+    if (request !== generation) {
+      await response.body?.cancel();
+      throw Error('CANCELLED');
     }
     if (response.status !== 200) {
       await response.body?.cancel();
@@ -57,6 +62,8 @@ export function createDriveAudioAdapter({getToken, fetchImpl = fetch, urls = URL
       return next;
     } finally {
       try { await reader.cancel(); } catch (_) { /* cancellation must not hide original result */ }
+    }
+    } finally {
       if (controller === abort) controller = undefined;
     }
   }
