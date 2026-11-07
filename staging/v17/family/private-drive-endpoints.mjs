@@ -25,11 +25,12 @@ export function createPrivateDriveEndpoints({hasSlot,loadManifest}) {
     if(chapters.some((c,i)=>typeof c.id!=='string'||!c.id||
       !Number.isFinite(c.start)||(i===0?c.start!==0:c.start<=chapters[i-1].start)||
       c.start>=duration))throw Error('INVALID_PRIVATE_MANIFEST');
-    return {ok:true,bookId,drive:true,parts,chapters,info:{durationSeconds:duration}};
+    return {ok:true,source:{bookId,drive:true,parts,chapters,info:{durationSeconds:duration}}};
   }
   async function part(body) {
     const bookId=String(body?.bookId??'');
-    const partNumber=body?.partNumber;
+    // The existing V17 player uses the field 'part', not 'partNumber'.
+    const partNumber=body?.part;
     if(!UUID.test(bookId)||!Number.isInteger(partNumber)||partNumber<1)throw Error('INVALID_PART_REQUEST');
     await hasSlot({bookId,...pickCredentials(body)});
     const manifest=await loadManifest(bookId);
