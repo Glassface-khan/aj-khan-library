@@ -1126,7 +1126,7 @@
           : {};
         m4b = createPlayback(source, book.chapters, driveOptions);
       } catch (err) {
-        if (opening === ticket) { state.error = friendlyError(err); render(); }
+        if (opening === ticket) { loadingSource = false; state.error = friendlyError(err); render(); }
         return;
       }
     }
@@ -1169,6 +1169,7 @@
         } catch (err) {
           if (opening === bookRequest && mediaRequest === request) {
             guestExpiry = 0;
+            loadingSource = false;
             state.error = friendlyError(err);
             render();
           }
