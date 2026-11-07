@@ -31,6 +31,7 @@ export function createPlayback(source, chapters, options = {}) {
       if (!Number.isInteger(part) || part < 1 || part > source.parts.length) throw Error('INVALID_PART_NUMBER');
       return drive ? driveAdapter.resolvePart(source.parts[part-1]) : source.parts[part-1].url;
     },
+    releasePrevious() { driveAdapter?.releasePrevious(); },
     dispose() { driveAdapter?.dispose(); },
     source(part) { return source.parts[part-1].url; },
     chapterTime(id, offset) {
