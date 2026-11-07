@@ -577,6 +577,8 @@
     const m = String(err && err.message || '');
     if (m === 'GOOGLE_DRIVE_RECONNECT_REQUIRED' || m === 'OAUTH_REQUIRED') return tr('Bitte Google Drive erneut verbinden und das Kapitel wieder starten.', 'Please reconnect Google Drive and restart the chapter.');
     if (m === 'DRIVE_PERMISSION_REQUIRED') return tr('Dein Google-Konto hat keinen Zugriff auf diese private Audiodatei.', 'Your Google account cannot access this private audio file.');
+    if (m === 'DRIVE_SIZE_MISMATCH') return tr('Die Audiodatei wurde unvollständig übertragen. Bitte erneut versuchen.', 'The audio file was downloaded incompletely. Please try again.');
+    if (m === 'DRIVE_FETCH_FAILED') return tr('Google Drive konnte die Audiodatei nicht liefern. Bitte Verbindung und Datei prüfen.', 'Google Drive could not deliver the audio file. Please check your connection and file.');
     if (m === 'GOOGLE_DRIVE_OAUTH_CANCELLED' || m === 'GOOGLE_DRIVE_OAUTH_DENIED') return tr('Die Google-Anmeldung wurde nicht abgeschlossen.', 'Google sign-in was not completed.');
     if (m === 'unauthorized' || (err && err.status === 401)) return tr('Dein Zugang ist nicht mehr gültig. Bitte melde dich auf der Autorenseite erneut an.', 'Your access is no longer valid. Please sign in to the author site again.');
     if (m === 'forbidden' || (err && err.status === 403)) return tr('Für dieses Hörbuch ist dein Zugang nicht freigeschaltet.', 'Your access does not include this audiobook.');
