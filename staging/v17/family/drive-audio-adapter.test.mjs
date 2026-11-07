@@ -55,3 +55,39 @@ test('rejected token stops download and does not attempt a second fetch without 
   assert.equal(refreshes,1);
   assert.equal(blobs,0);
 });
+
+test('switching chapters cancels an older in-flight Drive download',async()=>{
+  let firstResolve, calls=0, blobs=0;
+  const adapter=createDriveAudioAdapter({
+    getToken:async()=> 'test-token',
+    fetchImpl:async()=>{
+      calls++;
+      if(calls===1) return await new Promise(resolve=>{firstResolve=resolve;});
+      return new Response(new Uint8Array(4));
+    },
+    urls:{createObjectURL:()=>{blobs++;return 'blob:latest';},revokeObjectURL:()=>{}}
+  });
+  const old=adapter.resolvePart(part);
+  await Promise.resolve();await Promise.resolve();
+  const latest=adapter.resolvePart(part);
+  firstResolve(new Response(new Uint8Array(4)));
+  await assert.rejects(old,/CANCELLED/);
+  assert.equal(await latest,'blob:latest');
+  assert.equal(blobs,1);
+  adapter.dispose();
+});
+
+test('failed next part preserves current audio until explicit disposal',async()=>{
+  let calls=0;
+  const revoked=[];
+  const adapter=createDriveAudioAdapter({
+    getToken:async()=> 'test-token',
+    fetchImpl:async()=>++calls===1 ? new Response(new Uint8Array(4)) : new Response('',{status:403}),
+    urls:{createObjectURL:()=> 'blob:current',revokeObjectURL:url=>revoked.push(url)}
+  });
+  assert.equal(await adapter.resolvePart(part),'blob:current');
+  await assert.rejects(adapter.resolvePart(part),/DRIVE_PERMISSION_REQUIRED/);
+  assert.deepEqual(revoked,[]);
+  adapter.dispose();
+  assert.deepEqual(revoked,['blob:current']);
+});
