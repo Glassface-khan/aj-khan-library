@@ -791,7 +791,7 @@
   }
 
   let driveOAuthModule = null;
-  const driveClientConfigured = /^[0-9]+-[a-z0-9]+\\.apps\\.googleusercontent\\.com$/.test(
+  const driveClientConfigured = /^[0-9]+-[a-z0-9]+\.apps\.googleusercontent\.com$/.test(
     document.querySelector('meta[name="ajk-google-drive-client-id"]')?.content?.trim() || '');
   if (driveClientConfigured) {
     import('./audio-google-drive-oauth.mjs').then(async m => {
