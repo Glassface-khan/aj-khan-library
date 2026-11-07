@@ -32,3 +32,26 @@ test('rejects empty Drive response stream without creating a blob',async()=>{
   fetchImpl:async()=>({status:200,body:null})});
  await assert.rejects(adapter.resolvePart(part),/CANCELLED_OR_EMPTY_RESPONSE/);
 });
+
+test('rejected token stops download and does not attempt a second fetch without consent',async()=>{
+  let fetches=0, refreshes=0, blobs=0;
+  const adapter=createDriveAudioAdapter({
+    getToken:async({refresh})=>{
+      if(refresh){refreshes++;throw Error('GOOGLE_DRIVE_RECONNECT_REQUIRED');}
+      return 'expired-token';
+    },
+    fetchImpl:async(url,opts)=>{
+      fetches++;
+      assert.ok(!url.includes('expired-token'));
+      assert.equal(opts.credentials,'omit');
+      assert.equal(opts.cache,'no-store');
+      assert.equal(opts.headers.Authorization,'Bearer expired-token');
+      return new Response('',{status:401});
+    },
+    urls:{createObjectURL:()=>{blobs++;return 'blob:unexpected';},revokeObjectURL:()=>{}}
+  });
+  await assert.rejects(adapter.resolvePart(part),/GOOGLE_DRIVE_RECONNECT_REQUIRED/);
+  assert.equal(fetches,1);
+  assert.equal(refreshes,1);
+  assert.equal(blobs,0);
+});
