@@ -57,6 +57,9 @@ export function connectDriveFromClick() {
   return promise;
 }
 export async function getDriveToken({refresh=false}={}) {
-  if (!refresh && hasDriveToken()) return token;
+  // A Drive 401 means this token was rejected. Invalidate it immediately;
+  // never silently reopen consent from an asynchronous media request.
+  if (refresh) clearDriveToken();
+  if (hasDriveToken()) return token;
   throw Error('GOOGLE_DRIVE_RECONNECT_REQUIRED');
 }
