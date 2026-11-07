@@ -10,6 +10,8 @@ test('V17 one-based part numbers select backend-authorized Drive IDs',async()=>{
  assert.equal(await source.source(1),'blob:private-1');
  assert.equal(await source.source(2),'blob:private-2');
  assert.deepEqual(seen.map(x=>x.split('/').at(-1).split('?')[0]),parts.map(x=>x.fileId));
+ assert.deepEqual(revoked,[],'previous part stays valid until player confirms source handoff');
+ source.releasePrevious();
  assert.deepEqual(revoked,['blob:private-1']);
  source.dispose();assert.deepEqual(revoked,['blob:private-1','blob:private-2']);
  await assert.rejects(source.source(1),/SOURCE_CLOSED/);
