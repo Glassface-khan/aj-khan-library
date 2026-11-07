@@ -141,3 +141,34 @@ test('completed failed request does not retain an abort controller',async()=>{
   assert.equal(signals[0].aborted,false,'completed requests must not be aborted by later chapters');
   adapter.dispose();
 });
+
+test('previous audio blob survives until explicit media-source handoff',async()=>{
+  let count=0;
+  const revoked=[];
+  const adapter=createDriveAudioAdapter({
+    getToken:async()=> 'test-token',
+    fetchImpl:async()=>new Response(new Uint8Array(4)),
+    urls:{createObjectURL:()=> 'blob:part-'+(++count),revokeObjectURL:url=>revoked.push(url)}
+  });
+  assert.equal(await adapter.resolvePart(part),'blob:part-1');
+  assert.equal(await adapter.resolvePart(part),'blob:part-2');
+  assert.deepEqual(revoked,[],'previous Safari media source must remain valid before handoff');
+  adapter.releasePrevious();
+  assert.deepEqual(revoked,['blob:part-1']);
+  adapter.dispose();
+  assert.deepEqual(revoked,['blob:part-1','blob:part-2']);
+});
+
+test('disposing without media-source handoff revokes both current and retired blobs',async()=>{
+  let count=0;
+  const revoked=[];
+  const adapter=createDriveAudioAdapter({
+    getToken:async()=> 'test-token',
+    fetchImpl:async()=>new Response(new Uint8Array(4)),
+    urls:{createObjectURL:()=> 'blob:part-'+(++count),revokeObjectURL:url=>revoked.push(url)}
+  });
+  await adapter.resolvePart(part);
+  await adapter.resolvePart(part);
+  adapter.dispose();
+  assert.deepEqual(revoked,['blob:part-2','blob:part-1']);
+});
