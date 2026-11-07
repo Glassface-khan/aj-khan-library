@@ -873,7 +873,9 @@
         state.error = tr('Google-Anmeldung wird vorbereitet. Bitte erneut tippen.', 'Preparing Google sign-in. Please tap again.');
         render();return;
       }
-      const connection=driveOAuthModule.connectDriveFromClick();
+      let connection;
+      try { connection=driveOAuthModule.connectDriveFromClick(); }
+      catch (err) { state.error=friendlyError(err);render();return; }
       connection.then(()=>{state.error='';render();}).catch(err=>{state.error=friendlyError(err);render();});
     });
     const admin = panel.querySelector('#ajka-admin-rights');
